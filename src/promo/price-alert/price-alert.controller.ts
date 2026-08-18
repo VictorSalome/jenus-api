@@ -4,7 +4,7 @@ import { getDb } from '../../core/database.js';
 export const list = async (_req: Request, res: Response): Promise<void> => {
   try {
     const db = await getDb();
-    const alerts = await db.all('SELECT * FROM price_alerts WHERE is_active = 1');
+    const alerts = await db.all('SELECT * FROM price_alerts ORDER BY created_at DESC');
     res.json({ success: true, data: alerts });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Erro ao listar alertas' });
@@ -60,6 +60,20 @@ export const update = async (req: Request, res: Response): Promise<void> => {
     res.json({ success: true, message: 'Alerta atualizado' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Erro ao atualizar alerta' });
+  }
+};
+
+export const toggle = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = Number(req.params.id);
+    const db = await getDb();
+    await db.run(
+      'UPDATE price_alerts SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?',
+      id,
+    );
+    res.json({ success: true, message: 'Status alterado' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Erro ao alterar status' });
   }
 };
 
