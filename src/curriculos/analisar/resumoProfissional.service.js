@@ -152,12 +152,12 @@ const FRASE_GENERICA =
  * @param {string} descricaoVaga - Descrição da vaga
  * @returns {Object} Objeto com três versões do resumo: { curto, medio, longo }
  */
-export const gerarResumo = (descricaoVaga) => {
+export const gerarResumo = async (descricaoVaga) => {
   try {
     logInfo("Iniciando geração de resumo profissional dinâmico");
 
     // Identificar skills relevantes na descrição da vaga
-    const skillsEncontradas = identificarSkillsRelevantes(descricaoVaga || "");
+    const skillsEncontradas = await identificarSkillsRelevantes(descricaoVaga || "");
     const responsabilidades = identificarResponsabilidades(
       descricaoVaga || "",
       skillsEncontradas,
@@ -268,10 +268,11 @@ const extrairPalavrasChaveVaga = (descricaoVaga) => {
  * @param {string} descricaoVaga - Descrição da vaga
  * @returns {Array} Array de skills encontradas que existem tanto na vaga quanto no perfil
  */
-const identificarSkillsRelevantes = (descricaoVaga) => {
+const identificarSkillsRelevantes = async (descricaoVaga) => {
   const skillsEncontradas = [];
   const descricaoLower = normalizeText(descricaoVaga);
   const palavrasChaveVaga = extrairPalavrasChaveVaga(descricaoVaga);
+  const minhasSkills = await getMinhasSkills();
 
   logInfo("Palavras-chave extraídas da vaga", {
     palavrasChave: palavrasChaveVaga,

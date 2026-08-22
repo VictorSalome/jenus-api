@@ -46,19 +46,19 @@ function normalizeText(text) {
 
 function extractTitle(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  
+
   for (const line of lines) {
     const cleanLine = line.replace(/[📢💎]/g, '').trim();
-    
-    if (cleanLine.match(/^vaga\s+/i) || cleanLine.match(/^📢\s*vaga/i)) {
+
+    if (cleanLine.match(/^vaga\s*[:\-]\s*/i) || cleanLine.match(/^📢\s*vaga/i)) {
       return cleanLine
         .replace(/^📢\s*/i, '')
-        .replace(/^vaga\s+/i, '')
+        .replace(/^vaga\s*[:\-]\s*/i, '')
         .replace(/📢.*$/, '')
         .trim();
     }
   }
-  
+
   return null;
 }
 

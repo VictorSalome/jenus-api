@@ -3,6 +3,7 @@ import { getStats } from "../buscas/autoApply.service.js";
 import { registrarEnvio, registrarErro } from "../monitor/stats.service.js";
 import { buscarVagasBrasil } from "../scraperBR.service.js";
 import { executarPipeline } from "../buscas/autoApply.service.js";
+import { getEnviosCount } from "../email/email.service.js";
 import fs from "fs/promises";
 import path from "path";
 
@@ -30,10 +31,14 @@ router.get("/monitor", async (req, res) => {
       // Arquivo não existe ainda
     }
 
+    // Total histórico de envios com status SENT (do banco)
+    const totalEnviados = await getEnviosCount();
+
     res.json({
       success: true,
       total: stats.totalVagas || 0,
       enviados: stats.enviados || 0,
+      totalEnviados,
       erros: stats.erros || 0,
       tempoMedio: stats.tempoMedio || "0ms",
       ultimoEnvio: stats.ultimoEnvio || null,

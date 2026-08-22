@@ -336,7 +336,7 @@ export const personalizarCurriculo = async (dadosVaga) => {
 
     // Gerar resumo profissional dinâmico baseado na descrição da vaga
     const descricaoCompleta = `${dadosVaga.titulo || ""} ${dadosVaga.descricao || ""} ${dadosVaga.stackTecnologica?.join(" ") || ""} ${dadosVaga.responsabilidades?.join(" ") || ""} ${dadosVaga.requisitosObrigatorios?.join(" ") || ""} ${dadosVaga.diferenciaisDesejaveis?.join(" ") || ""}`;
-    const resumoDinamico = gerarResumo(descricaoCompleta);
+    const resumoDinamico = await gerarResumo(descricaoCompleta);
 
     // Personalizar título baseado na vaga
     const tituloPersonalizado = personalizarTitulo(

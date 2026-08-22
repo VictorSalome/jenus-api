@@ -25,6 +25,41 @@ import { readFileSync } from "node:fs";
 import path from "path";
 
 /**
+ * POST /analisar-vaga
+ * Apenas roda o parser nativo e retorna dados estruturados
+ * Não gera PDF nem persiste no banco
+ */
+export const analisarVagaController = asyncHandler(async (req, res) => {
+  const { textoVaga } = req.body;
+
+  if (!textoVaga || typeof textoVaga !== 'string' || textoVaga.length < 50) {
+    throw new ValidationError("Texto da vaga muito curto ou inválido", [
+      "Envie textoVaga com pelo menos 50 caracteres",
+    ]);
+  }
+
+  const vagaParseada = parseVaga(textoVaga);
+
+  if (!vagaParseada) {
+    throw new ValidationError("Não foi possível identificar uma vaga no texto", [
+      "O texto não parece ser uma descrição de vaga válida",
+    ]);
+  }
+
+  res.json({
+    sucesso: true,
+    vagaParseada: {
+      titulo: vagaParseada.title,
+      empresa: vagaParseada.company,
+      seniority: vagaParseada.seniority,
+      skills: vagaParseada.skills || [],
+      requirements: vagaParseada.requirements || [],
+      rawDescription: vagaParseada.rawDescription,
+    },
+  });
+});
+
+/**
  * STEP 1: Gera currículo e retorna preview (sem enviar email)
  * @param {Object} req - Request object
  * @param {Object} res - Response object
