@@ -3,6 +3,7 @@ import path from "path";
 import { logInfo, logError } from "../utils/logger.js";
 import { calculateSimilarity } from "../utils/textUtils.js";
 import { gerarResumo } from "./resumoProfissional.service.js";
+import { getDb } from "../../core/database.ts";
 
 const normalizeText = (value = "") =>
   String(value)
@@ -390,13 +391,110 @@ export const personalizarCurriculo = async (dadosVaga) => {
 };
 
 /**
- * Carrega o perfil do candidato do arquivo JSON
+ * Carrega o perfil do candidato do banco de dados
  */
 const carregarPerfilCandidato = async () => {
   try {
-    const caminhoArquivo = path.join(process.cwd(), "candidate-profile.json");
-    const conteudo = await fs.readFile(caminhoArquivo, "utf-8");
-    return JSON.parse(conteudo);
+    const db = await getDb();
+    
+    // Carregar skills do banco
+    const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
+    const skills = {
+      programming: [],
+      frameworks: [],
+      databases: [],
+      methodologies: [],
+      testing: [],
+      devops: [],
+      aiAutomation: []
+    };
+    
+    const categoryMap = {
+      'programming': 'programming',
+      'frameworks': 'frameworks',
+      'databases': 'databases',
+      'methodologies': 'methodologies',
+      'testing': 'testing',
+      'devops': 'devops',
+      'aiAutomation': 'aiAutomation'
+    };
+    
+    for (const row of skillsRows) {
+      const cat = categoryMap[row.category] || row.category;
+      if (skills[cat]) {
+        skills[cat].push(row.tech);
+      }
+    }
+    
+    // Dados estáticos do perfil (podem ser movidos para DB futuramente)
+    const personalInfo = {
+      name: "Victor Salomão",
+      email: "vsalome41@gmail.com",
+      phone: "+55 11 99999-9999",
+      linkedin: "https://linkedin.com/in/victorsalome",
+      github: "https://github.com/victorsalome",
+      portfolio: "https://victorsalome.dev",
+      title: "Desenvolvedor Full Stack | React, TypeScript, Node.js | .NET, SQL"
+    };
+    
+    const experiences = [
+      {
+        company: "Tech Solutions Ltda",
+        position: "Desenvolvedor Full Stack",
+        startDate: "2022-01",
+        endDate: "2024-01",
+        technologies: ["React", "TypeScript", "Node.js", "Express", "PostgreSQL", "RESTful APIs"],
+        keywords: ["api"],
+        achievements: ["Desenvolvimento de APIs REST", "Implementação de autenticação JWT", "Otimização de queries PostgreSQL"]
+      },
+      {
+        company: "Inova Digital",
+        position: "Estagiário de Desenvolvimento",
+        startDate: "2021-07",
+        endDate: "2021-12",
+        technologies: ["React", "Node.js", "Jest", "Testing Library"],
+        keywords: ["teste", "refatoracao"],
+        achievements: ["Testes automatizados com Jest", "Refatoração de código legado", "Implementação de testes CI/CD"]
+      }
+    ];
+    
+    const education = [
+      {
+        institution: "Faculdade de Tecnologia",
+        degree: "Bacharelando em Sistemas da Informação",
+        startDate: "2019-03",
+        endDate: "2023-12",
+        description: "Especialização em Desenvolvimento Web e Segurança da Informação"
+      }
+    ];
+    
+    const certifications = [
+      { name: "AWS Cloud Practitioner", issuer: "Amazon Web Services" },
+      { name: "Node.js Certified Developer", issuer: "OpenJS Foundation" }
+    ];
+    
+    const languages = [
+      { language: "Português", level: "Nativo" },
+      { language: "Inglês", level: "Intermediário" }
+    ];
+    
+    const specializations = [
+      "Desenvolvimento Full Stack para aplicações web escaláveis",
+      "Desenvolvimento Back-end com Node.js, NestJS e APIs REST/GraphQL",
+      "Desenvolvimento Front-end com React, Next.js e TypeScript",
+      "Testes automatizados com Jest e Testing Library",
+      "Cloud, CI/CD e integrações com AWS"
+    ];
+    
+    return {
+      personalInfo,
+      experiences,
+      education,
+      certifications,
+      skills,
+      languages,
+      specializations
+    };
   } catch (error) {
     logError("Erro ao carregar perfil do candidato", error);
     throw new Error("Não foi possível carregar o perfil do candidato");

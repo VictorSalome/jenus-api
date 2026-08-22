@@ -6,6 +6,7 @@ import { gerarPdfCurriculo } from "../pdf/pdfGenerator.service.js";
 import { enviarCurriculo } from "../email/email.service.js";
 import { logInfo, logError, logWarn } from "../utils/logger.js";
 import { getStats, registrarEnvio, registrarErro, registrarVaga } from "../monitor/stats.service.js";
+import { getDb } from "../../core/database.ts";
 import path from "path";
 import fs from "fs/promises";
 
@@ -107,13 +108,45 @@ export const executarPipeline = async ({
 
       // 5. ENVIAR EMAIL (só chega aqui se tem email + PDF)
       try {
-        // Carregar dados do candidato
-        const candidatoData = JSON.parse(
-          await fs.readFile(
-            path.join(process.cwd(), 'candidate-profile.json'),
-            'utf-8'
-          )
-        );
+        // Carregar dados do candidato do banco
+        const db = await getDb();
+        const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
+        const skills = {
+          programming: [],
+          frameworks: [],
+          databases: [],
+          methodologies: [],
+          testing: [],
+          devops: [],
+          aiAutomation: []
+        };
+        const categoryMap = {
+          'programming': 'programming',
+          'frameworks': 'frameworks',
+          'databases': 'databases',
+          'methodologies': 'methodologies',
+          'testing': 'testing',
+          'devops': 'devops',
+          'aiAutomation': 'aiAutomation'
+        };
+        for (const row of skillsRows) {
+          const cat = categoryMap[row.category] || row.category;
+          if (skills[cat]) {
+            skills[cat].push(row.tech);
+          }
+        }
+        
+        const candidatoData = {
+          personalInfo: {
+            name: "Victor Salomão",
+            email: "vsalome41@gmail.com",
+            phone: "+55 11 99999-9999",
+            linkedin: "https://linkedin.com/in/victorsalome",
+            github: "https://github.com/victorsalome",
+            portfolio: "https://victorsalome.dev",
+            title: "Desenvolvedor Full Stack | React, TypeScript, Node.js | .NET, SQL"
+          }
+        };
         
         // Construir dadosVaga completo
         const dadosVagaCompleto = {

@@ -2,11 +2,12 @@ import nodemailer from "nodemailer";
 import fs from "fs/promises";
 import path from "path";
 import { logInfo, logError } from "../utils/logger.js";
+import { getDb } from "../../core/database.ts";
 
 /**
  * Configuração do transporter de e-mail
  */
-const getSmtpRuntimeConfig = (overrides = {}) => {
+export const getSmtpRuntimeConfig = (overrides = {}) => {
   const basePort = parseInt(process.env.SMTP_PORT, 10) || 587;
   const port =
     overrides.port !== undefined ? parseInt(overrides.port, 10) : basePort;
@@ -27,7 +28,7 @@ const getSmtpRuntimeConfig = (overrides = {}) => {
   };
 };
 
-const criarTransporter = (overrides = {}) => {
+export const criarTransporter = (overrides = {}) => {
   const smtp = getSmtpRuntimeConfig(overrides);
   const config = {
     host: smtp.host,
@@ -501,4 +502,111 @@ export const testarConexaoSMTP = async (overrides = {}) => {
       usedFallback: false,
     };
   }
+};
+
+/**
+ * Envia currículo com registro atômico no banco (PENDING → SENT/FAILED)
+ * Fluxo:
+ * 1. INSERT INTO envios (status='PENDING') → COMMIT
+ * 2. Tentar envio via nodemailer
+ * 3. Sucesso → UPDATE envios SET status='SENT' WHERE id=?
+ * 4. Falha → UPDATE envios SET status='FAILED' WHERE id=?
+ * 
+ * @param {Object} params
+ * @param {string} params.emailDestino - E-mail de destino
+ * @param {string} params.caminhoArquivoPdf - Caminho do arquivo PDF
+ * @param {Object} params.dadosVaga - Dados da vaga
+ * @param {Object} params.candidato - Dados do candidato
+ * @param {number} [params.vagaId] - ID da vaga (opcional)
+ * @returns {Object} Resultado do envio com envioId
+ */
+export const enviarCurriculoComRegistro = async ({
+  emailDestino,
+  caminhoArquivoPdf,
+  dadosVaga,
+  candidato,
+  vagaId = null,
+}) => {
+  const db = await getDb();
+  
+  // 1. Criar registro como PENDING (transação atômica)
+  let envioId = null;
+  try {
+    await db.exec("BEGIN TRANSACTION");
+    const result = await db.run(
+      `INSERT INTO envios (vaga_id, filename, email_destino, vaga_titulo, status)
+       VALUES (?, ?, ?, ?, 'PENDING')`,
+      vagaId,
+      path.basename(caminhoArquivoPdf),
+      emailDestino,
+      dadosVaga.titulo || "Vaga não identificada"
+    );
+    envioId = result.lastID;
+    await db.exec("COMMIT");
+    logInfo("Envio registrado como PENDING", { envioId, emailDestino });
+  } catch (error) {
+    await db.exec("ROLLBACK");
+    logError("Erro ao registrar envio PENDING", error);
+    throw new Error(`Falha ao registrar envio: ${error.message}`);
+  }
+  
+  // 2. Tentar envio
+  let resultadoEmail = null;
+  let erroEnvio = null;
+  
+  try {
+    resultadoEmail = await enviarCurriculo(emailDestino, caminhoArquivoPdf, dadosVaga, candidato);
+    
+    // 3. Sucesso → UPDATE status = SENT
+    await db.run(
+      "UPDATE envios SET status = 'SENT' WHERE id = ?",
+      envioId
+    );
+    logInfo("Envio marcado como SENT", { envioId, messageId: resultadoEmail.messageId });
+    
+    return {
+      ...resultadoEmail,
+      envioId,
+      status: 'SENT'
+    };
+  } catch (error) {
+    erroEnvio = error;
+    
+    // 4. Falha → UPDATE status = FAILED
+    try {
+      await db.run(
+        "UPDATE envios SET status = 'FAILED' WHERE id = ?",
+        envioId
+      );
+      logInfo("Envio marcado como FAILED", { envioId, error: error.message });
+    } catch (updateError) {
+      logError("Erro ao atualizar status para FAILED", updateError);
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * Obtém contagem de envios com status SENT
+ */
+export const getEnviosCount = async () => {
+  const db = await getDb();
+  const result = await db.get(
+    "SELECT COUNT(*) as count FROM envios WHERE status = 'SENT'"
+  );
+  return result?.count || 0;
+};
+
+/**
+ * Obtém histórico de envios
+ */
+export const getEnviosHistory = async (limit = 50) => {
+  const db = await getDb();
+  const envios = await db.all(
+    `SELECT id, vaga_id, filename, email_destino, vaga_titulo, status, created_at
+     FROM envios ORDER BY created_at DESC LIMIT ?`,
+    limit
+  );
+  return envios;
 };

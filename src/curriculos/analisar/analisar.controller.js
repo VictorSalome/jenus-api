@@ -1,8 +1,10 @@
 import { extrairDadosVaga } from "./vagaExtractor.service.js";
+import { parseVaga } from "./vagaParser.js";
 import { personalizarCurriculo } from "./curriculoPersonalizador.service.js";
 import { gerarPdfCurriculo } from "../pdf/pdfGenerator.service.js";
+import { getDb } from "../../core/database.ts";
 import {
-  enviarCurriculo,
+  enviarCurriculoComRegistro,
   validarConfiguracaoEmail,
   testarConexaoSMTP,
 } from "../email/email.service.js";
@@ -21,9 +23,6 @@ import config from "../config/index.js";
 import fs from "fs/promises";
 import { readFileSync } from "node:fs";
 import path from "path";
-const candidateProfile = JSON.parse(
-  readFileSync(path.join(process.cwd(), "candidate-profile.json"), "utf-8"),
-);
 
 /**
  * STEP 1: Gera currículo e retorna preview (sem enviar email)
@@ -55,9 +54,50 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
     });
   }
 
-  // 2. Extrair dados da vaga
-  logInfo("Extraindo dados da vaga", { requestId });
-  const dadosVaga = await extrairDadosVaga(textoParaAnalise);
+  // 2. Parsear vaga com parser nativo (se for texto livre)
+  let dadosVaga;
+  let vagaId = null;
+  
+  if (typeof textoParaAnalise === 'string' && textoParaAnalise.length > 100) {
+    logInfo("Parseando vaga com parser nativo", { requestId });
+    const vagaParseada = parseVaga(textoParaAnalise);
+    
+    if (vagaParseada) {
+      // Persistir vaga no banco
+      const db = await getDb();
+      const result = await db.run(
+        `INSERT INTO vagas (title, company, seniority, raw_description, skills_json, requirements_json)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        vagaParseada.title,
+        vagaParseada.company,
+        vagaParseada.seniority,
+        vagaParseada.rawDescription,
+        vagaParseada.skills ? JSON.stringify(vagaParseada.skills) : null,
+        vagaParseada.requirements ? JSON.stringify(vagaParseada.requirements) : null
+      );
+      vagaId = result.lastID;
+      logInfo("Vaga persistida", { vagaId, requestId });
+      
+      // Formatar para o formato esperado pelo personalizador
+      dadosVaga = {
+        titulo: vagaParseada.title,
+        empresa: vagaParseada.company,
+        senioridade: vagaParseada.seniority,
+        areaAtuacao: vagaParseada.skills || [],
+        stackTecnologica: vagaParseada.skills || [],
+        emailContato: null, // será extraído pelo extractor se houver
+        descricao: vagaParseada.rawDescription,
+        requisitos: vagaParseada.requirements,
+        responsabilidades: vagaParseada.responsibilities
+      };
+    }
+  }
+  
+  // Fallback: usar extractor original se parser não funcionou
+  if (!dadosVaga) {
+    logInfo("Usando extractor original", { requestId });
+    dadosVaga = await extrairDadosVaga(textoParaAnalise);
+  }
 
   const extractionValidation = validateExtractedJobData(dadosVaga);
   if (!extractionValidation.isValid) {
@@ -94,6 +134,7 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
     emailDestino: dadosVaga.emailContato,
     empresa: dadosVaga.empresa,
     curriculoGerado: nomeArquivo,
+    vagaId: vagaId,
     detalhes: {
       relevancia: `${curriculoPersonalizado.relevanceScore}%`,
       tecnologiasEncontradas:
@@ -129,7 +170,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
     process.env.RENDER === "true" ||
     Boolean(process.env.RENDER_EXTERNAL_HOSTNAME);
 
-  const { nomeArquivo, emailDestino, vagaTitulo } = req.body;
+  const { nomeArquivo, emailDestino, vagaTitulo, vagaId } = req.body;
 
   if (!nomeArquivo) {
     throw new ValidationError("Nome do arquivo é obrigatório", [
@@ -140,6 +181,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
   logInfo("Iniciando envio de currículo", {
     nomeArquivo,
     emailDestino,
+    vagaId,
     requestId,
   });
 
@@ -165,15 +207,53 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
     }
   }
 
-  // Enviar email
+  // Carregar perfil do candidato do banco
+  const db = await getDb();
+  const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
+  const skills = {
+    programming: [],
+    frameworks: [],
+    databases: [],
+    methodologies: [],
+    testing: [],
+    devops: [],
+    aiAutomation: []
+  };
+  const categoryMap = {
+    'programming': 'programming',
+    'frameworks': 'frameworks',
+    'databases': 'databases',
+    'methodologies': 'methodologies',
+    'testing': 'testing',
+    'devops': 'devops',
+    'aiAutomation': 'aiAutomation'
+  };
+  for (const row of skillsRows) {
+    const cat = categoryMap[row.category] || row.category;
+    if (skills[cat]) {
+      skills[cat].push(row.tech);
+    }
+  }
+
+  const personalInfo = {
+    name: "Victor Salomão",
+    email: "vsalome41@gmail.com",
+    phone: "+55 11 99999-9999",
+    linkedin: "https://linkedin.com/in/victorsalome",
+    github: "https://github.com/victorsalome",
+    portfolio: "https://victorsalome.dev",
+    title: "Desenvolvedor Full Stack | React, TypeScript, Node.js | .NET, SQL"
+  };
+
+  // Enviar email com registro atômico PENDING → SENT/FAILED
   let resultadoEmail;
   try {
-    const info = candidateProfile.personalInfo || {};
-    resultadoEmail = await enviarCurriculo(
+    const info = personalInfo || {};
+    resultadoEmail = await enviarCurriculoComRegistro({
       emailDestino,
       caminhoArquivoPdf,
-      { titulo: vagaTitulo, emailContato: emailDestino },
-      {
+      dadosVaga: { titulo: vagaTitulo, emailContato: emailDestino },
+      candidato: {
         name: info.name || "Victor Salome Sousa",
         email: info.email,
         phone: info.phone,
@@ -181,7 +261,8 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
         github: info.github,
         portfolio: info.portfolio,
       },
-    );
+      vagaId: vagaId || null,
+    });
   } catch (emailError) {
     logError("Erro no envio de e-mail", emailError);
 
@@ -191,6 +272,8 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
         sucesso: true,
         messageId: `dev-mode-${Date.now()}`,
         previewUrl: `/temp/${nomeArquivo}`,
+        envioId: null,
+        status: 'SENT'
       };
     } else {
       const smtpMessage = String(emailError?.message || "Erro SMTP").replace(
@@ -230,6 +313,8 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
       enviado: resultadoEmail.sucesso,
       messageId: resultadoEmail.messageId,
       destino: emailDestino,
+      envioId: resultadoEmail.envioId,
+      status: resultadoEmail.status,
     },
     tempoProcessamento: `${processingTime}ms`,
     requestId,
@@ -238,6 +323,8 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
   logInfo("Currículo enviado com sucesso", {
     emailDestino,
     resultado: resultadoEmail.sucesso,
+    envioId: resultadoEmail.envioId,
+    status: resultadoEmail.status,
     requestId,
   });
 

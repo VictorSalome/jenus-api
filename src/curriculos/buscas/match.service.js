@@ -1,41 +1,57 @@
 import { logInfo } from "../utils/logger.js";
-import fs from "fs";
-import path from "path";
+import { getDb } from "../../core/database.ts";
 
-let cachedProfile = null;
+let cachedProfileSkills = null;
 
 /**
- * Carrega o perfil do candidato (candidate-profile.json)
+ * Carrega as skills do candidato do banco de dados
  */
-function loadProfile() {
-  if (cachedProfile) return cachedProfile;
-  const profilePath = path.join(process.cwd(), "candidate-profile.json");
-  if (!fs.existsSync(profilePath)) return null;
-  cachedProfile = JSON.parse(fs.readFileSync(profilePath, "utf-8"));
-  return cachedProfile;
+async function loadProfileSkills() {
+  if (cachedProfileSkills) return cachedProfileSkills;
+  
+  const db = await getDb();
+  const rows = await db.all('SELECT category, tech FROM profile_skills');
+  
+  cachedProfileSkills = rows.map(r => r.tech);
+  return cachedProfileSkills;
 }
 
 /**
  * Calcula score de compatibilidade entre uma vaga e o perfil
  * @param {Object} vaga - Vaga normalizada
- * @returns {Object} { score, matches, missing, summary }
+ * @returns {Object} { score, matches, missing, requiredMissing, optionalMissing, summary }
  */
-export const calcularCompatibilidade = (vaga) => {
-  const profile = loadProfile();
-  if (!profile)
+export const calcularCompatibilidade = async (vaga) => {
+  const profileSkills = await loadProfileSkills();
+  if (!profileSkills || profileSkills.length === 0) {
     return {
       score: 0,
       matches: [],
       missing: [],
+      requiredMissing: [],
+      optionalMissing: [],
       summary: "Perfil não encontrado",
     };
+  }
 
-  const profileSkills = extrairSkillsDoPerfil(profile);
   const vagaSkills = extrairSkillsDaVaga(vaga);
 
-  // ── Match de skills ──
+  // Separar skills obrigatórias e opcionais (heurística simples)
+  const requiredSkills = vagaSkills.filter(s => 
+    vaga.description?.toLowerCase().includes(`obrigatór`) || 
+    vaga.description?.toLowerCase().includes(`requer`) ||
+    vaga.description?.toLowerCase().includes(`mandatór`)
+  );
+  
+  // Se não tem indicação explícita, considerar as primeiras skills como obrigatórias
+  const skillsObrigatorias = requiredSkills.length > 0 ? requiredSkills : vagaSkills.slice(0, Math.ceil(vagaSkills.length * 0.6));
+  const skillsOpcionais = vagaSkills.filter(s => !skillsObrigatorias.includes(s));
+
+  // Match de skills
   const matches = [];
   const missing = [];
+  const requiredMissing = [];
+  const optionalMissing = [];
 
   for (const skill of vagaSkills) {
     const found = profileSkills.find(
@@ -47,51 +63,29 @@ export const calcularCompatibilidade = (vaga) => {
       matches.push({ required: skill, found });
     } else {
       missing.push(skill);
+      if (skillsObrigatorias.includes(skill)) {
+        requiredMissing.push(skill);
+      } else {
+        optionalMissing.push(skill);
+      }
     }
   }
 
-  // ── Score por skills (70%) ──
-  const skillScore =
-    vagaSkills.length > 0 ? (matches.length / vagaSkills.length) * 70 : 35;
-
-  // ── Match de localização (15%) ──
-  const locScore = calcularScoreLocalizacao(vaga, profile) * 15;
-
-  // ── Match de nível (15%) ──
-  const nivelScore = calcularScoreNivel(vaga, profile) * 15;
-
-  // ── Total ──
-  const score = Math.round(skillScore + locScore + nivelScore);
+  // Score simples baseado em skills
+  const skillScore = vagaSkills.length > 0 ? (matches.length / vagaSkills.length) * 100 : 0;
+  const score = Math.round(skillScore);
 
   const summary = gerarResumo(score, matches, missing);
 
-  return { score: Math.min(score, 100), matches, missing, summary };
+  return { 
+    score: Math.min(score, 100), 
+    matches, 
+    missing, 
+    requiredMissing,
+    optionalMissing,
+    summary 
+  };
 };
-
-/**
- * Extrai todas as skills do perfil (experiências + skills diretas)
- */
-function extrairSkillsDoPerfil(profile) {
-  const skills = new Set();
-
-  // skills pode ser array ou objeto com categorias
-  if (Array.isArray(profile.skills)) {
-    profile.skills.forEach((s) => skills.add(s));
-  } else if (profile.skills && typeof profile.skills === "object") {
-    Object.values(profile.skills).forEach((arr) => {
-      if (Array.isArray(arr)) arr.forEach((s) => skills.add(s));
-    });
-  }
-
-  if (profile.experiences) {
-    profile.experiences.forEach((exp) => {
-      if (exp.technologies) exp.technologies.forEach((t) => skills.add(t));
-      if (exp.keywords) exp.keywords.forEach((k) => skills.add(k));
-    });
-  }
-
-  return [...skills];
-}
 
 /**
  * Extrai skills/tecnologias mencionadas na vaga

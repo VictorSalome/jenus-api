@@ -19,6 +19,9 @@ import smtpRoutes from "./smtp/smtp.routes.js";
 import buscasRoutes from "./buscas/buscas.routes.js";
 import scraperRoutes from "./scraper/scraper.routes.js";
 import monitorRoutes from "./monitor/monitor.routes.js";
+import perfilRoutes from "./perfil/perfil.routes.js";
+import compatibilidadeRoutes from "./compatibilidade.routes.js";
+import emailTestRoutes from "./email/emailTest.routes.js";
 
 const app = express();
 
@@ -97,6 +100,9 @@ app.use(smtpRoutes);
 app.use("/buscar-vagas", buscasRoutes);
 app.use("/scraper", scraperRoutes);
 app.use(monitorRoutes);
+app.use(perfilRoutes);
+app.use(compatibilidadeRoutes);
+app.use(emailTestRoutes);
 
 // Middleware para rotas não encontradas
 app.use(notFoundHandler);

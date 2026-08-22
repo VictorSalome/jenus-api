@@ -4,6 +4,7 @@ import { config } from './config.js';
 import * as logger from './logger.js';
 import fs from 'fs';
 import path from 'path';
+import { migrations, migrationOrder, type MigrationName } from './migrations/index.js';
 
 const dbDir = path.dirname(config.DATABASE_PATH);
 if (!fs.existsSync(dbDir)) {
@@ -116,6 +117,38 @@ const createIndexes = async (): Promise<void> => {
   `);
 };
 
+const runMigrations = async (): Promise<void> => {
+  const database = await getDb();
+  logger.info('Verificando migrations pendentes...', 'Database');
+
+  // Garantir que a tabela schema_migrations existe antes de consultar
+  await database.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      executed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  for (const name of migrationOrder as readonly MigrationName[]) {
+    const executed = await database.get(
+      'SELECT 1 FROM schema_migrations WHERE name = ?',
+      name
+    );
+    if (!executed) {
+      logger.info(`Executando migration: ${name}`, 'Database');
+      await database.exec(migrations[name]);
+      await database.run(
+        'INSERT INTO schema_migrations (name) VALUES (?)',
+        name
+      );
+      logger.info(`Migration ${name} executada com sucesso`, 'Database');
+    } else {
+      logger.debug(`Migration ${name} já executada, pulando`, 'Database');
+    }
+  }
+};
+
 export const initDatabase = async (): Promise<void> => {
   try {
     await createTables();
@@ -215,6 +248,7 @@ export const seedDatabase = async (): Promise<void> => {
 // Inicializa ao importar
 export const initDb = async (): Promise<void> => {
   await initDatabase();
+  await runMigrations();
   await seedDatabase();
 };
 

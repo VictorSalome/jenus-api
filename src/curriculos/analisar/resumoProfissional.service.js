@@ -2,6 +2,7 @@ import { logInfo, logError } from "../utils/logger.js";
 import { calculateSimilarity } from "../utils/textUtils.js";
 import fs from "fs";
 import path from "path";
+import { getDb } from "../../core/database.ts";
 
 const normalizeText = (value = "") =>
   String(value)
@@ -78,46 +79,39 @@ const CONTEXT_RULES = [
 ];
 
 /**
- * Carrega as skills do candidato a partir do arquivo candidate-profile.json
+ * Carrega as skills do candidato a partir do banco de dados
  * @returns {Array} Array com todas as skills do candidato
  */
-const carregarSkillsCandidato = () => {
+const carregarSkillsCandidato = async () => {
   try {
-    const profilePath = path.join(process.cwd(), "candidate-profile.json");
-    const profileData = JSON.parse(fs.readFileSync(profilePath, "utf8"));
-
-    // Extrai skills dinamicamente de qualquer categoria em skills
+    const db = await getDb();
+    const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
     const todasSkills = [];
-    const categoriasSkills = profileData.skills || {};
-
-    Object.values(categoriasSkills).forEach((categoria) => {
-      if (Array.isArray(categoria)) {
-        todasSkills.push(...categoria);
-      }
-    });
-
-    // Extrai tecnologias das experiências
-    if (profileData.experiences) {
-      profileData.experiences.forEach((exp) => {
-        if (exp.technologies) {
-          todasSkills.push(...exp.technologies);
-        }
-      });
+    
+    for (const row of skillsRows) {
+      todasSkills.push(row.tech);
     }
-
+    
     // Remove duplicatas e valores não textuais
     return [...new Set(todasSkills)].filter(
       (item) => typeof item === "string" && item.trim().length > 0,
     );
   } catch (error) {
-    logError("Erro ao carregar skills do candidato", error);
+    logError("Erro ao carregar skills do candidato do banco", error);
     // Fallback para skills básicas
     return ["JavaScript", "React", "Node.js", "HTML", "CSS"];
   }
 };
 
-// Carrega as skills do candidato
-const minhasSkills = carregarSkillsCandidato();
+// Carrega as skills do candidato (lazy loading)
+let minhasSkills = null;
+
+async function getMinhasSkills() {
+  if (!minhasSkills) {
+    minhasSkills = await carregarSkillsCandidato();
+  }
+  return minhasSkills;
+}
 
 const expandirPalavrasChavePorContexto = (descricaoVaga, palavrasChave) => {
   const descricaoNormalizada = normalizeText(descricaoVaga);
