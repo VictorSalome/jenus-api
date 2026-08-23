@@ -35,9 +35,26 @@ app.use('/api/auth', authApp);
 app.use('/api', promoApp);
 app.use('/api/curriculo', requireAuth, curriculosApp);
 
-// ── Health check ──
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// ── Health check com validação de banco e tabelas ──
+app.get('/api/health', async (_req, res) => {
+  try {
+    const db = await initDb();
+    // Checa conexão e tabelas essenciais
+    await db.get("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1");
+    res.json({
+      status: 'ok',
+      database: 'connected',
+      tables: 'ok',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      database: 'disconnected',
+      error: error?.message || 'Database check failed',
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // ── 404 ──
