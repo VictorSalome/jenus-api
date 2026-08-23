@@ -3,6 +3,7 @@ name: 🚀 Deploy to Oracle Cloud
 on:
   push:
     branches: [main, master]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -25,5 +26,5 @@ jobs:
         run: |
           echo "🚀 Deploying to Oracle..."
           ssh -i ~/.ssh/oracle.key ${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }} \
-            "cd /home/ubuntu/enviaPromo && git pull origin master && npm install && npm run build && pm2 restart promo-monitor"
+            "cd ~/jenus-api && git pull origin main && npm ci --production && pm2 reload jenus-api --update-env && pm2 save"
           echo "✅ Deploy concluído!"
