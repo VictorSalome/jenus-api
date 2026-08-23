@@ -2,7 +2,7 @@ import { logInfo, logError } from "../utils/logger.js";
 import { calculateSimilarity } from "../utils/textUtils.js";
 import fs from "fs";
 import path from "path";
-import { getDb } from "../../core/database.ts";
+import { getDb } from "../../core/database.js";
 
 const normalizeText = (value = "") =>
   String(value)

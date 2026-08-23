@@ -2,7 +2,7 @@ import { extrairDadosVaga } from "./vagaExtractor.service.js";
 import { parseVaga } from "./vagaParser.js";
 import { personalizarCurriculo } from "./curriculoPersonalizador.service.js";
 import { gerarPdfCurriculo } from "../pdf/pdfGenerator.service.js";
-import { getDb } from "../../core/database.ts";
+import { getDb } from "../../core/database.js";
 import {
   enviarCurriculoComRegistro,
   validarConfiguracaoEmail,

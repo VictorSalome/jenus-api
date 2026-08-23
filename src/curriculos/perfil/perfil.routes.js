@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getDb } from "../../core/database.ts";
+import { getDb } from "../../core/database.js";
 import { asyncHandler, ValidationError } from "../middleware/errorHandler.js";
 import { logInfo, logError } from "../utils/logger.js";
 

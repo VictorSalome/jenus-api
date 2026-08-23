@@ -1,4 +1,4 @@
-import { getDb } from "../core/database.ts";
+import { getDb } from "../core/database.js";
 import { logInfo } from "./utils/logger.js";
 
 /**

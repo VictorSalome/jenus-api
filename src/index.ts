@@ -40,14 +40,14 @@ app.get("/api/health", async (_req, res) => {
   try {
     const db = await initDb();
     // Checa conexão e tabelas essenciais
-    await db.get("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1"); 
+    await db.get("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1");
     res.json({
       status: "ok",
       database: "connected",
       tables: "ok",
       timestamp: new Date().toISOString(),
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({
       status: "error",
       database: "disconnected",

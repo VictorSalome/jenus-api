@@ -3,7 +3,7 @@
  * Executar com: node src/curriculos/perfil/seedProfileSkills.js
  */
 
-import { getDb } from "../../core/database.ts";
+import { getDb } from "../../core/database.js";
 
 const candidateProfile = {
   skills: {

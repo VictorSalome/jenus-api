@@ -3,7 +3,7 @@ import path from "path";
 import { logInfo, logError } from "../utils/logger.js";
 import { calculateSimilarity } from "../utils/textUtils.js";
 import { gerarResumo } from "./resumoProfissional.service.js";
-import { getDb } from "../../core/database.ts";
+import { getDb } from "../../core/database.js";
 
 const normalizeText = (value = "") =>
   String(value)

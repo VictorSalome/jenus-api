@@ -6,7 +6,7 @@ import { gerarPdfCurriculo } from "../pdf/pdfGenerator.service.js";
 import { enviarCurriculo } from "../email/email.service.js";
 import { logInfo, logError, logWarn } from "../utils/logger.js";
 import { getStats, registrarEnvio, registrarErro, registrarVaga } from "../monitor/stats.service.js";
-import { getDb } from "../../core/database.ts";
+import { getDb } from "../../core/database.js";
 import path from "path";
 import fs from "fs/promises";
 

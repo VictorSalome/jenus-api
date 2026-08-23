@@ -246,10 +246,11 @@ export const seedDatabase = async (): Promise<void> => {
 };
 
 // Inicializa ao importar
-export const initDb = async (): Promise<void> => {
+export const initDb = async (): Promise<Database<sqlite3.Database, sqlite3.Statement>> => {
   await initDatabase();
   await runMigrations();
   await seedDatabase();
+  return getDb();
 };
 
 // Exporta db já inicializado para uso síncrono (depois de initDb)

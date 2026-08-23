@@ -1,5 +1,5 @@
 import { logInfo } from "../utils/logger.js";
-import { getDb } from "../../core/database.ts";
+import { getDb } from "../../core/database.js";
 
 let cachedProfileSkills = null;
 

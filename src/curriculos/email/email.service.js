@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 import fs from "fs/promises";
 import path from "path";
 import { logInfo, logError } from "../utils/logger.js";
-import { getDb } from "../../core/database.ts";
+import { getDb } from "../../core/database.js";
 
 /**
  * Configuração do transporter de e-mail
