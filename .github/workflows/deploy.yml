@@ -24,7 +24,12 @@ jobs:
 
       - name: 🚀 Deploy
         run: |
-          echo "🚀 Deploying to Oracle..."
+          echo "🚀 Deploying to Oracle using NPM..."
           ssh -i ~/.ssh/oracle.key ${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }} \
-            "cd ~/jenus-api && git pull origin main && npm ci --production && pm2 reload jenus-api --update-env && pm2 save"
-          echo "✅ Deploy concluído!"
+            "cd ~/jenus-api && \
+             git pull origin main && \
+             rm -f pnpm-lock.yaml pnpm-workspace.yaml yarn.lock && \
+             npm ci --production && \
+             pm2 reload jenus-api --update-env && \
+             pm2 save"
+          echo "✅ Deploy concluído via NPM!"
