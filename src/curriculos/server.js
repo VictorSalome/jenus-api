@@ -95,14 +95,14 @@ if (config.dev.logRequests) {
 
 // ── Feature routes ──
 app.use("/api/curriculo", analisarRoutes);
-app.use(testeRoutes);
-app.use(smtpRoutes);
-app.use("/buscar-vagas", buscasRoutes);
-app.use("/scraper", scraperRoutes);
-app.use(monitorRoutes);
 app.use("/api/curriculo", perfilRoutes);
-app.use(compatibilidadeRoutes);
-app.use(emailTestRoutes);
+app.use("/api/curriculo", buscasRoutes);
+app.use("/api/curriculo", scraperRoutes);
+app.use("/api/curriculo", monitorRoutes);
+app.use("/api/curriculo", compatibilidadeRoutes);
+app.use("/api/curriculo", emailTestRoutes);
+app.use("/api/curriculo", testeRoutes);
+app.use("/api/curriculo", smtpRoutes);
 
 // Middleware para rotas não encontradas
 app.use(notFoundHandler);
