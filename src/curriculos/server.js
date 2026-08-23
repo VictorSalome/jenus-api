@@ -94,13 +94,13 @@ if (config.dev.logRequests) {
 }
 
 // ── Feature routes ──
-app.use(analisarRoutes);
+app.use("/api/curriculo", analisarRoutes);
 app.use(testeRoutes);
 app.use(smtpRoutes);
 app.use("/buscar-vagas", buscasRoutes);
 app.use("/scraper", scraperRoutes);
 app.use(monitorRoutes);
-app.use(perfilRoutes);
+app.use("/api/curriculo", perfilRoutes);
 app.use(compatibilidadeRoutes);
 app.use(emailTestRoutes);
 
