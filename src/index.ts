@@ -34,7 +34,6 @@ app.use("/api/auth", authApp);
 app.use("/api", promoApp);
 app.use("/api/curriculo", requireAuth, curriculosApp);
 
-// ── Health check API (JSON) ──
 app.get("/api/health", async (_req, res) => {
   try {
     const db = await initDb();
