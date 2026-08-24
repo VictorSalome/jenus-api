@@ -24,6 +24,87 @@ import fs from "fs/promises";
 import { readFileSync } from "node:fs";
 import path from "path";
 
+const gerarTextoCurriculo = (curriculo, vaga) => {
+  const linhas = [];
+  
+  linhas.push(`${curriculo.personalInfo?.name || 'Candidato'}`);
+  linhas.push(`${curriculo.personalInfo?.title || vaga.titulo || 'Profissional'}`);
+  linhas.push('');
+  linhas.push(`📧 ${curriculo.personalInfo?.email || ''}`);
+  linhas.push(`📱 ${curriculo.personalInfo?.phone || ''}`);
+  linhas.push(`🔗 ${curriculo.personalInfo?.linkedin || ''}`);
+  linhas.push(`📍 ${curriculo.personalInfo?.location || ''}`);
+  linhas.push('');
+  linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  linhas.push('📋 RESUMO PROFISSIONAL');
+  linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  linhas.push(curriculo.summary || '');
+  linhas.push('');
+  
+  if (curriculo.experiences?.length) {
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    linhas.push('💼 EXPERIÊNCIAS PROFISSIONAIS');
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    curriculo.experiences.forEach((exp) => {
+      linhas.push(`${exp.role} — ${exp.company}`);
+      linhas.push(`${exp.period} | ${exp.location || ''}`);
+      if (exp.description) linhas.push(exp.description);
+      if (exp.technologies?.length) linhas.push(`Tecnologias: ${exp.technologies.join(', ')}`);
+      linhas.push('');
+    });
+  }
+  
+  if (curriculo.skills?.length) {
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    linhas.push('🛠️ HABILIDADES TÉCNICAS');
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    Object.entries(curriculo.skills).forEach(([categoria, techs]) => {
+      if (techs?.length) {
+        const label = categoria.charAt(0).toUpperCase() + categoria.slice(1);
+        linhas.push(`${label}: ${techs.join(', ')}`);
+      }
+    });
+    linhas.push('');
+  }
+  
+  if (curriculo.education?.length) {
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    linhas.push('🎓 FORMAÇÃO ACADÊMICA');
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    curriculo.education.forEach((edu) => {
+      linhas.push(`${edu.degree} — ${edu.institution}`);
+      linhas.push(`${edu.period || ''} ${edu.location || ''}`);
+      linhas.push('');
+    });
+  }
+  
+  if (curriculo.certifications?.length) {
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    linhas.push('📜 CERTIFICAÇÕES');
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    curriculo.certifications.forEach((cert) => {
+      linhas.push(`• ${cert.name} — ${cert.issuer} (${cert.year || ''})`);
+    });
+    linhas.push('');
+  }
+  
+  if (curriculo.languages?.length) {
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    linhas.push('🌐 IDIOMAS');
+    linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    curriculo.languages.forEach((lang) => {
+      linhas.push(`• ${lang.language}: ${lang.proficiency}`);
+    });
+    linhas.push('');
+  }
+  
+  linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  linhas.push(`Gerado automaticamente para: ${vaga.titulo || 'Vaga'} — ${vaga.empresa || 'Empresa'}`);
+  linhas.push(`Relevância: ${curriculo.relevanceScore}% | Match: ${curriculo.matchingSkills?.length || 0} skills`);
+  
+  return linhas.join('\n');
+};
+
 /**
  * POST /analisar-vaga
  * Apenas roda o parser nativo e retorna dados estruturados
@@ -46,6 +127,15 @@ export const analisarVagaController = asyncHandler(async (req, res) => {
     ]);
   }
 
+  // Calcular match com perfil do candidato
+  const db = await getDb();
+  const perfilSkills = await db.all('SELECT category, tech FROM profile_skills');
+  const flatSkills = perfilSkills.map(s => s.tech.toLowerCase());
+  const vagaSkills = (vagaParseada.skills || []).map(s => s.toLowerCase());
+  const matched = vagaSkills.filter(s => flatSkills.includes(s));
+  const missing = vagaSkills.filter(s => !flatSkills.includes(s));
+  const matchPercent = vagaSkills.length ? Math.round((matched.length / vagaSkills.length) * 100) : 0;
+
   res.json({
     sucesso: true,
     vagaParseada: {
@@ -54,8 +144,21 @@ export const analisarVagaController = asyncHandler(async (req, res) => {
       seniority: vagaParseada.seniority,
       skills: vagaParseada.skills || [],
       requirements: vagaParseada.requirements || [],
+      responsibilities: vagaParseada.responsibilities || [],
+      salary: vagaParseada.salary,
+      location: vagaParseada.location,
+      contractType: vagaParseada.contractType,
+      benefits: vagaParseada.benefits,
+      contactEmail: vagaParseada.contactEmail,
+      categorizedSkills: vagaParseada.categorizedSkills,
       rawDescription: vagaParseada.rawDescription,
     },
+    match: {
+      percent: matchPercent,
+      matched,
+      missing,
+      totalRequired: vagaSkills.length
+    }
   });
 });
 
@@ -180,6 +283,7 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
       timestamp: new Date().toISOString(),
     },
     previewUrl: `/temp/${nomeArquivo}`,
+    curriculoTexto: gerarTextoCurriculo(curriculoPersonalizado, dadosVaga),
     requestId,
   };
 

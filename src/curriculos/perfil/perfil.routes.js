@@ -1,9 +1,85 @@
 import { Router } from "express";
 import { getDb } from "../../core/database.js";
 import { asyncHandler, ValidationError } from "../middleware/errorHandler.js";
-import { logInfo, logError } from "../utils/logger.js";
+import { logInfo, logError, logWarn } from "../utils/logger.js";
+import fs from "fs/promises";
+import path from "path";
 
 const router = Router();
+
+const PROFILE_JSON_PATH = path.join(process.cwd(), "candidate-profile.json");
+
+/**
+ * GET /api/curriculo/profile
+ * Retorna o perfil completo (candidate-profile.json + skills do banco)
+ */
+router.get(
+  "/profile",
+  asyncHandler(async (req, res) => {
+    let profileData = {};
+    try {
+      const data = await fs.readFile(PROFILE_JSON_PATH, "utf-8");
+      profileData = JSON.parse(data);
+    } catch (e) {
+      logWarn("candidate-profile.json não encontrado ou inválido", e);
+    }
+
+    const db = await getDb();
+    const skillsRows = await db.all(
+      "SELECT category, tech FROM profile_skills ORDER BY category, tech"
+    );
+
+    const grouped = {};
+    for (const row of skillsRows) {
+      if (!grouped[row.category]) grouped[row.category] = [];
+      grouped[row.category].push(row.tech);
+    }
+
+    profileData.skills = grouped;
+
+    res.json({
+      success: true,
+      profile: profileData,
+    });
+  })
+);
+
+/**
+ * PATCH /api/curriculo/profile
+ * Atualiza o perfil completo salvando no candidate-profile.json
+ */
+router.patch(
+  "/profile",
+  asyncHandler(async (req, res) => {
+    const newProfile = req.body;
+    if (!newProfile || typeof newProfile !== "object") {
+      throw new ValidationError("Dados de perfil inválidos");
+    }
+
+    try {
+      // Ler arquivo existente para fazer merge seguro se necessário
+      let currentData = {};
+      try {
+        const data = await fs.readFile(PROFILE_JSON_PATH, "utf-8");
+        currentData = JSON.parse(data);
+      } catch (e) {}
+
+      const merged = { ...currentData, ...newProfile };
+      await fs.writeFile(PROFILE_JSON_PATH, JSON.stringify(merged, null, 2), "utf-8");
+
+      logInfo("candidate-profile.json atualizado com sucesso");
+
+      res.json({
+        success: true,
+        message: "Perfil atualizado com sucesso",
+        profile: merged,
+      });
+    } catch (error) {
+      logError("Erro ao salvar perfil", error);
+      throw error;
+    }
+  })
+);
 
 /**
  * PATCH /api/curriculo/profile/skills
