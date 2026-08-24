@@ -1,4 +1,3 @@
-// Handlers de erro global para evitar crash em erros não tratados
 process.on("unhandledRejection", (reason, _promise) => {
   console.error("[Unhandled Rejection]", reason);
 });

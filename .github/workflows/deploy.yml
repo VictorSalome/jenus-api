@@ -26,10 +26,10 @@ jobs:
         run: |
           echo "🚀 Deploying to Oracle using NPM..."
           ssh -i ~/.ssh/oracle.key ${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }} \
-            "cd ~/jenus-api && \
+            "cd ${{ secrets.DEPLOY_PATH }} && \
              git pull origin main && \
              npm install --production && \
              npm run build && \
-             pm2 reload promo-monitor && \
+             pm2 reload ${{ secrets.PM2_APP_NAME }} && \
              pm2 save"
           echo "✅ Deploy concluído via NPM!"
