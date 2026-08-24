@@ -28,7 +28,7 @@ jobs:
           ssh -i ~/.ssh/oracle.key ${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }} \
             "cd ${{ secrets.DEPLOY_PATH }} && \
              git pull origin main && \
-             npm install --production && \
+             npm install && \
              npm run build && \
              pm2 reload ${{ secrets.PM2_APP_NAME }} && \
              pm2 save"
