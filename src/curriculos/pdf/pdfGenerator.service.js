@@ -19,8 +19,13 @@ export const gerarPdfCurriculo = async (curriculo, dadosVaga) => {
     const tempDir = path.join(process.cwd(), process.env.TEMP_DIR || "temp");
     await fs.mkdir(tempDir, { recursive: true });
 
-    // Nome do arquivo PDF
-    const nomeArquivo = `curriculo_${curriculo.personalInfo.name.replace(/\s+/g, "_").toLowerCase()}_${Date.now()}.pdf`;
+    // Nome do arquivo PDF (removendo acentos e caracteres especiais)
+    const nomeLimpo = curriculo.personalInfo.name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, "_")
+      .toLowerCase();
+    const nomeArquivo = `curriculo_${nomeLimpo}_${Date.now()}.pdf`;
     const caminhoArquivo = path.join(tempDir, nomeArquivo);
 
     // Criar documento PDF
