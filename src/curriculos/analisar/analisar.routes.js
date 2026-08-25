@@ -126,8 +126,17 @@ router.post('/temp/:filename/token', requireAuth, async (req, res) => {
     const safeFilename = path.basename(filename);
     const filePath = path.join(config.paths.temp, safeFilename);
 
+    console.log('[DEBUG] Gerando token para:', {
+      filename,
+      safeFilename,
+      filePath,
+      tempDir: config.paths.temp,
+      exists: fs.existsSync(filePath),
+    });
+
     // Verifica se o arquivo existe na pasta temporária
     if (!fs.existsSync(filePath)) {
+      console.log('[DEBUG] Arquivo não existe:', filePath);
       return res.status(404).json({
         success: false,
         error: {
@@ -139,12 +148,24 @@ router.post('/temp/:filename/token', requireAuth, async (req, res) => {
 
     // Gera token temporário (válido por 5 minutos)
     const user = req.user;
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          message: 'Usuário não autenticado',
+          status: 401,
+        },
+      });
+    }
+    console.log('[DEBUG] usuário autenticado:', user);
+    const expirySeconds = 300; // 5 minutos
     const token = jwt.sign({
       type: 'pdf-preview',
       filename: safeFilename,
       userId: user.userId,
-      exp: Math.floor(Date.now() / 1000) + 300, // 5 minutos
-    }, process.env.JWT_ACCESS_SECRET || 'your-access-token-secret-change-me');
+    }, process.env.JWT_ACCESS_SECRET || 'your-access-token-secret-change-me', {
+      expiresIn: expirySeconds,
+    });
 
     res.json({
       success: true,
