@@ -31,8 +31,7 @@ await initializeSmtpRuntimeConfig();
 autoStartScheduler();
 
 // Serve CSS separado para currículo (evita conflitos) - removido: API pura
-// Expose temporary files for preview during development
-app.use("/temp", express.static(config.paths.temp));
+// Expose temporary files for preview - via rota explícita em analisar.routes.js
 
 // Middleware de request ID
 app.use(requestIdMiddleware);
