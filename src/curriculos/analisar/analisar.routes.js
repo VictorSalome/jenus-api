@@ -18,7 +18,7 @@ router.post("/gerar-curriculo", gerarCurriculoController);
 router.post("/enviar-curriculo", enviarCurriculoController);
 
 // Rota explícita para download/visualização do PDF na pasta temp (prefixo /api para evitar conflito com Nginx)
-router.get("/api/temp/:filename", (req, res) => {
+router.get("/temp/:filename", (req, res) => {
   const { filename } = req.params;
   const safeFilename = path.basename(filename);
   const filePath = path.join(config.paths.temp, safeFilename);

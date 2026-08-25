@@ -282,7 +282,7 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
       tempoProcessamento: `${processingTime}ms`,
       timestamp: new Date().toISOString(),
     },
-    previewUrl: `/api/temp/${nomeArquivo}`,
+    previewUrl: `/api/curriculo/temp/${nomeArquivo}`,
     curriculoTexto: gerarTextoCurriculo(curriculoPersonalizado, dadosVaga),
     requestId,
   };
@@ -410,7 +410,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
       resultadoEmail = {
         sucesso: true,
         messageId: `dev-mode-${Date.now()}`,
-        previewUrl: `/temp/${nomeArquivo}`,
+        previewUrl: `/api/curriculo/temp/${nomeArquivo}`,
         envioId: null,
         status: 'SENT'
       };
