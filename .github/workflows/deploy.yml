@@ -3,12 +3,14 @@ name: 🚀 Deploy to Oracle Cloud
 on:
   push:
     branches: [main]
+
   workflow_dispatch:
 
 jobs:
   deploy:
     name: Deploy to Oracle VM
     runs-on: ubuntu-latest
+
     if: "!contains(github.event.head_commit.message, 'skip-deploy')"
 
     steps:
@@ -18,18 +20,30 @@ jobs:
       - name: 🔑 Setup SSH
         run: |
           mkdir -p ~/.ssh
+
           echo "${{ secrets.ORACLE_SSH_KEY }}" > ~/.ssh/oracle.key
           chmod 600 ~/.ssh/oracle.key
-          ssh-keyscan -H ${{ secrets.ORACLE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: 🚀 Deploy
+          ssh-keyscan -H "${{ secrets.ORACLE_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 🚀 Deploy to Oracle
         run: |
-          echo "🚀 Deploying to Oracle using NPM..."
-          ssh -i ~/.ssh/oracle.key ${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }} \
-            "cd ${{ secrets.DEPLOY_PATH }} && \
-             git pull origin main && \
+          echo "🚀 Iniciando deploy..."
+
+          ssh -i ~/.ssh/oracle.key \
+            "${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }}" \
+            "cd '${{ secrets.DEPLOY_PATH }}' && \
+             echo '📥 Sincronizando código...' && \
+             git fetch origin main && \
+             git reset --hard origin/main && \
+             echo '📦 Instalando dependências...' && \
              npm install && \
+             echo '🔨 Executando build...' && \
              npm run build && \
-             pm2 reload ${{ secrets.PM2_APP_NAME }} && \
-             pm2 save"
-          echo "✅ Deploy concluído via NPM!"
+             echo '♻️ Reiniciando PM2...' && \
+             pm2 reload '${{ secrets.PM2_APP_NAME }}' --update-env && \
+             pm2 save && \
+             echo '✅ Deploy concluído!'"
+
+      - name: ✅ Deploy finished
+        run: echo "🎉 Deploy para Oracle concluído com sucesso!"
