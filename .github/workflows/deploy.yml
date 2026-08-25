@@ -32,18 +32,39 @@ jobs:
 
           ssh -i ~/.ssh/oracle.key \
             "${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }}" \
-            "cd '${{ secrets.DEPLOY_PATH }}' && \
-             echo '📥 Sincronizando código...' && \
-             git fetch origin main && \
-             git reset --hard origin/main && \
-             echo '📦 Instalando dependências...' && \
-             npm install && \
-             echo '🔨 Executando build...' && \
-             npm run build && \
-             echo '♻️ Reiniciando PM2...' && \
-             pm2 reload '${{ secrets.PM2_APP_NAME }}' --update-env && \
-             pm2 save && \
-             echo '✅ Deploy concluído!'"
+            "
+              set -e
+
+              cd '${{ secrets.DEPLOY_PATH }}'
+
+              echo '📥 Sincronizando código...'
+              git fetch origin main
+              git reset --hard origin/main
+
+              echo '📦 Instalando dependências...'
+              npm install
+
+              echo '🔨 Executando build...'
+              npm run build
+
+              echo '🔎 Verificando PM2...'
+
+              if pm2 describe '${{ secrets.PM2_APP_NAME }}' >/dev/null 2>&1; then
+                echo '♻️ Processo encontrado. Recarregando PM2...'
+                pm2 reload '${{ secrets.PM2_APP_NAME }}' --update-env
+              else
+                echo '🚀 Processo não encontrado. Iniciando PM2...'
+                pm2 start scripts/pm2.config.cjs
+              fi
+
+              echo '💾 Salvando configuração do PM2...'
+              pm2 save
+
+              echo '📊 Status do PM2...'
+              pm2 status
+
+              echo '✅ Deploy concluído!'
+            "
 
       - name: ✅ Deploy finished
         run: echo "🎉 Deploy para Oracle concluído com sucesso!"
