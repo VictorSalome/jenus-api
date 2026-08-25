@@ -7,9 +7,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "rm -rf dist && npx tsc && mkdir -p dist && cp -r src/curriculos dist/curriculos && mkdir -p data temp",
     "start": "node dist/index.js",
-    "start:pm2": "pm2 start scripts/pm2.config.js",
-    "stop:pm2": "pm2 stop scripts/pm2.config.js",
-    "restart:pm2": "pm2 restart scripts/pm2.config.js",
+    "start:pm2": "pm2 start scripts/pm2.config.cjs",
+    "stop:pm2": "pm2 stop scripts/pm2.config.cjs",
+    "restart:pm2": "pm2 restart scripts/pm2.config.cjs",
     "logs:pm2": "pm2 logs promo-monitor",
     "deploy": "bash scripts/deploy-oracle.sh",
     "deploy:oracle": "bash scripts/deploy-oracle.sh"
