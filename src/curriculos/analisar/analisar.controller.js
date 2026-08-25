@@ -282,7 +282,7 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
       tempoProcessamento: `${processingTime}ms`,
       timestamp: new Date().toISOString(),
     },
-    previewUrl: `/temp/${nomeArquivo}`,
+    previewUrl: `/api/temp/${nomeArquivo}`,
     curriculoTexto: gerarTextoCurriculo(curriculoPersonalizado, dadosVaga),
     requestId,
   };

@@ -17,14 +17,17 @@ router.post("/analisar-vaga", analisarVagaController);
 router.post("/gerar-curriculo", gerarCurriculoController);
 router.post("/enviar-curriculo", enviarCurriculoController);
 
-// Rota explícita para download/visualização do PDF na pasta temp
-router.get("/temp/:filename", (req, res) => {
+// Rota explícita para download/visualização do PDF na pasta temp (prefixo /api para evitar conflito com Nginx)
+router.get("/api/temp/:filename", (req, res) => {
   const { filename } = req.params;
-  // Prevenir Path Traversal
   const safeFilename = path.basename(filename);
   const filePath = path.join(config.paths.temp, safeFilename);
 
+  console.log('Tentando servir arquivo:', filePath);
+  console.log('Pasta temp configurada:', config.paths.temp);
+
   if (!fs.existsSync(filePath)) {
+    console.log('Arquivo não encontrado:', filePath);
     return res.status(404).json({
       success: false,
       error: {
