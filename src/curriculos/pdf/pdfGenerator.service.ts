@@ -179,7 +179,7 @@ const adicionarCabecalho = (doc, personalInfo, estilos, yPosition) => {
     .font("Helvetica-Bold")
     .fontSize(20)
     .fillColor("black")
-    .text(`${personalInfo.name} Sousa`, doc.page.margins.left, yPosition);
+    .text(`${personalInfo.name}`, doc.page.margins.left, yPosition);
 
   yPosition += 30;
 

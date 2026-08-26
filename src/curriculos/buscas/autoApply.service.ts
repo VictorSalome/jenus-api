@@ -131,9 +131,18 @@ export const executarPipeline = async ({
 
       // 5. ENVIAR EMAIL (só chega aqui se tem email + PDF)
       try {
-        // Carregar dados do candidato do banco
+        // Carregar dados do candidato do banco + profile JSON
         const { getDb } = await import("../../core/database.js");
+        const fs = await import("fs/promises");
+        const configModule = await import("../config/index.js");
         const db = await getDb();
+        
+        let profileJson: any = {};
+        try {
+          const raw = await fs.readFile(configModule.default.paths.candidateProfile, "utf-8");
+          profileJson = JSON.parse(raw);
+        } catch {}
+        
         const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
         const skills: Record<string, string[]> = {
           programming: [],
@@ -161,14 +170,14 @@ export const executarPipeline = async ({
         }
         
         const candidatoData = {
-          personalInfo: {
-            name: "Victor Salome Sousa",
-            email: "vsalome41@gmail.com",
-            phone: "+55 11 99999-9999",
-            linkedin: "https://linkedin.com/in/victorsalome",
-            github: "https://github.com/victorsalome",
-            portfolio: "https://victorsalome.dev",
-            title: "Desenvolvedor Full Stack | React, TypeScript, Node.js | .NET, SQL"
+          personalInfo: profileJson.personalInfo || {
+            name: "Candidato",
+            email: "",
+            phone: "",
+            linkedin: "",
+            github: "",
+            portfolio: "",
+            title: ""
           }
         };
         

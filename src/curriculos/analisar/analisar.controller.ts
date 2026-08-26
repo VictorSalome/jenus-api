@@ -437,31 +437,40 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
     }
   }
 
-  const personalInfo = {
-    name: "Victor Salome Sousa",
-    email: "vsalome41@gmail.com",
-    phone: "+55 11 99999-9999",
-    linkedin: "https://linkedin.com/in/victorsalome",
-    github: "https://github.com/victorsalome",
-    portfolio: "https://victorsalome.dev",
-    title: "Desenvolvedor Full Stack | React, TypeScript, Node.js | .NET, SQL"
+  // Ler dados do candidate-profile.json
+  let profileJson: any = {};
+  try {
+    const fs = await import('fs/promises');
+    const raw = await fs.readFile(config.paths.candidateProfile, 'utf-8');
+    profileJson = JSON.parse(raw);
+  } catch {
+    // fallback
+  }
+
+  const personalInfo = profileJson.personalInfo || {
+    name: "Candidato",
+    email: "",
+    phone: "",
+    linkedin: "",
+    github: "",
+    portfolio: "",
+    title: ""
   };
 
   // Enviar email com registro atômico PENDING → SENT/FAILED
   let resultadoEmail;
   try {
-    const info = personalInfo || {};
     resultadoEmail = await enviarCurriculoComRegistro({
       emailDestino,
       caminhoArquivoPdf,
       dadosVaga: { titulo: vagaTitulo, emailContato: emailDestino },
       candidato: {
-        name: info.name || "Victor Salome Sousa",
-        email: info.email,
-        phone: info.phone,
-        linkedin: info.linkedin,
-        github: info.github,
-        portfolio: info.portfolio,
+        name: personalInfo.name || "Candidato",
+        email: personalInfo.email,
+        phone: personalInfo.phone,
+        linkedin: personalInfo.linkedin,
+        github: personalInfo.github,
+        portfolio: personalInfo.portfolio,
       },
       vagaId: vagaId || null,
     });
