@@ -287,7 +287,7 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
         senioridade: vagaParseada.seniority,
         areaAtuacao: vagaParseada.skills || [],
         stackTecnologica: vagaParseada.skills || [],
-        emailContato: null, // será extraído pelo extractor se houver
+        emailContato: vagaParseada.contactEmail || null,
         descricao: vagaParseada.rawDescription,
         requisitos: vagaParseada.requirements,
         responsabilidades: vagaParseada.responsibilities
@@ -437,25 +437,23 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
     }
   }
 
-  // Ler dados do candidate-profile.json
-  let profileJson: any = {};
+  // Ler dados pessoais do banco
+  let personalInfo = { name: "Candidato", email: "", phone: "", linkedin: "", github: "", portfolio: "", title: "" };
   try {
-    const fs = await import('fs/promises');
-    const raw = await fs.readFile(config.paths.candidateProfile, 'utf-8');
-    profileJson = JSON.parse(raw);
-  } catch {
-    // fallback
-  }
-
-  const personalInfo = profileJson.personalInfo || {
-    name: "Candidato",
-    email: "",
-    phone: "",
-    linkedin: "",
-    github: "",
-    portfolio: "",
-    title: ""
-  };
+    const db = await getDb();
+    const personal = await db.get('SELECT * FROM profile_personal WHERE id = 1');
+    if (personal) {
+      personalInfo = {
+        name: personal.name || "Candidato",
+        email: personal.email || "",
+        phone: personal.phone || "",
+        linkedin: personal.linkedin || "",
+        github: personal.github || "",
+        portfolio: personal.portfolio || "",
+        title: personal.title || "",
+      };
+    }
+  } catch {}
 
   // Enviar email com registro atômico PENDING → SENT/FAILED
   let resultadoEmail;
@@ -465,7 +463,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
       caminhoArquivoPdf,
       dadosVaga: { titulo: vagaTitulo, emailContato: emailDestino },
       candidato: {
-        name: personalInfo.name || "Candidato",
+        name: personalInfo.name,
         email: personalInfo.email,
         phone: personalInfo.phone,
         linkedin: personalInfo.linkedin,

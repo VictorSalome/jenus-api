@@ -398,7 +398,7 @@ export const personalizarCurriculo = async (dadosVaga: Record<string, any>): Pro
 };
 
 /**
- * Carrega o perfil do candidato do banco de dados + candidate-profile.json
+ * Carrega o perfil do candidato do banco de dados
  */
 const carregarPerfilCandidato = async (): Promise<any> => {
   try {
@@ -433,32 +433,52 @@ const carregarPerfilCandidato = async (): Promise<any> => {
       }
     }
     
-    // Ler dados do candidate-profile.json
-    let profileJson: any = {};
-    try {
-      const fs = await import('fs/promises');
-      const configModule = await import('../config/index.js');
-      const raw = await fs.readFile(configModule.default.paths.candidateProfile, 'utf-8');
-      profileJson = JSON.parse(raw);
-    } catch {
-      logWarn("candidate-profile.json não encontrado, usando dados fallback");
-    }
+    // Ler dados pessoais do banco
+    const personal = await db.get('SELECT * FROM profile_personal WHERE id = 1');
+    const personalInfo = personal ? {
+      name: personal.name || "",
+      email: personal.email || "",
+      phone: personal.phone || "",
+      linkedin: personal.linkedin || "",
+      github: personal.github || "",
+      portfolio: personal.portfolio || "",
+      location: personal.location || "",
+      title: personal.title || "",
+      summary: personal.summary || "",
+    } : { name: "Candidato", email: "", phone: "", linkedin: "", github: "", portfolio: "", location: "", title: "", summary: "" };
     
-    const personalInfo = profileJson.personalInfo || {
-      name: "Candidato",
-      email: "",
-      phone: "",
-      linkedin: "",
-      github: "",
-      portfolio: "",
-      title: ""
-    };
+    // Ler experiências do banco
+    const expRows = await db.all('SELECT * FROM profile_experiences ORDER BY sort_order');
+    const experiences = expRows.map((e: any) => ({
+      id: e.id, company: e.company, position: e.position,
+      startDate: e.start_date, endDate: e.end_date, location: e.location,
+      description: e.description, keywords: JSON.parse(e.keywords_json || "[]"),
+      achievements: JSON.parse(e.achievements_json || "[]"),
+      technologies: JSON.parse(e.technologies_json || "[]"),
+    }));
     
-    const experiences = profileJson.experiences || [];
-    const education = profileJson.education || [];
-    const certifications = profileJson.certifications || [];
-    const languages = profileJson.languages || [];
-    const specializations = profileJson.specializations || [];
+    // Ler educação do banco
+    const eduRows = await db.all('SELECT * FROM profile_education ORDER BY sort_order');
+    const education = eduRows.map((e: any) => ({
+      id: e.id, institution: e.institution, degree: e.degree,
+      startDate: e.start_date, endDate: e.end_date, location: e.location,
+      gpa: e.gpa, description: e.description,
+    }));
+    
+    // Ler certificações do banco
+    const certRows = await db.all('SELECT * FROM profile_certifications ORDER BY sort_order');
+    const certifications = certRows.map((c: any) => ({
+      id: c.id, name: c.name, issuer: c.issuer, date: c.date,
+      credentialId: c.credential_id, url: c.url,
+    }));
+    
+    // Ler idiomas do banco
+    const langRows = await db.all('SELECT * FROM profile_languages ORDER BY sort_order');
+    const languages = langRows.map((l: any) => ({ language: l.language, level: l.level }));
+    
+    // Ler especializações do banco
+    const specRows = await db.all('SELECT * FROM profile_specializations ORDER BY sort_order');
+    const specializations = specRows.map((s: any) => s.text);
     
     return {
       personalInfo,

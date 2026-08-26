@@ -1,212 +1,256 @@
 import { Router } from "express";
 import { getDb } from "../../core/database.js";
 import { asyncHandler, ValidationError } from "../middleware/errorHandler.js";
-import { logInfo, logError, logWarn } from "../utils/logger.js";
-import fs from "fs/promises";
-import path from "path";
-import config from "../config/index.js";
+import { logInfo, logError } from "../utils/logger.js";
 
 const router = Router();
 
-const PROFILE_JSON_PATH = config.paths.candidateProfile;
-
-// ── Helpers ──
-
-const readProfile = async (): Promise<Record<string, any>> => {
-  try {
-    const data = await fs.readFile(PROFILE_JSON_PATH, "utf-8");
-    return JSON.parse(data);
-  } catch {
-    return {};
-  }
-};
-
-const writeProfile = async (data: Record<string, any>): Promise<void> => {
-  await fs.writeFile(PROFILE_JSON_PATH, JSON.stringify(data, null, 2), "utf-8");
-};
-
 const genId = (): string => `${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-
-// ── Per-section CRUD ──
-
-const SECTIONS = ["experiences", "education", "certifications", "languages", "specializations"] as const;
-type SectionName = (typeof SECTIONS)[number];
-
-const buildSectionRoutes = (section: SectionName) => {
-  // GET /profile/:section
-  router.get(
-    `/profile/${section}`,
-    asyncHandler(async (_req, res) => {
-      const profile = await readProfile();
-      res.json({ success: true, [section]: profile[section] || [] });
-    })
-  );
-
-  // POST /profile/:section - add item
-  router.post(
-    `/profile/${section}`,
-    asyncHandler(async (req, res) => {
-      const profile = await readProfile();
-      if (!Array.isArray(profile[section])) profile[section] = [];
-
-      const item = { id: genId(), ...req.body };
-      profile[section].push(item);
-      await writeProfile(profile);
-
-      logInfo(`Item adicionado em ${section}`, { id: item.id });
-      res.json({ success: true, item, [section]: profile[section] });
-    })
-  );
-
-  // PATCH /profile/:section/:id - update item
-  router.patch(
-    `/profile/${section}/:id`,
-    asyncHandler(async (req, res) => {
-      const profile = await readProfile();
-      const arr = profile[section];
-      if (!Array.isArray(arr)) {
-        throw new ValidationError(`Seção ${section} não encontrada`);
-      }
-
-      const idx = arr.findIndex((i: any) => i.id === req.params.id);
-      if (idx === -1) {
-        throw new ValidationError(`Item ${req.params.id} não encontrado em ${section}`);
-      }
-
-      arr[idx] = { ...arr[idx], ...req.body, id: req.params.id };
-      await writeProfile(profile);
-
-      logInfo(`Item atualizado em ${section}`, { id: req.params.id });
-      res.json({ success: true, item: arr[idx], [section]: arr });
-    })
-  );
-
-  // DELETE /profile/:section/:id - remove item
-  router.delete(
-    `/profile/${section}/:id`,
-    asyncHandler(async (req, res) => {
-      const profile = await readProfile();
-      const arr = profile[section];
-      if (!Array.isArray(arr)) {
-        throw new ValidationError(`Seção ${section} não encontrada`);
-      }
-
-      const idx = arr.findIndex((i: any) => i.id === req.params.id);
-      if (idx === -1) {
-        throw new ValidationError(`Item ${req.params.id} não encontrado em ${section}`);
-      }
-
-      arr.splice(idx, 1);
-      await writeProfile(profile);
-
-      logInfo(`Item removido de ${section}`, { id: req.params.id });
-      res.json({ success: true, [section]: arr });
-    })
-  );
-};
-
-SECTIONS.forEach(buildSectionRoutes);
-
-// ── Personal Info (singleton) ──
-
-router.get(
-  "/profile/personal",
-  asyncHandler(async (_req, res) => {
-    const profile = await readProfile();
-    res.json({ success: true, personalInfo: profile.personalInfo || {} });
-  })
-);
-
-router.patch(
-  "/profile/personal",
-  asyncHandler(async (req, res) => {
-    const profile = await readProfile();
-    profile.personalInfo = { ...(profile.personalInfo || {}), ...req.body };
-    await writeProfile(profile);
-
-    logInfo("Personal info atualizado");
-    res.json({ success: true, personalInfo: profile.personalInfo });
-  })
-);
-
-// ── Specializations (array de strings) ──
-
-router.post(
-  "/profile/specializations",
-  asyncHandler(async (req, res) => {
-    const profile = await readProfile();
-    if (!Array.isArray(profile.specializations)) profile.specializations = [];
-
-    const text = req.body.text || req.body.specialization;
-    if (!text || typeof text !== "string") {
-      throw new ValidationError("Envie { text: string }");
-    }
-
-    profile.specializations.push(text);
-    await writeProfile(profile);
-
-    res.json({ success: true, specializations: profile.specializations });
-  })
-);
-
-router.delete(
-  "/profile/specializations/:index",
-  asyncHandler(async (req, res) => {
-    const profile = await readProfile();
-    const arr = profile.specializations || [];
-    const idx = parseInt(req.params.index, 10);
-
-    if (isNaN(idx) || idx < 0 || idx >= arr.length) {
-      throw new ValidationError("Índice inválido");
-    }
-
-    arr.splice(idx, 1);
-    await writeProfile(profile);
-
-    res.json({ success: true, specializations: arr });
-  })
-);
 
 // ── GET /profile (full) ──
 
 router.get(
   "/profile",
   asyncHandler(async (_req, res) => {
-    const profileData = await readProfile();
-
     const db = await getDb();
-    const skillsRows = await db.all(
-      "SELECT category, tech FROM profile_skills ORDER BY category, tech"
-    );
 
-    const grouped: Record<string, string[]> = {};
+    const personal = await db.get("SELECT * FROM profile_personal WHERE id = 1");
+    const experiences = await db.all("SELECT * FROM profile_experiences ORDER BY sort_order");
+    const education = await db.all("SELECT * FROM profile_education ORDER BY sort_order");
+    const certifications = await db.all("SELECT * FROM profile_certifications ORDER BY sort_order");
+    const languages = await db.all("SELECT * FROM profile_languages ORDER BY sort_order");
+    const specializations = await db.all("SELECT * FROM profile_specializations ORDER BY sort_order");
+    const skillsRows = await db.all("SELECT category, tech FROM profile_skills ORDER BY category, tech");
+
+    const skills: Record<string, string[]> = {};
     for (const row of skillsRows) {
-      if (!grouped[row.category]) grouped[row.category] = [];
-      grouped[row.category].push(row.tech);
+      if (!skills[row.category]) skills[row.category] = [];
+      skills[row.category].push(row.tech);
     }
 
-    profileData.skills = grouped;
+    const profile = {
+      personalInfo: personal || {},
+      experiences: experiences.map((e) => ({
+        id: e.id,
+        company: e.company,
+        position: e.position,
+        startDate: e.start_date,
+        endDate: e.end_date,
+        location: e.location,
+        description: e.description,
+        keywords: JSON.parse(e.keywords_json || "[]"),
+        achievements: JSON.parse(e.achievements_json || "[]"),
+        technologies: JSON.parse(e.technologies_json || "[]"),
+      })),
+      education: education.map((e) => ({
+        id: e.id,
+        institution: e.institution,
+        degree: e.degree,
+        startDate: e.start_date,
+        endDate: e.end_date,
+        location: e.location,
+        gpa: e.gpa,
+        description: e.description,
+      })),
+      certifications: certifications.map((c) => ({
+        id: c.id,
+        name: c.name,
+        issuer: c.issuer,
+        date: c.date,
+        credentialId: c.credential_id,
+        url: c.url,
+      })),
+      languages: languages.map((l) => ({ language: l.language, level: l.level })),
+      specializations: specializations.map((s) => s.text),
+      skills,
+    };
 
-    res.json({ success: true, profile: profileData });
+    res.json({ success: true, profile });
   })
 );
+
+// ── GET /profile/personal ──
+
+router.get(
+  "/profile/personal",
+  asyncHandler(async (_req, res) => {
+    const db = await getDb();
+    const personal = await db.get("SELECT * FROM profile_personal WHERE id = 1");
+    res.json({ success: true, personalInfo: personal || {} });
+  })
+);
+
+// ── PATCH /profile/personal ──
+
+router.patch(
+  "/profile/personal",
+  asyncHandler(async (req, res) => {
+    const db = await getDb();
+    const data = req.body;
+
+    const existing = await db.get("SELECT * FROM profile_personal WHERE id = 1");
+    if (existing) {
+      await db.run(`
+        UPDATE profile_personal SET name=?, email=?, phone=?, linkedin=?, github=?, portfolio=?, location=?, title=?, summary=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=1
+      `, data.name ?? existing.name, data.email ?? existing.email, data.phone ?? existing.phone,
+         data.linkedin ?? existing.linkedin, data.github ?? existing.github, data.portfolio ?? existing.portfolio,
+         data.location ?? existing.location, data.title ?? existing.title, data.summary ?? existing.summary);
+    } else {
+      await db.run(`
+        INSERT INTO profile_personal (id, name, email, phone, linkedin, github, portfolio, location, title, summary)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, data.name, data.email, data.phone, data.linkedin, data.github, data.portfolio, data.location, data.title, data.summary);
+    }
+
+    const updated = await db.get("SELECT * FROM profile_personal WHERE id = 1");
+    logInfo("Dados pessoais atualizados");
+    res.json({ success: true, personalInfo: updated });
+  })
+);
+
+// ── Per-section CRUD ──
+
+const SECTIONS = {
+  experiences: {
+    table: "profile_experiences",
+    mapRow: (e: any) => ({
+      id: e.id, company: e.company, position: e.position,
+      startDate: e.start_date, endDate: e.end_date, location: e.location,
+      description: e.description, keywords: JSON.parse(e.keywords_json || "[]"),
+      achievements: JSON.parse(e.achievements_json || "[]"),
+      technologies: JSON.parse(e.technologies_json || "[]"),
+    }),
+    fields: ["id", "company", "position", "start_date", "end_date", "location", "description", "keywords_json", "achievements_json", "technologies_json", "sort_order"],
+    insertFields: (data: any) => ({
+      id: data.id || genId(), company: data.company, position: data.position,
+      start_date: data.startDate, end_date: data.endDate, location: data.location,
+      description: data.description, keywords_json: JSON.stringify(data.keywords || []),
+      achievements_json: JSON.stringify(data.achievements || []),
+      technologies_json: JSON.stringify(data.technologies || []),
+    }),
+  },
+  education: {
+    table: "profile_education",
+    mapRow: (e: any) => ({
+      id: e.id, institution: e.institution, degree: e.degree,
+      startDate: e.start_date, endDate: e.end_date, location: e.location,
+      gpa: e.gpa, description: e.description,
+    }),
+    fields: ["id", "institution", "degree", "start_date", "end_date", "location", "gpa", "description", "sort_order"],
+    insertFields: (data: any) => ({
+      id: data.id || genId(), institution: data.institution, degree: data.degree,
+      start_date: data.startDate, end_date: data.endDate, location: data.location,
+      gpa: data.gpa, description: data.description,
+    }),
+  },
+  certifications: {
+    table: "profile_certifications",
+    mapRow: (c: any) => ({
+      id: c.id, name: c.name, issuer: c.issuer, date: c.date,
+      credentialId: c.credential_id, url: c.url,
+    }),
+    fields: ["id", "name", "issuer", "date", "credential_id", "url", "sort_order"],
+    insertFields: (data: any) => ({
+      id: data.id || genId(), name: data.name, issuer: data.issuer,
+      date: data.date, credential_id: data.credentialId, url: data.url,
+    }),
+  },
+  languages: {
+    table: "profile_languages",
+    mapRow: (l: any) => ({ language: l.language, level: l.level }),
+    fields: ["id", "language", "level", "sort_order"],
+    insertFields: (data: any) => ({ language: data.language, level: data.level }),
+  },
+  specializations: {
+    table: "profile_specializations",
+    mapRow: (s: any) => ({ text: s.text }),
+    fields: ["id", "text", "sort_order"],
+    insertFields: (data: any) => ({ text: data.text || data.specialization }),
+  },
+};
+
+for (const [section, config] of Object.entries(SECTIONS)) {
+  // GET
+  router.get(`/profile/${section}`, asyncHandler(async (_req, res) => {
+    const db = await getDb();
+    const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
+    res.json({ success: true, [section]: rows.map(config.mapRow) });
+  }));
+
+  // POST (add)
+  router.post(`/profile/${section}`, asyncHandler(async (req, res) => {
+    const db = await getDb();
+    const fields = config.insertFields(req.body);
+    const keys = Object.keys(fields);
+    const placeholders = keys.map(() => "?").join(", ");
+
+    await db.run(
+      `INSERT INTO ${config.table} (${keys.join(", ")}) VALUES (${placeholders})`,
+      ...Object.values(fields)
+    );
+
+    const maxOrder = await db.get(`SELECT COALESCE(MAX(sort_order), 0) + 1 as next FROM ${config.table}`);
+    await db.run(`UPDATE ${config.table} SET sort_order = ? WHERE sort_order = 0 AND id = ?`, maxOrder.next, fields.id);
+
+    logInfo(`Item adicionado em ${section}`, { id: fields.id });
+    const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
+    res.json({ success: true, [section]: rows.map(config.mapRow) });
+  }));
+
+  // PATCH (update)
+  router.patch(`/profile/${section}/:id`, asyncHandler(async (req, res) => {
+    const db = await getDb();
+    const existing = await db.get(`SELECT * FROM ${config.table} WHERE id = ?`, req.params.id);
+    if (!existing) throw new ValidationError(`Item não encontrado`);
+
+    const fields = config.insertFields({ ...existing, ...req.body, id: req.params.id });
+    const sets = Object.keys(fields).map((k) => `${k} = ?`).join(", ");
+
+    await db.run(`UPDATE ${config.table} SET ${sets} WHERE id = ?`, ...Object.values(fields), req.params.id);
+
+    logInfo(`Item atualizado em ${section}`, { id: req.params.id });
+    const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
+    res.json({ success: true, [section]: rows.map(config.mapRow) });
+  }));
+
+  // DELETE
+  router.delete(`/profile/${section}/:id`, asyncHandler(async (req, res) => {
+    const db = await getDb();
+    await db.run(`DELETE FROM ${config.table} WHERE id = ?`, req.params.id);
+    logInfo(`Item removido de ${section}`, { id: req.params.id });
+    const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
+    res.json({ success: true, [section]: rows.map(config.mapRow) });
+  }));
+}
 
 // ── PATCH /profile (full overwrite) ──
 
 router.patch(
   "/profile",
   asyncHandler(async (req, res) => {
-    const newProfile = req.body;
-    if (!newProfile || typeof newProfile !== "object") {
-      throw new ValidationError("Dados de perfil inválidos");
+    const db = await getDb();
+    const data = req.body;
+
+    if (data.personalInfo) {
+      const existing = await db.get("SELECT * FROM profile_personal WHERE id = 1");
+      if (existing) {
+        await db.run(`UPDATE profile_personal SET name=?, email=?, phone=?, linkedin=?, github=?, portfolio=?, location=?, title=?, summary=?, updated_at=CURRENT_TIMESTAMP WHERE id=1`,
+          data.personalInfo.name ?? existing.name, data.personalInfo.email ?? existing.email,
+          data.personalInfo.phone ?? existing.phone, data.personalInfo.linkedin ?? existing.linkedin,
+          data.personalInfo.github ?? existing.github, data.personalInfo.portfolio ?? existing.portfolio,
+          data.personalInfo.location ?? existing.location, data.personalInfo.title ?? existing.title,
+          data.personalInfo.summary ?? existing.summary);
+      } else {
+        await db.run(`INSERT INTO profile_personal (id, name, email, phone, linkedin, github, portfolio, location, title, summary) VALUES (1,?,?,?,?,?,?,?,?,?)`,
+          data.personalInfo.name, data.personalInfo.email, data.personalInfo.phone,
+          data.personalInfo.linkedin, data.personalInfo.github, data.personalInfo.portfolio,
+          data.personalInfo.location, data.personalInfo.title, data.personalInfo.summary);
+      }
     }
 
-    const currentData = await readProfile();
-    const merged = { ...currentData, ...newProfile };
-    await writeProfile(merged);
-
-    logInfo("candidate-profile.json atualizado com sucesso");
-    res.json({ success: true, message: "Perfil atualizado com sucesso", profile: merged });
+    logInfo("Perfil atualizado via PATCH /profile");
+    res.json({ success: true, message: "Perfil atualizado com sucesso" });
   })
 );
 
@@ -244,8 +288,8 @@ router.patch(
     }
 
     const updatedSkills = await db.all("SELECT category, tech FROM profile_skills ORDER BY category, tech");
-    logInfo("Perfil de skills atualizado", { count: updatedSkills.length });
-    res.json({ success: true, message: "Perfil atualizado com sucesso", skills: updatedSkills });
+    logInfo("Skills atualizadas", { count: updatedSkills.length });
+    res.json({ success: true, message: "Skills atualizadas", skills: updatedSkills });
   })
 );
 
@@ -254,13 +298,11 @@ router.get(
   asyncHandler(async (_req, res) => {
     const db = await getDb();
     const skills = await db.all("SELECT category, tech FROM profile_skills ORDER BY category, tech");
-
     const grouped: Record<string, string[]> = {};
     for (const row of skills) {
       if (!grouped[row.category]) grouped[row.category] = [];
       grouped[row.category].push(row.tech);
     }
-
     res.json({ success: true, skills: grouped, flat: skills });
   })
 );

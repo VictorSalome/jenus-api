@@ -41,6 +41,74 @@ export const migrations = {
       status TEXT CHECK(status IN ('PENDING','SENT','FAILED')) DEFAULT 'PENDING',
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+  `,
+
+  '004_profile': `
+    CREATE TABLE IF NOT EXISTS profile_personal (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      name TEXT,
+      email TEXT,
+      phone TEXT,
+      linkedin TEXT,
+      github TEXT,
+      portfolio TEXT,
+      location TEXT,
+      title TEXT,
+      summary TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS profile_experiences (
+      id TEXT PRIMARY KEY,
+      company TEXT,
+      position TEXT,
+      start_date TEXT,
+      end_date TEXT,
+      location TEXT,
+      description TEXT,
+      keywords_json TEXT,
+      achievements_json TEXT,
+      technologies_json TEXT,
+      sort_order INTEGER DEFAULT 0,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS profile_education (
+      id TEXT PRIMARY KEY,
+      institution TEXT,
+      degree TEXT,
+      start_date TEXT,
+      end_date TEXT,
+      location TEXT,
+      gpa TEXT,
+      description TEXT,
+      sort_order INTEGER DEFAULT 0,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS profile_certifications (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      issuer TEXT,
+      date TEXT,
+      credential_id TEXT,
+      url TEXT,
+      sort_order INTEGER DEFAULT 0,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS profile_languages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      language TEXT,
+      level TEXT,
+      sort_order INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS profile_specializations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      text TEXT,
+      sort_order INTEGER DEFAULT 0
+    );
   `
 } as const;
 
@@ -50,7 +118,8 @@ export const migrations = {
 export const migrationOrder = [
   '001_initial',
   '002_vagas',
-  '003_envios'
+  '003_envios',
+  '004_profile'
 ] as const;
 
 export type MigrationName = typeof migrationOrder[number];

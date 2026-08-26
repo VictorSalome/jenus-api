@@ -30,6 +30,17 @@ export const stopMonitor = async (): Promise<void> => {
   }
   
   setRunningState(false);
+
+  // Push: notificar que o monitor parou
+  try {
+    const { sendPushNotification } = await import('../push/push.service.js');
+    await sendPushNotification({
+      title: '⚠️ Monitor parou',
+      body: 'O monitor de promoções foi desligado',
+      data: { screen: 'monitor' },
+    });
+  } catch {}
+
   await stopTelegramMonitor();
   console.log('[Monitor] Monitor parado com sucesso');
 };

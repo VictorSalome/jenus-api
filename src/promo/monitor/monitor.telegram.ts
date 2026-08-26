@@ -455,6 +455,44 @@ async function sendPromoMessage(
       imageBuffer: img?.buffer || null,
     });
 
+    // Push notification
+    try {
+      const { sendPushNotification } = await import('../push/push.service.js');
+      const { isUrgent } = await import('../urgent/urgent.config.js');
+      const urgent = isUrgent(text, originalPrice || 0, price || 0);
+      await sendPushNotification({
+        title: urgent ? '🔥 URGENTE!' : '🏷️ Nova promo!',
+        body: `${product || 'Produto'} por ${price ? `R$${price}` : 'preço não informado'} — ${store || channelUsername}`,
+        data: { screen: 'promo', product, price, store, link },
+        priority: urgent ? 'high' : 'normal',
+      });
+    } catch (e) {
+      console.error('[Push] Erro ao enviar push de promo:', e);
+    }
+
+    // Price alert matching
+    try {
+      const { getDb } = await import('../../core/database.js');
+      const db = await getDb();
+      const alerts = await db.all(
+        'SELECT * FROM price_alerts WHERE is_active = 1'
+      ) as any[];
+
+      for (const alert of alerts) {
+        if (price && alert.target_price >= price) {
+          const { sendPushNotification: sendPush } = await import('../push/push.service.js');
+          await sendPush({
+            title: '💰 Alerta de preço!',
+            body: `${alert.product_name} atingiu R$${price} (meta: R$${alert.target_price})`,
+            data: { screen: 'price-alert', productId: alert.product_name },
+            priority: 'high',
+          });
+        }
+      }
+    } catch (e) {
+      console.error('[Push] Erro ao verificar price alerts:', e);
+    }
+
     await addSentMessage({
       link,
       product,
