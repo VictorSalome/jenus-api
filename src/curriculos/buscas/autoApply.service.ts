@@ -131,16 +131,25 @@ export const executarPipeline = async ({
 
       // 5. ENVIAR EMAIL (só chega aqui se tem email + PDF)
       try {
-        // Carregar dados do candidato do banco + profile JSON
+        // Carregar dados do candidato do banco
         const { getDb } = await import("../../core/database.js");
-        const fs = await import("fs/promises");
-        const configModule = await import("../config/index.js");
         const db = await getDb();
         
-        let profileJson: any = {};
+        // Ler dados pessoais do banco
+        let personalInfo = { name: "Candidato", email: "", phone: "", linkedin: "", github: "", portfolio: "", title: "" };
         try {
-          const raw = await fs.readFile(configModule.default.paths.candidateProfile, "utf-8");
-          profileJson = JSON.parse(raw);
+          const personal = await db.get('SELECT * FROM profile_personal WHERE id = 1');
+          if (personal) {
+            personalInfo = {
+              name: personal.name || "Candidato",
+              email: personal.email || "",
+              phone: personal.phone || "",
+              linkedin: personal.linkedin || "",
+              github: personal.github || "",
+              portfolio: personal.portfolio || "",
+              title: personal.title || "",
+            };
+          }
         } catch {}
         
         const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
@@ -170,7 +179,8 @@ export const executarPipeline = async ({
         }
         
         const candidatoData = {
-          personalInfo: profileJson.personalInfo || {
+          personalInfo: personalInfo
+        };
             name: "Candidato",
             email: "",
             phone: "",
