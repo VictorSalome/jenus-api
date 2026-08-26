@@ -48,6 +48,7 @@ function normalizeText(text: string): string {
 function extractTitle(text: string): string | null {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
+  // 1. Procura padrão explícito: "vaga: ..." ou "📢 vaga ..."
   for (const line of lines) {
     const cleanLine = line.replace(/[📢💎]/g, '').trim();
 
@@ -57,6 +58,15 @@ function extractTitle(text: string): string | null {
         .replace(/^vaga\s*[:\-]\s*/i, '')
         .replace(/📢.*$/, '')
         .trim();
+    }
+  }
+
+  // 2. Fallback: primeira linha curta (< 80 chars) que não seja seção
+  const sectionHeaders = /^(requisitos|requerimentos|responsabilidades|atribuições|qualificações|diferenciais|benefícios|oferecemos|temos:|soft skills|hard skills)/i;
+  for (const line of lines) {
+    const cleanLine = line.replace(/[📢💎]/g, '').trim();
+    if (cleanLine.length > 0 && cleanLine.length < 80 && !sectionHeaders.test(cleanLine)) {
+      return cleanLine;
     }
   }
 

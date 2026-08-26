@@ -438,7 +438,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
   }
 
   const personalInfo = {
-    name: "Victor Salomão",
+    name: "Victor Salome Sousa",
     email: "vsalome41@gmail.com",
     phone: "+55 11 99999-9999",
     linkedin: "https://linkedin.com/in/victorsalome",

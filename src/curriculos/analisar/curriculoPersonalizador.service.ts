@@ -435,7 +435,7 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     
     // Dados estáticos do perfil (podem ser movidos para DB futuramente)
     const personalInfo = {
-      name: "Victor Salomão",
+      name: "Victor Salome Sousa",
       email: "vsalome41@gmail.com",
       phone: "+55 11 99999-9999",
       linkedin: "https://linkedin.com/in/victorsalome",

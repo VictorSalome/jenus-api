@@ -1,56 +1,420 @@
 {
   "personalInfo": {
-    "name": "Victor Salomão",
-    "email": "vsalome41@gmail.com",
-    "phone": "+55 11 99999-9999",
-    "linkedin": "https://linkedin.com/in/victorsalome",
+    "name": "Victor Salome Sousa",
+    "email": "victorsalome41@hotmail.com",
+    "phone": "11987319331",
+    "linkedin": "https://www.linkedin.com/in/victorsalome",
     "github": "https://github.com/victorsalome",
-    "portfolio": "https://victorsalome.dev",
-    "title": "Desenvolvedor Full Stack | React, TypeScript, Node.js | .NET, SQL"
+    "portfolio": "https://portifolio-curriculo-dev.vercel.app/",
+    "location": "São Paulo, São Paulo, Brasil",
+    "title": "Desenvolvedor Full Stack | React, Next.js, Node.js, NestJS, TypeScript",
+    "summary": "Desenvolvedor Full Stack com cerca de 3 anos de experiência no desenvolvimento de aplicações web escaláveis utilizando React, Next.js, Node.js e NestJS. Possuo experiência na construção de APIs REST/GraphQL, integrações cloud com AWS, pipelines CI/CD e aplicações modernas com foco em performance, arquitetura modular e boas práticas de engenharia de software. Atuo tanto no front-end quanto no back-end, participando desde a modelagem até deploy e manutenção das aplicações. Tenho forte interesse em automação de processos, IA aplicada e melhoria contínua da qualidade técnica dos projetos."
   },
   "experiences": [
     {
-      "company": "Tech Solutions Ltda",
+      "id": "exp1",
+      "company": "Grupo MedSystems",
       "position": "Desenvolvedor Full Stack",
-      "startDate": "2022-01",
-      "endDate": "2024-01",
-      "technologies": ["React", "TypeScript", "Node.js", "Express", "PostgreSQL", "RESTful APIs"],
-      "keywords": ["api"],
-      "achievements": ["Desenvolvimento de APIs REST", "Implementação de autenticação JWT", "Otimização de queries PostgreSQL"]
+      "startDate": "2024-11",
+      "endDate": "present",
+      "location": "São Paulo, Brasil",
+      "description": "Atuação full stack em produtos internos e integrações críticas do ecossistema MedSystems, com foco em confiabilidade, escala e eficiência operacional.",
+      "keywords": [
+        "full stack",
+        "react",
+        "next.js",
+        "node.js",
+        "nestjs",
+        "api rest",
+        "graphql",
+        "react native",
+        "integração erp",
+        "crm",
+        "automação",
+        "webhooks",
+        "event-driven"
+      ],
+      "achievements": [
+        "Desenvolvimento de interfaces web com React e Next.js (SSR/SSG) para fluxos operacionais críticos, melhorando tempo de resposta percebido e experiência dos usuários internos",
+        "Construção de APIs RESTful e serviços backend com Node.js e NestJS, aplicando SOLID, arquitetura modular, autenticação JWT e padrões de observabilidade",
+        "Integração de ERP Sankhya e CRM Bitrix24 com orquestração por webhooks, reduzindo inconsistências manuais de dados em mais de 80%",
+        "Automação de processos financeiros, logísticos e contábeis com arquitetura orientada a eventos, reduzindo o tempo de execução de rotinas repetitivas em aproximadamente 60%",
+        "Entrega de soluções web e mobile (React Native) com foco em componentização, reuso de código e manutenção evolutiva"
+      ],
+      "technologies": [
+        "React",
+        "Next.js",
+        "React Native",
+        "Node.js",
+        "NestJS",
+        "Express",
+        "TypeScript",
+        "JavaScript",
+        "PostgreSQL",
+        "MongoDB",
+        "REST API",
+        "GraphQL",
+        "JWT",
+        "Webhooks",
+        "AWS",
+        "Sankhya",
+        "Bitrix24"
+      ]
     },
     {
-      "company": "Inova Digital",
-      "position": "Estagiário de Desenvolvimento",
-      "startDate": "2021-07",
-      "endDate": "2021-12",
-      "technologies": ["React", "Node.js", "Jest", "Testing Library"],
-      "keywords": ["teste", "refatoracao"],
-      "achievements": ["Testes automatizados com Jest", "Refatoração de código legado", "Implementação de testes CI/CD"]
+      "id": "exp2",
+      "company": "Workana",
+      "position": "Desenvolvedor Full Stack Freelancer",
+      "startDate": "2023-03",
+      "endDate": "2025-02",
+      "location": "São Paulo, São Paulo, Brasil",
+      "description": "Desenvolvimento end-to-end de soluções web para diferentes segmentos, com responsabilidade técnica do discovery ao deploy.",
+      "keywords": [
+        "freelancer",
+        "react",
+        "next.js",
+        "node.js",
+        "nestjs",
+        "typescript",
+        "api rest",
+        "graphql",
+        "frontend",
+        "backend",
+        "full stack",
+        "salesforce",
+        "mysql",
+        "mongodb"
+      ],
+      "achievements": [
+        "Construção de aplicações full stack com React, Next.js, Node.js e TypeScript, com foco em arquitetura escalável e manutenção simplificada",
+        "Implementação de integrações REST com autenticação, paginação e tratamento de falhas, aumentando a robustez de fluxos de negócio entre sistemas",
+        "Estruturação de backends com modelagem relacional e não relacional (MySQL e MongoDB), otimizando consultas e estabilidade em produção",
+        "Padronização de UI responsiva com Tailwind e styled-components, reduzindo retrabalho visual e acelerando entregas",
+        "Apoio técnico em integrações e automações no ecossistema Salesforce para processos comerciais"
+      ],
+      "technologies": [
+        "React",
+        "Next.js",
+        "Node.js",
+        "NestJS",
+        "TypeScript",
+        "JavaScript",
+        "Express",
+        "REST API",
+        "GraphQL",
+        "MySQL",
+        "MongoDB",
+        "Docker",
+        "CI/CD",
+        "Tailwind CSS",
+        "styled-components",
+        "Salesforce"
+      ]
+    },
+    {
+      "id": "exp3",
+      "company": "DespesasCar",
+      "position": "Desenvolvedor Front-end",
+      "startDate": "2024-04",
+      "endDate": "2024-07",
+      "location": "São Paulo, SP",
+      "description": "Desenvolvimento front-end em Next.js para plataforma de gestão de despesas veiculares.",
+      "keywords": [
+        "next.js",
+        "react",
+        "tailwind",
+        "dashboard",
+        "api integration",
+        "figma"
+      ],
+      "achievements": [
+        "Implementação de dashboards interativos em Next.js para controle de despesas e indicadores operacionais",
+        "Integração com API externa com autenticação e sincronização de dados, garantindo consistência no fluxo de informações",
+        "Aplicação de abordagem mobile-first com Tailwind CSS, garantindo uso fluido em múltiplos dispositivos"
+      ],
+      "technologies": [
+        "Next.js",
+        "React",
+        "TypeScript",
+        "Tailwind CSS",
+        "REST API",
+        "Figma"
+      ]
+    },
+    {
+      "id": "exp4",
+      "company": "SoftStart",
+      "position": "Desenvolvedor Front-end Freelancer",
+      "startDate": "2024-03",
+      "endDate": "2024-04",
+      "location": "Portugal (Remoto)",
+      "description": "Desenvolvimento de interfaces responsivas e dashboards orientados a processos com Angular e TypeScript.",
+      "keywords": [
+        "angular",
+        "typescript",
+        "tailwind",
+        "dashboard",
+        "angular material",
+        "responsivo"
+      ],
+      "achievements": [
+        "Entrega de dashboard de processos e totem de cadastro com Angular, Tailwind e Angular Material",
+        "Evolução de componentes reutilizáveis com foco em padronização visual e escalabilidade",
+        "Apoio em code review e correções críticas de layout para aumento de qualidade de release"
+      ],
+      "technologies": [
+        "Angular",
+        "TypeScript",
+        "Tailwind CSS",
+        "Angular Material",
+        "RxJS"
+      ]
+    },
+    {
+      "id": "exp5",
+      "company": "Dev Burguer",
+      "position": "Desenvolvedor Full Stack Jr",
+      "startDate": "2023-06",
+      "endDate": "2023-11",
+      "location": "São Paulo, SP",
+      "description": "Atuação no desenvolvimento e evolução de aplicações web com React no front-end e Node.js no back-end.",
+      "keywords": [
+        "react",
+        "node.js",
+        "docker",
+        "jwt",
+        "express",
+        "mongodb",
+        "postgresql",
+        "full stack"
+      ],
+      "achievements": [
+        "Implementação de APIs backend com Node.js, Express e JWT para autenticação e autorização",
+        "Evolução de consultas e rotas críticas com foco em estabilidade e desempenho",
+        "Entrega de interfaces web com React e styled-components mantendo consistência visual e responsividade"
+      ],
+      "technologies": [
+        "React",
+        "Node.js",
+        "Express",
+        "Docker",
+        "JWT",
+        "MongoDB",
+        "PostgreSQL",
+        "styled-components"
+      ]
+    },
+    {
+      "id": "exp6",
+      "company": "Freelancer",
+      "position": "Desenvolvedor Front-end",
+      "startDate": "2023-03",
+      "endDate": "2023-06",
+      "location": "São Paulo, SP",
+      "description": "Desenvolvimento de aplicações front-end com React, Next.js e Angular para diferentes contextos de negócio.",
+      "keywords": [
+        "react",
+        "next.js",
+        "angular",
+        "frontend",
+        "tailwind",
+        "graphql",
+        "crud"
+      ],
+      "achievements": [
+        "Criação de interfaces responsivas com React e Next.js aplicando princípios de componentização",
+        "Implementação de CRUDs e integrações com PostgreSQL, MongoDB, Firebase e GraphQL",
+        "Apoio em prototipação e evolução de fluxos de usuário com foco em usabilidade"
+      ],
+      "technologies": [
+        "React",
+        "Next.js",
+        "Angular",
+        "TypeScript",
+        "Tailwind CSS",
+        "GraphQL",
+        "Firebase",
+        "MongoDB",
+        "PostgreSQL"
+      ]
     }
   ],
   "education": [
     {
-      "institution": "Faculdade de Tecnologia",
-      "degree": "Bacharelando em Sistemas da Informação",
-      "startDate": "2019-03",
-      "endDate": "2023-12",
-      "description": "Especialização em Desenvolvimento Web e Segurança da Informação"
+      "id": "edu2",
+      "institution": "SENAC São Paulo",
+      "degree": "Tecnólogo em Análise e Desenvolvimento de Sistemas",
+      "startDate": "2024-02",
+      "endDate": "present",
+      "location": "São Paulo, SP",
+      "gpa": "",
+      "description": "Formação com foco em engenharia de software, arquitetura de aplicações, banco de dados e gestão de projetos de TI."
+    },
+    {
+      "id": "edu1",
+      "institution": "Universidade Santo Amaro (UNISA)",
+      "degree": "Bacharel em Administração de Empresas",
+      "startDate": "2019-02",
+      "endDate": "2022-12",
+      "location": "São Paulo, SP",
+      "gpa": ""
+    }
+  ],
+  "certifications": [
+    {
+      "id": "cert1",
+      "name": "Lógica de Programação",
+      "issuer": "Rocketseat",
+      "date": "2023",
+      "credentialId": "",
+      "url": ""
+    },
+    {
+      "id": "cert2",
+      "name": "Fundamentos de JavaScript",
+      "issuer": "Rocketseat",
+      "date": "2023",
+      "credentialId": "",
+      "url": ""
+    },
+    {
+      "id": "cert3",
+      "name": "Conceitos de Backend",
+      "issuer": "Dev Club",
+      "date": "2024",
+      "credentialId": "",
+      "url": ""
+    },
+    {
+      "id": "cert4",
+      "name": "Desenvolvedor Front-End",
+      "issuer": "Alura",
+      "date": "2024",
+      "credentialId": "",
+      "url": ""
+    },
+    {
+      "id": "cert5",
+      "name": "Desenvolvedor Full Stack",
+      "issuer": "Udemy",
+      "date": "2024",
+      "credentialId": "",
+      "url": ""
     }
   ],
   "skills": {
-    "programming": ["JavaScript", "TypeScript", "C#", ".NET", "Python"],
-    "frameworks": ["React", "Node.js", "Express", ".NET Core", "ASP.NET"],
-    "databases": ["PostgreSQL", "MySQL", "MongoDB", "SQL Server", "SQLite"],
-    "methodologies": ["Agile", "Scrum", "TDD", "CI/CD"],
-    "testing": ["Jest", "React Testing Library", "xUnit", "Moq"],
-    "devops": ["Docker", "Git", "GitHub Actions", "Azure DevOps"]
+    "stackPrincipal": [
+      "React",
+      "Next.js",
+      "TypeScript",
+      "Node.js",
+      "NestJS",
+      "PostgreSQL",
+      "MongoDB",
+      "Docker",
+      "AWS"
+    ],
+    "frontEnd": [
+      "React",
+      "Next.js",
+      "TypeScript",
+      "Tailwind CSS",
+      "styled-components",
+      "Angular",
+      "SSR",
+      "SSG",
+      "ISR",
+      "Server Components"
+    ],
+    "backEnd": [
+      "Node.js",
+      "NestJS",
+      "Express",
+      "REST API",
+      "GraphQL",
+      "JWT",
+      "Clean Architecture",
+      "SOLID",
+      "Arquitetura Modular"
+    ],
+    "databases": [
+      "PostgreSQL",
+      "MongoDB",
+      "MySQL",
+      "Firebase",
+      "Elasticsearch"
+    ],
+    "cloudDevOps": [
+      "Docker",
+      "AWS",
+      "EC2",
+      "S3",
+      "Lambda",
+      "SQS",
+      "CI/CD",
+      "Vercel",
+      "GitHub Actions"
+    ],
+    "testing": [
+      "Jest",
+      "React Testing Library",
+      "Testing Library",
+      "Testes Unitários",
+      "Testes de Integração",
+      "SonarQube"
+    ],
+    "integrations": [
+      "REST API",
+      "GraphQL",
+      "Webhooks",
+      "ERP Sankhya",
+      "CRM Bitrix24",
+      "Salesforce"
+    ],
+    "architecture": [
+      "Clean Code",
+      "SOLID",
+      "Clean Architecture",
+      "Design Systems",
+      "Componentização",
+      "Code Review",
+      "Refatoração",
+      "Acessibilidade",
+      "Responsividade"
+    ],
+    "stateManagement": ["Zustand", "Redux", "Context API", "React Query"],
+    "aiAutomation": [
+      "Automação de processos e integrações utilizando APIs e IA generativa",
+      "Agentes de IA",
+      "Orquestração de workflows",
+      "Arquitetura orientada a eventos",
+      "Bots inteligentes"
+    ],
+    "additionalKnowledge": [
+      "React Native",
+      "Angular Material",
+      "Sass/SCSS",
+      "Bootstrap",
+      "OAuth2",
+      "Session-based Auth"
+    ]
   },
-  "certifications": [
-    { "name": "AWS Cloud Practitioner", "issuer": "Amazon Web Services" },
-    { "name": "Node.js Certified Developer", "issuer": "OpenJS Foundation" }
-  ],
   "languages": [
-    { "language": "Português", "level": "Nativo" },
-    { "language": "Inglês", "level": "Intermediário" }
+    {
+      "language": "Português",
+      "level": "Nativo"
+    },
+    {
+      "language": "Inglês",
+      "level": "Básico/Técnico"
+    }
+  ],
+  "specializations": [
+    "Desenvolvimento Front-end com React, Next.js e TypeScript",
+    "Desenvolvimento Back-end com Node.js, NestJS e APIs REST/GraphQL",
+    "Desenvolvimento Full Stack para aplicações web escaláveis",
+    "Testes automatizados e qualidade de software",
+    "Cloud, CI/CD e integrações com AWS",
+    "Automação de processos e integrações utilizando APIs e IA generativa"
   ]
 }
