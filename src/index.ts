@@ -13,7 +13,7 @@ import * as logger from "./core/logger.js";
 
 import authApp from "./apps/auth/index.js";
 import promoApp from "./apps/promo-monitor/index.js";
-import curriculosApp from "./apps/curriculo-monitor/index.js";
+import curriculosApp, { pdfPreviewRouter } from "./apps/curriculo-monitor/index.js";
 import { requireAuth } from "./promo/auth/auth.middleware.js";
 
 const app = express();
@@ -31,6 +31,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // ── Apps ──
 app.use("/api/auth", authApp);
 app.use("/api", promoApp);
+app.use("/api/curriculo", pdfPreviewRouter);
 app.use("/api/curriculo", requireAuth, curriculosApp);
 
 app.get("/api/health", async (_req, res) => {

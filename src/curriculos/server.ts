@@ -13,7 +13,7 @@ import {
 import { loggerMiddleware } from './utils/logger.js';
 import { autoStartScheduler } from './buscas/scheduler.service.js';
 
-import analisarRoutes from './analisar/analisar.routes.js';
+import analisarRoutes, { pdfPreviewRouter } from './analisar/analisar.routes.js';
 import testeRoutes from './teste/teste.routes.js';
 import smtpRoutes from './smtp/smtp.routes.js';
 import buscasRoutes from './buscas/buscas.routes.js';
@@ -94,4 +94,5 @@ app.use(notFoundHandler);
 
 app.use(errorHandler);
 
+export { pdfPreviewRouter };
 export default app;
