@@ -6,6 +6,7 @@ import { executarPipeline } from "../buscas/autoApply.service.js";
 import { getEnviosCount } from "../email/email.service.js";
 import fs from "fs/promises";
 import path from "path";
+import config from "../config/index.js";
 
 const router = Router();
 
