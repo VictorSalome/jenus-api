@@ -24,7 +24,7 @@ router.get("/monitor", async (req, res) => {
 
     // Carregar histórico de envios
     let history = [];
-    const historyPath = path.join(process.cwd(), "data", "send_history.json");
+    const historyPath = path.join(config.paths.data, "send_history.json");
     try {
       const historyData = await fs.readFile(historyPath, "utf-8");
       history = JSON.parse(historyData);
