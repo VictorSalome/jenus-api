@@ -181,15 +181,6 @@ export const executarPipeline = async ({
         const candidatoData = {
           personalInfo: personalInfo
         };
-            name: "Candidato",
-            email: "",
-            phone: "",
-            linkedin: "",
-            github: "",
-            portfolio: "",
-            title: ""
-          }
-        };
         
         // Construir dadosVaga completo
         const dadosVagaCompleto = {
