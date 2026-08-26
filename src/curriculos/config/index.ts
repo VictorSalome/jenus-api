@@ -168,7 +168,6 @@ export interface PathConfig {
   logs: string;
   data: string;
   uploads: string;
-  candidateProfile: string;
 }
 
 export const pathConfig: PathConfig = {
@@ -177,10 +176,6 @@ export const pathConfig: PathConfig = {
   logs: path.join(process.cwd(), process.env.LOG_DIR || "logs"),
   data: path.join(process.cwd(), process.env.DATA_DIR || "data"),
   uploads: path.join(process.cwd(), process.env.UPLOADS_DIR || "uploads"),
-  candidateProfile: path.join(
-    process.cwd(),
-    process.env.CANDIDATE_PROFILE_PATH || "candidate-profile.json",
-  ),
 };
 
 export interface ValidationConfig {

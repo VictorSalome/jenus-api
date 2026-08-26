@@ -16,14 +16,50 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * Carrega os dados do candidato do arquivo JSON
+ * Carrega os dados do candidato do banco de dados
  * @returns {Object} Dados do candidato
  */
 const carregarDadosCandidato = async () => {
   try {
-    const candidateProfilePath = config.paths.candidateProfile;
-    const data = await fs.readFile(candidateProfilePath, "utf8");
-    return JSON.parse(data);
+    const { getDb } = await import("../../core/database.js");
+    const db = await getDb();
+    
+    const personal = await db.get('SELECT * FROM profile_personal WHERE id = 1');
+    const expRows = await db.all('SELECT * FROM profile_experiences ORDER BY sort_order');
+    const eduRows = await db.all('SELECT * FROM profile_education ORDER BY sort_order');
+    const certRows = await db.all('SELECT * FROM profile_certifications ORDER BY sort_order');
+    const langRows = await db.all('SELECT * FROM profile_languages ORDER BY sort_order');
+    const specRows = await db.all('SELECT * FROM profile_specializations ORDER BY sort_order');
+    const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
+    
+    const skills: Record<string, string[]> = {};
+    for (const row of skillsRows) {
+      if (!skills[row.category]) skills[row.category] = [];
+      skills[row.category].push(row.tech);
+    }
+    
+    return {
+      personalInfo: personal ? {
+        name: personal.name, email: personal.email, phone: personal.phone,
+        linkedin: personal.linkedin, github: personal.github, portfolio: personal.portfolio,
+        location: personal.location, title: personal.title, summary: personal.summary,
+      } : {},
+      experiences: expRows.map((e: any) => ({
+        company: e.company, position: e.position, startDate: e.start_date,
+        endDate: e.end_date, location: e.location, description: e.description,
+        technologies: JSON.parse(e.technologies_json || "[]"),
+        keywords: JSON.parse(e.keywords_json || "[]"),
+        achievements: JSON.parse(e.achievements_json || "[]"),
+      })),
+      education: eduRows.map((e: any) => ({
+        institution: e.institution, degree: e.degree, startDate: e.start_date,
+        endDate: e.end_date, location: e.location, description: e.description,
+      })),
+      certifications: certRows.map((c: any) => ({ name: c.name, issuer: c.issuer })),
+      languages: langRows.map((l: any) => ({ language: l.language, level: l.level })),
+      specializations: specRows.map((s: any) => s.text),
+      skills,
+    };
   } catch (error) {
     logError("Erro ao carregar dados do candidato", error);
     throw new Error("Falha ao carregar dados do candidato");

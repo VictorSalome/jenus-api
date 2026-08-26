@@ -1,9 +1,7 @@
 import { getDb } from "../core/database.js";
 import { logInfo } from "./utils/logger.js";
-import fs from "fs/promises";
-import config from "./config/index.js";
 
-// ── Category map from candidate-profile.json ──
+// ── Category map from database ──
 
 interface SkillCategoryMap {
   [tech: string]: string;
@@ -11,35 +9,12 @@ interface SkillCategoryMap {
 
 const loadSkillCategoryMap = async (): Promise<SkillCategoryMap> => {
   try {
-    const data = await fs.readFile(config.paths.candidateProfile, "utf-8");
-    const profile = JSON.parse(data);
+    const db = await getDb();
+    const rows = await db.all('SELECT category, tech FROM profile_skills');
     const map: SkillCategoryMap = {};
-
-    const CATEGORY_LABELS: Record<string, string> = {
-      stackPrincipal: "programming",
-      frontEnd: "frameworks",
-      backEnd: "backEnd",
-      databases: "databases",
-      cloudDevOps: "devops",
-      testing: "testing",
-      integrations: "integrations",
-      architecture: "methodologies",
-      stateManagement: "stateManagement",
-      aiAutomation: "aiAutomation",
-      additionalKnowledge: "additionalKnowledge",
-    };
-
-    if (profile.skills) {
-      for (const [cat, techs] of Object.entries(profile.skills)) {
-        if (Array.isArray(techs)) {
-          const label = CATEGORY_LABELS[cat] || cat;
-          for (const tech of techs) {
-            map[tech.toLowerCase()] = label;
-          }
-        }
-      }
+    for (const row of rows) {
+      map[row.tech.toLowerCase()] = row.category;
     }
-
     return map;
   } catch {
     return {};
