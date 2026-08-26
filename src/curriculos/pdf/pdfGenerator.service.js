@@ -4,6 +4,7 @@ import { createWriteStream } from "fs";
 import path from "path";
 import { logInfo, logError } from "../utils/logger.js";
 import { formatarData, formatarTelefone } from "../utils/formatters.js";
+import config from "../config/index.js";
 
 /**
  * Gera PDF do currículo seguindo normas ABNT
@@ -16,7 +17,7 @@ export const gerarPdfCurriculo = async (curriculo, dadosVaga) => {
     logInfo("Iniciando geração do PDF do currículo");
 
     // Criar diretório temp se não existir
-    const tempDir = path.join(process.cwd(), process.env.TEMP_DIR || "temp");
+    const tempDir = config.paths.temp;
     await fs.mkdir(tempDir, { recursive: true });
 
     // Nome do arquivo PDF (removendo acentos e caracteres especiais)
@@ -154,6 +155,9 @@ export const gerarPdfCurriculo = async (curriculo, dadosVaga) => {
       stream.on("finish", resolve);
       stream.on("error", reject);
     });
+
+    // Verificar se o arquivo foi realmente criado
+    await fs.access(caminhoArquivo);
 
     logInfo("PDF gerado com sucesso", { arquivo: nomeArquivo });
     return caminhoArquivo;

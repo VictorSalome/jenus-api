@@ -325,8 +325,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
   });
 
   // Verificar se arquivo existe
-  const tempDir = path.join(process.cwd(), process.env.TEMP_DIR || "temp");
-  const caminhoArquivoPdf = path.join(tempDir, nomeArquivo);
+  const caminhoArquivoPdf = path.join(config.paths.temp, nomeArquivo);
 
   try {
     await fs.access(caminhoArquivoPdf);
