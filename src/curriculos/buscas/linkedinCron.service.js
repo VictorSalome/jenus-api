@@ -3,6 +3,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import { logInfo, logError } from "../utils/logger.js";
+import config from "../config/index.js";
 
 const execAsync = promisify(exec);
 
@@ -10,7 +11,7 @@ let tarefaAtiva = null;
 let ultimaExecucao = null;
 
 const SCRAPER_PATH = path.resolve(
-  process.cwd(),
+  config.paths.root,
   "scraper",
   "linkedin_scraper.py",
 );

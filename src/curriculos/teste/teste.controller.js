@@ -21,10 +21,7 @@ const __dirname = path.dirname(__filename);
  */
 const carregarDadosCandidato = async () => {
   try {
-    const candidateProfilePath = path.join(
-      process.cwd(),
-      "candidate-profile.json",
-    );
+    const candidateProfilePath = config.paths.candidateProfile;
     const data = await fs.readFile(candidateProfilePath, "utf8");
     return JSON.parse(data);
   } catch (error) {

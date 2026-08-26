@@ -4,10 +4,11 @@ import { asyncHandler, ValidationError } from "../middleware/errorHandler.js";
 import { logInfo, logError, logWarn } from "../utils/logger.js";
 import fs from "fs/promises";
 import path from "path";
+import config from "../config/index.js";
 
 const router = Router();
 
-const PROFILE_JSON_PATH = path.join(process.cwd(), "candidate-profile.json");
+const PROFILE_JSON_PATH = config.paths.candidateProfile;
 
 /**
  * GET /api/curriculo/profile

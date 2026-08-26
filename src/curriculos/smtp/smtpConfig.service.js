@@ -1,10 +1,11 @@
 import fs from "fs/promises";
 import path from "path";
 import { logInfo, logWarn } from "../utils/logger.js";
+import config from "../config/index.js";
 
 const SMTP_CONFIG_FILE = path.join(
-  process.cwd(),
-  process.env.SMTP_CONFIG_FILE || "data/smtp-config.json",
+  config.paths.data,
+  "smtp-config.json",
 );
 
 const normalizeBoolean = (value, defaultValue = false) => {

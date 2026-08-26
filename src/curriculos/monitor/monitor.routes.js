@@ -86,7 +86,7 @@ router.post("/auto-apply", async (req, res) => {
     });
 
     // Registrar no histórico
-    const historyPath = path.join(process.cwd(), "data", "send_history.json");
+    const historyPath = path.join(config.paths.data, "send_history.json");
     let history = [];
     try {
       const data = await fs.readFile(historyPath, "utf-8");

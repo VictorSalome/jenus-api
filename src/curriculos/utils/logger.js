@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import config from '../config/index.js';
 
 /**
  * Sistema de logging para a aplicação
@@ -14,9 +15,8 @@ const LOG_LEVELS = {
 };
 
 // Configuração do logger
-const config = {
+const loggerConfig = {
   level: process.env.LOG_LEVEL || 'INFO',
-  logDir: process.env.LOG_DIR || 'logs',
   maxFileSize: parseInt(process.env.LOG_MAX_FILE_SIZE) || 10 * 1024 * 1024, // 10MB
   maxFiles: parseInt(process.env.LOG_MAX_FILES) || 5,
   enableConsole: process.env.LOG_CONSOLE !== 'false',
@@ -28,7 +28,7 @@ const config = {
  */
 const ensureLogDir = async () => {
   try {
-    const logPath = path.join(process.cwd(), config.logDir);
+    const logPath = config.paths.logs;
     await fs.mkdir(logPath, { recursive: true });
     return logPath;
   } catch (error) {
