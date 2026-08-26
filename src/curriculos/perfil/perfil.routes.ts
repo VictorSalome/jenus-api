@@ -158,15 +158,15 @@ const SECTIONS = {
   },
   languages: {
     table: "profile_languages",
-    mapRow: (l: any) => ({ language: l.language, level: l.level }),
+    mapRow: (l: any) => ({ id: l.id, language: l.language, level: l.level }),
     fields: ["id", "language", "level", "sort_order"],
-    insertFields: (data: any) => ({ language: data.language, level: data.level }),
+    insertFields: (data: any) => ({ id: data.id || genId(), language: data.language, level: data.level }),
   },
   specializations: {
     table: "profile_specializations",
-    mapRow: (s: any) => ({ text: s.text }),
+    mapRow: (s: any) => ({ id: s.id, text: s.text }),
     fields: ["id", "text", "sort_order"],
-    insertFields: (data: any) => ({ text: data.text || data.specialization }),
+    insertFields: (data: any) => ({ id: data.id || genId(), text: data.text || data.specialization }),
   },
 };
 
