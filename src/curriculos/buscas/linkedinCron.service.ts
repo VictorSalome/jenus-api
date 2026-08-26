@@ -7,8 +7,8 @@ import config from "../config/index.js";
 
 const execAsync = promisify(exec);
 
-let tarefaAtiva = null;
-let ultimaExecucao = null;
+let tarefaAtiva: cron.ScheduledTask | null = null;
+let ultimaExecucao: any = null;
 
 const SCRAPER_PATH = path.resolve(
   config.paths.root,
@@ -48,7 +48,7 @@ const executarScraper = async () => {
     logInfo(`Scraper LinkedIn finalizado em ${duracao}ms`);
     if (stdout)
       logInfo(`Scraper output: ${stdout.split("\n").slice(-5).join(" | ")}`);
-  } catch (err) {
+  } catch (err: any) {
     const duracao = Date.now() - inicio;
     ultimaExecucao = {
       timestamp: new Date().toISOString(),
@@ -66,7 +66,7 @@ const executarScraper = async () => {
  */
 export const iniciarLinkedinCron = ({
   cron: cronExpr = "15 */2 * * *", // a cada 2h, min 15
-} = {}) => {
+}: { cron?: string } = {}) => {
   if (tarefaAtiva) {
     tarefaAtiva.stop();
   }

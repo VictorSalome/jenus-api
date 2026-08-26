@@ -1,14 +1,12 @@
 import { Router } from "express";
-import { asyncHandler, ValidationError } from "../middleware/errorHandler.js";
-import { criarTransporter, getSmtpRuntimeConfig } from "./email.service.js";
+import { asyncHandler } from "../middleware/errorHandler.js";
+import { getSmtpRuntimeConfig } from "../smtp/smtpConfig.service.js";
 
 const router = Router();
 
 /**
  * POST /api/curriculo/email-test
  * Envia e-mail de teste usando a mesma configuração SMTP do envio real
- * Body: { to: string, subject: string, body: string }
- * Feature flag: ENABLE_EMAIL_TEST=true
  */
 router.post(
   "/email-test",
@@ -23,33 +21,28 @@ router.post(
     }
 
     const { to, subject, body } = req.body;
+    const errorLogger = (await import("../utils/logger.js")).logError;
 
     // Validação
     if (!to || !subject || !body) {
-      throw new ValidationError("Campos obrigatórios: to, subject, body", [
-        "to: e-mail de destino (string, e-mail válido)",
-        "subject: assunto do e-mail (string)",
-        "body: corpo do e-mail em HTML (string)",
-      ]);
+      throw new Error("Campos obrigatórios: to, subject, body");
     }
 
     // Validação básica de e-mail
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(to)) {
-      throw new ValidationError("E-mail de destino inválido", [
-        "Formato esperado: usuario@dominio.com",
-      ]);
+      throw new Error("E-mail de destino inválido");
     }
 
     if (typeof subject !== "string" || subject.trim().length === 0) {
-      throw new ValidationError("Assunto deve ser uma string não vazia");
+      throw new Error("Assunto deve ser uma string não vazia");
     }
 
     if (typeof body !== "string" || body.trim().length === 0) {
-      throw new ValidationError("Corpo do e-mail deve ser uma string não vazia");
+      throw new Error("Corpo do e-mail deve ser uma string não vazia");
     }
 
-    logInfo("Enviando e-mail de teste", { to, subject: subject.slice(0, 50) });
+    const { criarTransporter } = await import("../email/email.service.js");
 
     try {
       const transporter = criarTransporter();
@@ -66,12 +59,8 @@ router.post(
 
       const resultado = await transporter.sendMail(mailOptions);
 
-      logInfo("E-mail de teste enviado com sucesso", {
-        to,
-        messageId: resultado.messageId,
-      });
+      errorLogger("E-mail de teste enviado com sucesso", { to, messageId: resultado.messageId });
 
-      // previewUrl só existe se estiver usando Ethereal (desenvolvimento sem SMTP real)
       const previewUrl = resultado.previewUrl || null;
 
       return res.json({
@@ -84,13 +73,11 @@ router.post(
         subject,
       });
     } catch (error) {
-      logError("Erro ao enviar e-mail de teste", error);
-
+      errorLogger("Erro ao enviar e-mail de teste", error);
       return res.status(503).json({
         success: false,
         status: "error",
-        message: `Falha no envio do e-mail de teste: ${error.message}`,
-        error: error.message,
+        message: `Falha no envio do e-mail de teste: ${error instanceof Error ? error.message : String(error)}`,
       });
     }
   })

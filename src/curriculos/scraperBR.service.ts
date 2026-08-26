@@ -24,13 +24,25 @@ const DEFAULT_HEADERS = {
     "Connection": "keep-alive",
   },
   timeout: 30000,
-  validateStatus: (status) => status < 500,
+  validateStatus: (status: number) => status < 500,
 };
 
+export interface VagaScraper {
+  id: string;
+  title: string;
+  company: string;
+  description: string;
+  location: string;
+  url: string;
+  tags: string[];
+  salary: string;
+  remote: boolean;
+}
+
 const buscarVagasBrasil = async (
-  query = "", tags = [], limit = 10, offset = 0
-) => {
-  const vagas = [];
+  query = "", tags: string[] = [], limit = 10, offset = 0
+): Promise<VagaScraper[]> => {
+  const vagas: VagaScraper[] = [];
   
   try {
     logInfo("Buscando vagas via HTTP...", { query, limit });
@@ -42,7 +54,7 @@ const buscarVagasBrasil = async (
     );
     
     if (jobicyRes.data?.data?.length) {
-      jobicyRes.data.data.forEach((v) => {
+      jobicyRes.data.data.forEach((v: any) => {
         vagas.push({
           id: v.id,
           title: v.title,
@@ -57,19 +69,19 @@ const buscarVagasBrasil = async (
       });
       logInfo(`Jobicy: ${vagas.length} vagas encontradas`);
     }
-  } catch (e) {
+  } catch (e: any) {
     logError(`Jobicy API: ${e.message}`);
   }
 
   return vagas.slice(0, limit);
 };
 
-const buscarVagasPorTecnologia = async (tecnologia, limit = 10) => {
+const buscarVagasPorTecnologia = async (tecnologia: string, limit = 10): Promise<VagaScraper[]> => {
   const tags = tecnologia.split(/[,\s]+/).filter(t => t.length > 2);
   return buscarVagasBrasil(tecnologia, tags, limit);
 };
 
-const buscarVagasRemotas = async (query = "", limit = 10) => {
+const buscarVagasRemotas = async (query = "", limit = 10): Promise<VagaScraper[]> => {
   return buscarVagasBrasil(`${query} remoto`, [], limit);
 };
 

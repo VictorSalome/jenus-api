@@ -4,7 +4,7 @@
  * Sem dependência de IA
  */
 
-const SKILL_CATEGORIES = {
+const SKILL_CATEGORIES: Record<string, string[]> = {
   frontend: ['react', 'react native', 'reactjs', 'react.js', 'vue', 'vuejs', 'vue.js', 'angular', 'svelte', 'html', 'css', 'sass', 'tailwind', 'bootstrap', 'typescript', 'javascript', 'js', 'ts', 'next', 'nextjs', 'next.js', 'remix'],
   backend: ['node', 'nodejs', 'node.js', 'express', 'nest', 'nestjs', 'fastify', 'python', 'django', 'flask', 'fastapi', 'java', 'spring', 'spring boot', 'go', 'golang', 'rust', 'c#', 'csharp', '.net', 'dotnet', 'asp.net', 'php', 'laravel', 'symfony', 'ruby', 'rails'],
   database: ['sql', 'postgresql', 'postgres', 'mysql', 'sqlite', 'mongodb', 'redis', 'prisma', 'typeorm', 'sequelize'],
@@ -14,19 +14,19 @@ const SKILL_CATEGORIES = {
   architecture: ['microservices', 'clean architecture', 'ddd', 'hexagonal', 'event driven', 'graphql', 'rest', 'api']
 };
 
-const TECH_KEYWORDS = Object.values(SKILL_CATEGORIES).flat();
+const TECH_KEYWORDS: string[] = Object.values(SKILL_CATEGORIES).flat();
 
 // Precompile regexes once at module load (performance)
-function escapeRegex(str) {
+function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const TECH_REGEXES = TECH_KEYWORDS.map(tech => ({
+const TECH_REGEXES: { tech: string; regex: RegExp }[] = TECH_KEYWORDS.map(tech => ({
   tech,
   regex: new RegExp(`\\b${escapeRegex(tech)}\\b`, 'i')
 }));
 
-const SENIORITY_KEYWORDS = {
+const SENIORITY_KEYWORDS: Record<string, string[]> = {
   'estagiário': ['estagiário', 'estagio', 'intern', 'internship'],
   'júnior': ['júnior', 'junior', 'jr', 'entry level', 'entry-level'],
   'pleno': ['pleno', 'mid', 'mid level', 'mid-level'],
@@ -35,7 +35,7 @@ const SENIORITY_KEYWORDS = {
   'arquiteto': ['arquiteto', 'architect', 'architecture']
 };
 
-function normalizeText(text) {
+function normalizeText(text: string): string {
   return text
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -45,7 +45,7 @@ function normalizeText(text) {
     .trim();
 }
 
-function extractTitle(text) {
+function extractTitle(text: string): string | null {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
   for (const line of lines) {
@@ -63,7 +63,7 @@ function extractTitle(text) {
   return null;
 }
 
-function extractCompany(title) {
+function extractCompany(title: string): string | null {
   if (!title) return null;
   
   const match = title.match(/\s*-\s*([A-Z][A-Z0-9\s&.-]+)$/);
@@ -79,7 +79,7 @@ function extractCompany(title) {
   return null;
 }
 
-function extractSeniority(text) {
+function extractSeniority(text: string): string | null {
   const normalized = normalizeText(text);
   
   for (const [level, keywords] of Object.entries(SENIORITY_KEYWORDS)) {
@@ -93,9 +93,9 @@ function extractSeniority(text) {
   return null;
 }
 
-function extractSkills(text) {
+function extractSkills(text: string): string[] {
   const normalized = normalizeText(text);
-  const found = new Set();
+  const found = new Set<string>();
   
   for (const { tech, regex } of TECH_REGEXES) {
     if (regex.test(normalized)) {
@@ -106,9 +106,9 @@ function extractSkills(text) {
   return Array.from(found).sort();
 }
 
-function extractSection(text, sectionKeywords) {
+function extractSection(text: string, sectionKeywords: string[]): string[] | null {
   const lines = text.split('\n');
-  const results = [];
+  const results: string[] = [];
   let inSection = false;
   
   for (const line of lines) {
@@ -139,7 +139,7 @@ function extractSection(text, sectionKeywords) {
   return results.length > 0 ? results : null;
 }
 
-function extractRequirements(text) {
+function extractRequirements(text: string): string[] | null {
   return extractSection(text, [
     'requisitos', 'requerimentos', 'qualificações', 'qualificacoes',
     'requisitos obrigatórios', 'requisitos mandatórios',
@@ -147,7 +147,7 @@ function extractRequirements(text) {
   ]);
 }
 
-function extractResponsibilities(text) {
+function extractResponsibilities(text: string): string[] | null {
   return extractSection(text, [
     'responsabilidades', 'atribuições', 'atribuicoes',
     'atividades', 'escopo', 'o que você vai fazer', 'o que voce vai fazer',
@@ -155,7 +155,7 @@ function extractResponsibilities(text) {
   ]);
 }
 
-function extractSalary(text) {
+function extractSalary(text: string): string | null {
   const patterns = [
     /R\$\s*[\d.,]+\s*(?:a|até|-)\s*R\$\s*[\d.,]+/i,
     /R\$\s*[\d.,]+/i,
@@ -169,14 +169,14 @@ function extractSalary(text) {
   return null;
 }
 
-function extractLocation(text) {
+function extractLocation(text: string): { remoto: boolean; hibrido: boolean; cities: string[] } {
   const remoto = /remoto|home.?office|trabalho.?remoto|anywhere/i.test(text);
   const hibrido = /h[ií]brido|flex[ií]vel/i.test(text);
   const cities = text.match(/S[ãa]o Paulo|Rio de Janeiro|Belo Horizonte|Bras[ií]lia|Porto Alegre|Curitiba|Recife|Fortaleza|Salvador|Florian[oó]polis/gi);
   return { remoto, hibrido, cities: cities || [] };
 }
 
-function extractContractType(text) {
+function extractContractType(text: string): string | null {
   if (/CLT/i.test(text)) return 'CLT';
   if (/PJ|pessoa.jur[ií]dica/i.test(text)) return 'PJ';
   if (/est[aá]gio/i.test(text)) return 'Estágio';
@@ -184,9 +184,9 @@ function extractContractType(text) {
   return null;
 }
 
-function extractBenefits(text) {
+function extractBenefits(text: string): string[] | null {
   const normalized = normalizeText(text);
-  const benefits = [];
+  const benefits: string[] = [];
   const keywords = [
     'vr', 'va', 'vale refeição', 'vale alimentação',
     'plano saúde', 'plano odontológico',
@@ -201,7 +201,7 @@ function extractBenefits(text) {
   return benefits.length ? benefits : null;
 }
 
-function extractContactEmail(text) {
+function extractContactEmail(text: string): string | null {
   const patterns = [
     /(?:envie|mande|encaminhe|curr[ií]culo\s*para|contato)[:\s]*([\w.+-]+@[\w-]+\.[\w.-]+)/i,
     /email[\s:]*([\w.+-]+@[\w-]+\.[\w.-]+)/i
@@ -213,8 +213,8 @@ function extractContactEmail(text) {
   return null;
 }
 
-function categorizeSkills(skills) {
-  const categorized = {};
+function categorizeSkills(skills: string[]): Record<string, string[]> {
+  const categorized: Record<string, string[]> = {};
   for (const skill of skills) {
     const lowerSkill = skill.toLowerCase();
     for (const [cat, list] of Object.entries(SKILL_CATEGORIES)) {
@@ -228,7 +228,28 @@ function categorizeSkills(skills) {
   return categorized;
 }
 
-export function parseVaga(texto) {
+export interface ParsedVaga {
+  title: string | null;
+  company: string | null;
+  seniority: string | null;
+  skills: string[] | null;
+  requirements: string[] | null;
+  responsibilities: string[] | null;
+  salary: string | null;
+  location: { remoto: boolean; hibrido: boolean; cities: string[] };
+  contractType: string | null;
+  benefits: string[] | null;
+  contactEmail: string | null;
+  categorizedSkills: Record<string, string[]>;
+  rawDescription: string;
+}
+
+/**
+ * Parseia uma descrição de vaga e retorna dados estruturados
+ * @param {string} texto - Texto da vaga
+ * @returns {ParsedVaga | null} Dados estruturados da vaga ou null se inválido
+ */
+export function parseVaga(texto: string): ParsedVaga | null {
   if (!texto || typeof texto !== 'string') {
     return null;
   }

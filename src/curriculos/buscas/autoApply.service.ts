@@ -1,32 +1,49 @@
-import { buscarVagas } from "./feed.service.js";
-import { calcularCompatibilidade } from "./match.service.js";
-import { extrairDadosVaga } from "../analisar/vagaExtractor.service.js";
-import { personalizarCurriculo } from "../analisar/curriculoPersonalizador.service.js";
-import { gerarPdfCurriculo } from "../pdf/pdfGenerator.service.js";
-import { enviarCurriculo } from "../email/email.service.js";
-import { logInfo, logError, logWarn } from "../utils/logger.js";
-import { getStats, registrarEnvio, registrarErro, registrarVaga } from "../monitor/stats.service.js";
-import { getDb } from "../../core/database.js";
-import path from "path";
-import fs from "fs/promises";
+import { logInfo, logError } from "../utils/logger.js";
+import { httpGet } from "../shared/http.js";
+import config from "../config/index.js";
 
 /**
  * Pipeline: busca → match → gera currículo → envia email (se tiver email)
  */
+export interface PipelineResult {
+  buscas: Array<{ title: string; score: number }>;
+  applied: Array<any>;
+  skipped: Array<any>;
+  erros: Array<{ title: string; error: string }>;
+  stats: { gerados: number; enviados: number; semEmail: number; erroEnvio: number };
+  resumo: {
+    total: number;
+    compatveis: number;
+    gerados: number;
+    enviados: number;
+    semEmail: number;
+    erros: number;
+    erroEnvio: number;
+    tempoTotal: string;
+  };
+}
+
 export const executarPipeline = async ({
   query = "",
   tags = [],
   minScore = 60,
   limit = 10,
   autoSend = true,
-} = {}) => {
+}: {
+  query?: string;
+  tags?: string[];
+  minScore?: number;
+  limit?: number;
+  autoSend?: boolean;
+} = {}): Promise<PipelineResult> => {
   const startTime = Date.now();
-  const resultados = {
+  const resultados: PipelineResult = {
     buscas: [],
     applied: [],
     skipped: [],
     erros: [],
     stats: { gerados: 0, enviados: 0, semEmail: 0, erroEnvio: 0 },
+    resumo: {} as any,
   };
 
   logInfo("Iniciando pipeline auto-apply", {
@@ -36,12 +53,14 @@ export const executarPipeline = async ({
   });
 
   // 1. Buscar vagas
+  const { buscarVagas } = await import("./feed.service.js");
   const vagas = await buscarVagas({ query, tags, limit: Math.min(limit, 20) });
   logInfo(`Vagas brutas: ${vagas.length}`);
 
   // 2. Processar cada vaga
   for (const vaga of vagas) {
     try {
+      const { calcularCompatibilidade } = await import("./match.service.js");
       const match = calcularCompatibilidade(vaga);
       resultados.buscas.push({
         title: vaga.title,
@@ -57,12 +76,13 @@ export const executarPipeline = async ({
       }
 
       // 3. Extrair dados da vaga
+      const { extrairDadosVaga } = await import("../analisar/vagaExtractor.service.js");
       const textoVaga = `${vaga.title}\n${vaga.company}\n${vaga.description || ""}`;
       const dadosVaga = await extrairDadosVaga(textoVaga);
 
       // Email: prioridade → vaga._emails (LinkedIn) → extrairDadosVaga → regex no description
       const emailFinal =
-        vaga._emails?.[0] ||
+        (vaga as any)._emails?.[0] ||
         dadosVaga.emailContato ||
         extrairEmailDoTexto(vaga.description || "");
 
@@ -83,15 +103,18 @@ export const executarPipeline = async ({
       );
 
       // 4. Gerar currículo
-      let nomeArquivo = null;
+      let nomeArquivo: string | null = null;
       try {
+        const { personalizarCurriculo } = await import("../analisar/curriculoPersonalizador.service.js");
+        const { gerarPdfCurriculo } = await import("../pdf/pdfGenerator.service.js");
+        
         const curriculo = await personalizarCurriculo(dadosVaga);
         const pdfPath = await gerarPdfCurriculo(curriculo, dadosVaga);
         if (pdfPath) {
           nomeArquivo = path.basename(pdfPath);
           resultados.stats.gerados++;
         }
-      } catch (err) {
+      } catch (err: any) {
         logError(`Erro ao gerar PDF para "${vaga.title}": ${err.message}`);
       }
 
@@ -109,9 +132,10 @@ export const executarPipeline = async ({
       // 5. ENVIAR EMAIL (só chega aqui se tem email + PDF)
       try {
         // Carregar dados do candidato do banco
+        const { getDb } = await import("../../core/database.js");
         const db = await getDb();
         const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
-        const skills = {
+        const skills: Record<string, string[]> = {
           programming: [],
           frameworks: [],
           databases: [],
@@ -120,7 +144,7 @@ export const executarPipeline = async ({
           devops: [],
           aiAutomation: []
         };
-        const categoryMap = {
+        const categoryMap: Record<string, string> = {
           'programming': 'programming',
           'frameworks': 'frameworks',
           'databases': 'databases',
@@ -164,6 +188,7 @@ export const executarPipeline = async ({
           salario: dadosVaga.salario || '',
         };
         
+        const { enviarCurriculo } = await import("../email/email.service.js");
         await enviarCurriculo(
           emailFinal,
           pdfPath,
@@ -180,7 +205,7 @@ export const executarPipeline = async ({
           arquivo: nomeArquivo,
           status: "enviado",
         });
-      } catch (err) {
+      } catch (err: any) {
         resultados.stats.erroEnvio++;
         logError(`❌ Erro envio "${vaga.title}": ${err.message}`);
         resultados.applied.push({
@@ -193,7 +218,7 @@ export const executarPipeline = async ({
           erro: err.message,
         });
       }
-    } catch (err) {
+    } catch (err: any) {
       logError(`Erro ao processar "${vaga.title}": ${err.message}`);
       resultados.erros.push({ title: vaga.title, error: err.message });
     }
@@ -216,7 +241,7 @@ export const executarPipeline = async ({
  * Extrai email de texto livre (descrição da vaga, LinkedIn post, etc.)
  * Ignora emails de plataformas (linkedin, sentry, etc.)
  */
-function extrairEmailDoTexto(texto) {
+function extrairEmailDoTexto(texto: string): string | null {
   if (!texto) return null;
   const ignoreDomains = [
     "linkedin.com",
@@ -236,4 +261,7 @@ function extrairEmailDoTexto(texto) {
   return valido || null;
 }
 
-export { getStats };
+import { logWarn } from "../utils/logger.js";
+import path from "path";
+
+export { getStats } from "../monitor/stats.service.js";

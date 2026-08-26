@@ -27,14 +27,21 @@ http.interceptors.response.use(
   },
 );
 
+export interface HttpResponse<T = any> {
+  ok: boolean;
+  data?: T;
+  status: number;
+  error?: string;
+}
+
 /**
  * GET com tratamento de erro padronizado
  */
-export const httpGet = async (url, params = {}) => {
+export const httpGet = async <T = any>(url: string, params: Record<string, any> = {}): Promise<HttpResponse<T>> => {
   try {
     const res = await http.get(url, { params });
     return { ok: true, data: res.data, status: res.status };
-  } catch (err) {
+  } catch (err: any) {
     const msg =
       err.response?.data?.message || err.message || "Erro na requisição";
     const status = err.response?.status || 0;
@@ -45,11 +52,11 @@ export const httpGet = async (url, params = {}) => {
 /**
  * POST com tratamento de erro padronizado
  */
-export const httpPost = async (url, body = {}, headers = {}) => {
+export const httpPost = async <T = any>(url: string, body: Record<string, any> = {}, headers: Record<string, string> = {}): Promise<HttpResponse<T>> => {
   try {
     const res = await http.post(url, body, { headers });
     return { ok: true, data: res.data, status: res.status };
-  } catch (err) {
+  } catch (err: any) {
     const msg =
       err.response?.data?.message || err.message || "Erro na requisição";
     const status = err.response?.status || 0;

@@ -2,9 +2,29 @@ import { httpGet } from "../shared/http.js";
 import { logInfo, logError } from "../utils/logger.js";
 import config from "../config/index.js";
 
+export interface Feed {
+  name: string;
+  url: string;
+  parse: (data: any) => any[];
+}
+
+export interface VagaFeed {
+  source: string;
+  externalId: string;
+  title: string;
+  company: string;
+  description: string;
+  url: string;
+  location: string;
+  salary: string;
+  tags: string[];
+  postedAt: string;
+  type: string;
+}
+
 // ── Fontes de vagas ──
 
-const FEEDS = {
+const FEEDS: Record<string, Feed> = {
   jobicy: {
     name: "Jobicy",
     url: "https://jobicy.com/api/v2/remote-jobs",
@@ -24,9 +44,9 @@ const FEEDS = {
 
 // ── Normalização de vaga ──
 
-function parseJobicy(data) {
+function parseJobicy(data: any): VagaFeed[] {
   if (!data?.jobs) return [];
-  return data.jobs.map((j) => ({
+  return data.jobs.map((j: any) => ({
     source: "jobicy",
     externalId: String(j.id),
     title: j.jobTitle || "",
@@ -44,9 +64,9 @@ function parseJobicy(data) {
   }));
 }
 
-function parseArbeitnow(data) {
+function parseArbeitnow(data: any): VagaFeed[] {
   if (!data?.data) return [];
-  return data.data.map((j) => ({
+  return data.data.map((j: any) => ({
     source: "arbeitnow",
     externalId: String(j.id),
     title: j.title || "",
@@ -61,9 +81,9 @@ function parseArbeitnow(data) {
   }));
 }
 
-function parseRemotive(data) {
+function parseRemotive(data: any): VagaFeed[] {
   if (!Array.isArray(data)) return [];
-  return data.map((j) => ({
+  return data.map((j: any) => ({
     source: "remotive",
     externalId: String(j.id),
     title: j.title || "",
@@ -92,7 +112,11 @@ export const buscarVagas = async ({
   query = "",
   tags = [],
   limit = 10,
-} = {}) => {
+}: {
+  query?: string;
+  tags?: string[];
+  limit?: number;
+} = {}): Promise<VagaFeed[]> => {
   logInfo(
     `Buscando vagas: query="${query}" tags=${tags.join(",")} limit=${limit}`,
   );
@@ -110,7 +134,7 @@ export const buscarVagas = async ({
       const vagas = feed.parse(result.data).slice(0, limit);
       logInfo(`Feed ${feed.name}: ${vagas.length} vagas encontradas`);
       return vagas;
-    } catch (err) {
+    } catch (err: any) {
       logError(`Feed ${feed.name} erro: ${err.message}`);
       return [];
     }
@@ -119,7 +143,7 @@ export const buscarVagas = async ({
   const resultados = await Promise.allSettled(promises);
   const todas = resultados
     .filter((r) => r.status === "fulfilled")
-    .flatMap((r) => r.value);
+    .flatMap((r: any) => r.value);
 
   logInfo(`Total de vagas encontradas: ${todas.length}`);
   return todas;
@@ -128,7 +152,7 @@ export const buscarVagas = async ({
 /**
  * Busca vagas de uma fonte específica
  */
-export const buscarVagaFonte = async (fonte, params = {}) => {
+export const buscarVagaFonte = async (fonte: string, params: any = {}): Promise<VagaFeed[]> => {
   const feed = FEEDS[fonte];
   if (!feed)
     throw new Error(
@@ -153,7 +177,7 @@ export const getFontes = () =>
 
 // ── Helpers ──
 
-function buildParams(fonte, { query, tags, limit }) {
+function buildParams(fonte: string, { query, tags, limit }: { query: string; tags: string[]; limit: number }) {
   switch (fonte) {
     case "jobicy":
       return {

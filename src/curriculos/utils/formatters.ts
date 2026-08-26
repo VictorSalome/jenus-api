@@ -8,25 +8,25 @@
  * @param {string} formato - Formato desejado ('short', 'long', 'month-year')
  * @returns {string} Data formatada
  */
-export const formatarData = (data, formato = 'month-year') => {
+export const formatarData = (data: string | Date | null | undefined, formato: 'short' | 'long' | 'month-year' = 'month-year'): string => {
   if (!data) return 'Não informado';
   
   try {
     const date = typeof data === 'string' ? new Date(data) : data;
     
     if (isNaN(date.getTime())) {
-      return data; // Retorna o valor original se não for uma data válida
+      return String(data); // Retorna o valor original se não for uma data válida
     }
     
-    const options = {
+    const options: Intl.DateTimeFormatOptions = {
       'short': { year: 'numeric', month: '2-digit' },
       'long': { year: 'numeric', month: 'long', day: 'numeric' },
       'month-year': { year: 'numeric', month: 'long' }
-    };
+    }[formato] || { year: 'numeric', month: 'long' };
     
-    return date.toLocaleDateString('pt-BR', options[formato] || options['month-year']);
+    return date.toLocaleDateString('pt-BR', options);
   } catch (error) {
-    return data; // Retorna o valor original em caso de erro
+    return String(data); // Retorna o valor original em caso de erro
   }
 };
 
@@ -35,7 +35,7 @@ export const formatarData = (data, formato = 'month-year') => {
  * @param {string} telefone - Número de telefone
  * @returns {string} Telefone formatado
  */
-export const formatarTelefone = (telefone) => {
+export const formatarTelefone = (telefone: string | null | undefined): string => {
   if (!telefone) return 'Não informado';
   
   // Remove todos os caracteres não numéricos
@@ -64,7 +64,7 @@ export const formatarTelefone = (telefone) => {
  * @param {string} cpf - Número do CPF
  * @returns {string} CPF formatado
  */
-export const formatarCPF = (cpf) => {
+export const formatarCPF = (cpf: string | null | undefined): string => {
   if (!cpf) return 'Não informado';
   
   const numeros = cpf.replace(/\D/g, '');
@@ -81,7 +81,7 @@ export const formatarCPF = (cpf) => {
  * @param {string} cep - Número do CEP
  * @returns {string} CEP formatado
  */
-export const formatarCEP = (cep) => {
+export const formatarCEP = (cep: string | null | undefined): string => {
   if (!cep) return 'Não informado';
   
   const numeros = cep.replace(/\D/g, '');
@@ -98,7 +98,7 @@ export const formatarCEP = (cep) => {
  * @param {string} texto - Texto a ser capitalizado
  * @returns {string} Texto capitalizado
  */
-export const capitalizarTexto = (texto) => {
+export const capitalizarTexto = (texto: string | null | undefined): string => {
   if (!texto) return '';
   
   return texto
@@ -113,7 +113,7 @@ export const capitalizarTexto = (texto) => {
  * @param {number} valor - Valor numérico
  * @returns {string} Valor formatado em reais
  */
-export const formatarMoeda = (valor) => {
+export const formatarMoeda = (valor: number): string => {
   if (typeof valor !== 'number') return 'R$ 0,00';
   
   return valor.toLocaleString('pt-BR', {
@@ -128,7 +128,7 @@ export const formatarMoeda = (valor) => {
  * @param {number} decimais - Número de casas decimais
  * @returns {string} Valor formatado como porcentagem
  */
-export const formatarPorcentagem = (valor, decimais = 1) => {
+export const formatarPorcentagem = (valor: number, decimais = 1): string => {
   if (typeof valor !== 'number') return '0%';
   
   return `${valor.toFixed(decimais)}%`;
@@ -139,7 +139,7 @@ export const formatarPorcentagem = (valor, decimais = 1) => {
  * @param {string} texto - Texto com acentos
  * @returns {string} Texto sem acentos
  */
-export const removerAcentos = (texto) => {
+export const removerAcentos = (texto: string | null | undefined): string => {
   if (!texto) return '';
   
   return texto
@@ -152,7 +152,7 @@ export const removerAcentos = (texto) => {
  * @param {string} texto - Texto original
  * @returns {string} Slug gerado
  */
-export const gerarSlug = (texto) => {
+export const gerarSlug = (texto: string | null | undefined): string => {
   if (!texto) return '';
   
   return removerAcentos(texto)
@@ -169,7 +169,7 @@ export const gerarSlug = (texto) => {
  * @param {number} limite - Limite de caracteres
  * @returns {string} Texto truncado
  */
-export const truncarTexto = (texto, limite = 100) => {
+export const truncarTexto = (texto: string | null | undefined, limite = 100): string => {
   if (!texto) return '';
   
   if (texto.length <= limite) return texto;
@@ -182,7 +182,7 @@ export const truncarTexto = (texto, limite = 100) => {
  * @param {number} meses - Número de meses
  * @returns {string} Duração formatada
  */
-export const formatarDuracao = (meses) => {
+export const formatarDuracao = (meses: number | null | undefined): string => {
   if (!meses || meses < 1) return 'Menos de 1 mês';
   
   const anos = Math.floor(meses / 12);
@@ -208,16 +208,16 @@ export const formatarDuracao = (meses) => {
  * @param {string|Date} dataFim - Data de fim (ou 'present')
  * @returns {number} Diferença em meses
  */
-export const calcularMesesEntreDatas = (dataInicio, dataFim) => {
+export const calcularMesesEntreDatas = (dataInicio: string | Date, dataFim: string | Date | 'present'): number => {
   try {
     const inicio = new Date(dataInicio);
-    const fim = dataFim === 'present' ? new Date() : new Date(dataFim);
+    const fim = dataFim === 'present' ? new Date() : new Date(dataFim as string);
     
     if (isNaN(inicio.getTime()) || isNaN(fim.getTime())) {
       return 0;
     }
     
-    const diffTime = Math.abs(fim - inicio);
+    const diffTime = Math.abs(fim.getTime() - inicio.getTime());
     const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30.44)); // Média de dias por mês
     
     return diffMonths;
@@ -231,7 +231,7 @@ export const calcularMesesEntreDatas = (dataInicio, dataFim) => {
  * @param {string} email - E-mail a ser validado
  * @returns {Object} { valido: boolean, emailFormatado: string }
  */
-export const validarEmail = (email) => {
+export const validarEmail = (email: string | null | undefined): { valido: boolean; emailFormatado: string } => {
   if (!email) {
     return { valido: false, emailFormatado: '' };
   }
@@ -252,7 +252,7 @@ export const validarEmail = (email) => {
  * @param {string} ultimoSeparador - Separador antes do último item
  * @returns {string} Lista formatada
  */
-export const formatarLista = (lista, separador = ', ', ultimoSeparador = ' e ') => {
+export const formatarLista = (lista: string[], separador = ', ', ultimoSeparador = ' e '): string => {
   if (!Array.isArray(lista) || lista.length === 0) return '';
   
   if (lista.length === 1) return lista[0];

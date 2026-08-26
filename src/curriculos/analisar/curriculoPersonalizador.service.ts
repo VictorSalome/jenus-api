@@ -5,13 +5,13 @@ import { calculateSimilarity } from "../utils/textUtils.js";
 import { gerarResumo } from "./resumoProfissional.service.js";
 import { getDb } from "../../core/database.js";
 
-const normalizeText = (value = "") =>
+const normalizeText = (value = ""): string =>
   String(value)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 
-const SKILL_ALIASES = {
+const SKILL_ALIASES: Record<string, string[]> = {
   React: ["react", "front-end", "frontend", "componentes", "hooks"],
   "Next.js": [
     "next.js",
@@ -77,7 +77,14 @@ const SKILL_ALIASES = {
   "Code Review": ["code review", "revisao de codigo"],
 };
 
-const CONTEXT_RULES = [
+interface ContextRule {
+  name: string;
+  signals: string[];
+  skills: string[];
+  areas: string[];
+}
+
+const CONTEXT_RULES: ContextRule[] = [
   {
     name: "frontend-moderno",
     signals: [
@@ -181,7 +188,7 @@ const CONTEXT_RULES = [
   },
 ];
 
-const buildJobText = (dadosVaga = {}) =>
+const buildJobText = (dadosVaga: Record<string, any> = {}): string =>
   normalizeText(
     [
       dadosVaga.titulo || "",
@@ -194,12 +201,12 @@ const buildJobText = (dadosVaga = {}) =>
     ].join(" "),
   );
 
-const hasAnySignal = (text, signals = []) =>
+const hasAnySignal = (text: string, signals: string[] = []): boolean =>
   signals.some((signal) => text.includes(normalizeText(signal)));
 
-const inferContextualMatches = (text) => {
-  const inferredSkills = [];
-  const inferredAreas = [];
+const inferContextualMatches = (text: string): { skills: string[]; areas: string[] } => {
+  const inferredSkills: string[] = [];
+  const inferredAreas: string[] = [];
 
   CONTEXT_RULES.forEach((rule) => {
     if (hasAnySignal(text, rule.signals)) {
@@ -214,7 +221,7 @@ const inferContextualMatches = (text) => {
   };
 };
 
-const isSkillSemanticallyRelevant = (skill, text) => {
+const isSkillSemanticallyRelevant = (skill: string, text: string): boolean => {
   const normalizedSkill = normalizeText(skill);
   const aliases = SKILL_ALIASES[skill] || [];
 
@@ -225,9 +232,9 @@ const isSkillSemanticallyRelevant = (skill, text) => {
   return aliases.some((alias) => text.includes(normalizeText(alias)));
 };
 
-const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
+const clamp = (value: number, min = 0, max = 1): number => Math.min(max, Math.max(min, value));
 
-const inferirSenioridade = (dadosVaga = {}) => {
+const inferirSenioridade = (dadosVaga: Record<string, any> = {}): string => {
   const textoVaga = buildJobText(dadosVaga);
 
   if (
@@ -257,7 +264,7 @@ const inferirSenioridade = (dadosVaga = {}) => {
   return "pleno";
 };
 
-const calcularAnosExperiencia = (experiencias = []) => {
+const calcularAnosExperiencia = (experiencias: any[] = []): number => {
   if (!Array.isArray(experiencias) || experiencias.length === 0) return 0;
 
   let maiorTempo = 0;
@@ -286,7 +293,7 @@ const calcularAnosExperiencia = (experiencias = []) => {
   return Number(maiorTempo.toFixed(1));
 };
 
-const calcularAderenciaSenioridade = (senioridade, anosExperiencia) => {
+const calcularAderenciaSenioridade = (senioridade: string, anosExperiencia: number): number => {
   switch (senioridade) {
     case "senior":
       if (anosExperiencia >= 5) return 1;
@@ -304,14 +311,14 @@ const calcularAderenciaSenioridade = (senioridade, anosExperiencia) => {
   }
 };
 
-const calcularCoberturaLista = (itens = [], matchPredicate) => {
+const calcularCoberturaLista = (itens: any[] = [], matchPredicate: (item: any) => boolean): number => {
   if (!Array.isArray(itens) || itens.length === 0) return 1;
   const total = itens.length;
   const matched = itens.filter((item) => matchPredicate(item)).length;
   return clamp(matched / total);
 };
 
-const habilidadeCombinaComRequisito = (habilidade, requisito) => {
+const habilidadeCombinaComRequisito = (habilidade: string, requisito: string): boolean => {
   const skillNorm = normalizeText(habilidade);
   const reqNorm = normalizeText(requisito);
 
@@ -327,7 +334,7 @@ const habilidadeCombinaComRequisito = (habilidade, requisito) => {
  * @param {Object} dadosVaga - Dados estruturados da vaga
  * @returns {Object} Currículo personalizado
  */
-export const personalizarCurriculo = async (dadosVaga) => {
+export const personalizarCurriculo = async (dadosVaga: Record<string, any>): Promise<any> => {
   try {
     logInfo("Iniciando personalização do currículo");
 
@@ -393,7 +400,7 @@ export const personalizarCurriculo = async (dadosVaga) => {
 /**
  * Carrega o perfil do candidato do banco de dados
  */
-const carregarPerfilCandidato = async () => {
+const carregarPerfilCandidato = async (): Promise<any> => {
   try {
     const db = await getDb();
     
@@ -504,7 +511,7 @@ const carregarPerfilCandidato = async () => {
 /**
  * Personaliza o título do candidato baseado na vaga
  */
-const personalizarTitulo = (tituloOriginal, dadosVaga) => {
+const personalizarTitulo = (tituloOriginal: string, dadosVaga: Record<string, any>): string => {
   const { titulo: tituloVaga, areaAtuacao, nivel } = dadosVaga;
 
   // Se a vaga tem um título claro, adaptar o título do candidato
@@ -540,7 +547,7 @@ const personalizarTitulo = (tituloOriginal, dadosVaga) => {
 /**
  * Filtra especializações relevantes para a vaga
  */
-const filtrarEspecializacoesRelevantes = (specializations, dadosVaga) => {
+const filtrarEspecializacoesRelevantes = (specializations: string[], dadosVaga: Record<string, any>): string[] => {
   const textoVaga = buildJobText(dadosVaga);
   const contextMatches = inferContextualMatches(textoVaga);
 
@@ -562,7 +569,7 @@ const filtrarEspecializacoesRelevantes = (specializations, dadosVaga) => {
 /**
  * Filtra experiências mais relevantes para a vaga
  */
-const filtrarExperienciasRelevantes = (experiences, dadosVaga) => {
+const filtrarExperienciasRelevantes = (experiences: any[], dadosVaga: Record<string, any>): any[] => {
   const stackTecnologica = dadosVaga.stackTecnologica || [];
   const responsabilidades = dadosVaga.responsabilidades || [];
   const requisitosObrigatorios = dadosVaga.requisitosObrigatorios || [];
@@ -576,18 +583,18 @@ const filtrarExperienciasRelevantes = (experiences, dadosVaga) => {
 
     // Pontuação por tecnologias em comum (peso alto)
     const tecnologiasExp = exp.technologies || [];
-    const tecnologiasComuns = tecnologiasExp.filter((tech) =>
+    const tecnologiasComuns = tecnologiasExp.filter((tech: string) =>
       stackTecnologica.some(
-        (stackTech) =>
+        (stackTech: string) =>
           normalizeText(tech).includes(normalizeText(stackTech)) ||
           normalizeText(stackTech).includes(normalizeText(tech)),
       ),
     );
     pontuacao += tecnologiasComuns.length * 10;
 
-    const afinidadesContextuais = tecnologiasExp.filter((tech) =>
+    const afinidadesContextuais = tecnologiasExp.filter((tech: string) =>
       contextMatches.skills.some(
-        (skill) => normalizeText(skill) === normalizeText(tech),
+        (skill: string) => normalizeText(skill) === normalizeText(tech),
       ),
     );
     pontuacao += afinidadesContextuais.length * 6;
@@ -597,7 +604,7 @@ const filtrarExperienciasRelevantes = (experiences, dadosVaga) => {
     const keywordsVaga = normalizeText(
       `${stackTecnologica.join(" ")} ${responsabilidades.join(" ")} ${requisitosObrigatorios.join(" ")} ${areaAtuacao}`,
     );
-    const keywordsComuns = keywordsExp.filter((keyword) =>
+    const keywordsComuns = keywordsExp.filter((keyword: string) =>
       keywordsVaga.includes(normalizeText(keyword)),
     );
     pontuacao += keywordsComuns.length * 8;
@@ -608,7 +615,7 @@ const filtrarExperienciasRelevantes = (experiences, dadosVaga) => {
     );
 
     exp.achievements = exp.achievements || [];
-    exp.achievements.forEach((achievement) => {
+    exp.achievements.forEach((achievement: string) => {
       const achievementLower = normalizeText(achievement);
       if (
         todasPalavrasChave.includes("api") &&
@@ -687,7 +694,7 @@ const filtrarExperienciasRelevantes = (experiences, dadosVaga) => {
 /**
  * Filtra certificações relevantes para a vaga
  */
-const filtrarCertificacoesRelevantes = (certifications, dadosVaga) => {
+const filtrarCertificacoesRelevantes = (certifications: any[], dadosVaga: Record<string, any>): any[] => {
   const stackTecnologica = dadosVaga.stackTecnologica || [];
 
   return certifications.filter((cert) => {
@@ -695,7 +702,7 @@ const filtrarCertificacoesRelevantes = (certifications, dadosVaga) => {
     const emissorCert = cert.issuer.toLowerCase();
 
     // Verificar se a certificação está relacionada às tecnologias da vaga
-    const temTecnologiaRelevante = stackTecnologica.some((tech) =>
+    const temTecnologiaRelevante = stackTecnologica.some((tech: string) =>
       nomeCert.includes(tech.toLowerCase()),
     );
 
@@ -720,7 +727,7 @@ const filtrarCertificacoesRelevantes = (certifications, dadosVaga) => {
 /**
  * Organiza habilidades por relevância para a vaga
  */
-const organizarHabilidadesRelevantes = (skills, dadosVaga) => {
+const organizarHabilidadesRelevantes = (skills: Record<string, string[]>, dadosVaga: Record<string, any>): Record<string, string[]> => {
   const stackTecnologica = dadosVaga.stackTecnologica || [];
   const areaAtuacao = dadosVaga.areaAtuacao || "";
   const textoVaga = buildJobText(dadosVaga);
@@ -739,21 +746,21 @@ const organizarHabilidadesRelevantes = (skills, dadosVaga) => {
         categoria
       ].sort((a, b) => {
         const aRelevante = stackTecnologica.some(
-          (tech) =>
+          (tech: string) =>
             normalizeText(a).includes(normalizeText(tech)) ||
             normalizeText(tech).includes(normalizeText(a)),
         );
         const bRelevante = stackTecnologica.some(
-          (tech) =>
+          (tech: string) =>
             normalizeText(b).includes(normalizeText(tech)) ||
             normalizeText(tech).includes(normalizeText(b)),
         );
 
         const aContextual = contextMatches.skills.some(
-          (skill) => normalizeText(skill) === normalizeText(a),
+          (skill: string) => normalizeText(skill) === normalizeText(a),
         );
         const bContextual = contextMatches.skills.some(
-          (skill) => normalizeText(skill) === normalizeText(b),
+          (skill: string) => normalizeText(skill) === normalizeText(b),
         );
 
         if (aContextual && !bContextual) return -1;
@@ -780,7 +787,7 @@ const organizarHabilidadesRelevantes = (skills, dadosVaga) => {
   }
 
   if (
-    contextMatches.skills.some((skill) =>
+    contextMatches.skills.some((skill: string) =>
       ["Jest", "React Testing Library", "Testing Library"].includes(skill),
     )
   ) {
@@ -798,15 +805,15 @@ const organizarHabilidadesRelevantes = (skills, dadosVaga) => {
   return habilidadesOrganizadas;
 };
 
-const priorizarHabilidades = (habilidades, stackTecnologica = []) => {
+const priorizarHabilidades = (habilidades: string[], stackTecnologica: string[] = []): string[] => {
   return [...new Set(habilidades)].sort((a, b) => {
     const aRelevante = stackTecnologica.some(
-      (tech) =>
+      (tech: string) =>
         normalizeText(a).includes(normalizeText(tech)) ||
         normalizeText(tech).includes(normalizeText(a)),
     );
     const bRelevante = stackTecnologica.some(
-      (tech) =>
+      (tech: string) =>
         normalizeText(b).includes(normalizeText(tech)) ||
         normalizeText(tech).includes(normalizeText(b)),
     );
@@ -820,7 +827,7 @@ const priorizarHabilidades = (habilidades, stackTecnologica = []) => {
 /**
  * Identifica habilidades que correspondem diretamente à vaga
  */
-const identificarHabilidadesCorrespondentes = (skills, dadosVaga) => {
+const identificarHabilidadesCorrespondentes = (skills: Record<string, string[]>, dadosVaga: Record<string, any>): string[] => {
   const stackTecnologica = dadosVaga.stackTecnologica || [];
   const requisitosObrigatorios = dadosVaga.requisitosObrigatorios || [];
   const diferenciaisDesejaveis = dadosVaga.diferenciaisDesejaveis || [];
@@ -833,7 +840,7 @@ const identificarHabilidadesCorrespondentes = (skills, dadosVaga) => {
     .flat()
     .filter((skill) => typeof skill === "string" && skill.trim().length > 0);
 
-  const habilidadesCorrespondentes = [];
+  const habilidadesCorrespondentes: string[] = [];
   const textoVaga = buildJobText({
     titulo,
     areaAtuacao,
@@ -844,9 +851,9 @@ const identificarHabilidadesCorrespondentes = (skills, dadosVaga) => {
   });
 
   // Verificar correspondência com stack tecnológica
-  stackTecnologica.forEach((tech) => {
+  stackTecnologica.forEach((tech: string) => {
     const habilidadeCorrespondente = todasHabilidades.find(
-      (skill) =>
+      (skill: string) =>
         normalizeText(skill).includes(normalizeText(tech)) ||
         normalizeText(tech).includes(normalizeText(skill)) ||
         isSkillSemanticallyRelevant(skill, normalizeText(tech)),
@@ -862,9 +869,9 @@ const identificarHabilidadesCorrespondentes = (skills, dadosVaga) => {
 
   // Verificar correspondência com requisitos
   [...requisitosObrigatorios, ...(diferenciaisDesejaveis || [])].forEach(
-    (requisito) => {
+    (requisito: string) => {
       const requisitoLower = normalizeText(requisito);
-      todasHabilidades.forEach((skill) => {
+      todasHabilidades.forEach((skill: string) => {
         if (
           (requisitoLower.includes(normalizeText(skill)) ||
             isSkillSemanticallyRelevant(skill, requisitoLower)) &&
@@ -877,7 +884,7 @@ const identificarHabilidadesCorrespondentes = (skills, dadosVaga) => {
   );
 
   const afinidades = inferirHabilidadesPorAfinidade(textoVaga);
-  afinidades.forEach((skill) => {
+  afinidades.forEach((skill: string) => {
     if (!habilidadesCorrespondentes.includes(skill)) {
       habilidadesCorrespondentes.push(skill);
     }
@@ -886,14 +893,14 @@ const identificarHabilidadesCorrespondentes = (skills, dadosVaga) => {
   return habilidadesCorrespondentes;
 };
 
-const inferirHabilidadesPorAfinidade = (textoVaga) => {
+const inferirHabilidadesPorAfinidade = (textoVaga: string): string[] => {
   return inferContextualMatches(textoVaga).skills;
 };
 
 /**
  * Calcula pontuação geral de relevância do candidato para a vaga
  */
-const calcularPontuacaoRelevancia = (perfil, dadosVaga) => {
+const calcularPontuacaoRelevancia = (perfil: any, dadosVaga: Record<string, any>): number => {
   const habilidadesCorrespondentes = identificarHabilidadesCorrespondentes(
     perfil.skills,
     dadosVaga,
@@ -922,29 +929,29 @@ const calcularPontuacaoRelevancia = (perfil, dadosVaga) => {
 
   const mustHaveCoverage = calcularCoberturaLista(
     requisitosObrigatorios,
-    (requisito) =>
-      skillsDoCandidato.some((skill) =>
+    (requisito: string) =>
+      skillsDoCandidato.some((skill: string) =>
         habilidadeCombinaComRequisito(skill, requisito),
       ) ||
-      habilidadesCorrespondentes.some((skill) =>
+      habilidadesCorrespondentes.some((skill: string) =>
         habilidadeCombinaComRequisito(skill, requisito),
       ),
   );
 
   const niceToHaveCoverage = calcularCoberturaLista(
     diferenciaisDesejaveis,
-    (diferencial) =>
-      skillsDoCandidato.some((skill) =>
+    (diferencial: string) =>
+      skillsDoCandidato.some((skill: string) =>
         habilidadeCombinaComRequisito(skill, diferencial),
       ) ||
-      habilidadesCorrespondentes.some((skill) =>
+      habilidadesCorrespondentes.some((skill: string) =>
         habilidadeCombinaComRequisito(skill, diferencial),
       ),
   );
 
-  const stackCoverage = calcularCoberturaLista(stackTecnologica, (tech) =>
+  const stackCoverage = calcularCoberturaLista(stackTecnologica, (tech: string) =>
     habilidadesCorrespondentes.some(
-      (skill) =>
+      (skill: string) =>
         normalizeText(skill).includes(normalizeText(tech)) ||
         normalizeText(tech).includes(normalizeText(skill)) ||
         isSkillSemanticallyRelevant(skill, normalizeText(tech)),
@@ -953,9 +960,9 @@ const calcularPontuacaoRelevancia = (perfil, dadosVaga) => {
 
   const contextoCoverage = calcularCoberturaLista(
     contextMatches.skills,
-    (skillContextual) =>
+    (skillContextual: string) =>
       habilidadesCorrespondentes.some(
-        (skill) => normalizeText(skill) === normalizeText(skillContextual),
+        (skill: string) => normalizeText(skill) === normalizeText(skillContextual),
       ),
   );
 
@@ -995,8 +1002,8 @@ const calcularPontuacaoRelevancia = (perfil, dadosVaga) => {
 /**
  * Extrai competências-chave das responsabilidades da vaga
  */
-const extrairCompetenciasChave = (responsabilidades, skills) => {
-  const competencias = [];
+const extrairCompetenciasChave = (responsabilidades: string[], skills: Record<string, string[]>): string[] => {
+  const competencias: string[] = [];
   const todasHabilidades = [
     ...skills.programming,
     ...skills.frameworks,

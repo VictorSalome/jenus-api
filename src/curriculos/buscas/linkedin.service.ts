@@ -1,5 +1,16 @@
 import { logInfo, logError } from "../utils/logger.js";
 
+export interface VagaLinkedIn {
+  titulo: string;
+  empresa: string;
+  descricao: string;
+  emails: string[];
+  links: string[];
+  localizacao: string;
+  modalidade: string;
+  fonte: string;
+}
+
 /**
  * Parseia HTML do LinkedIn para extrair vagas com email
  * O HTML deve ser salvo pelo usuário (copy/paste da página de busca)
@@ -7,10 +18,10 @@ import { logInfo, logError } from "../utils/logger.js";
  * @param {string} html - HTML da página LinkedIn
  * @returns {Object[]} Vagas extraídas
  */
-export const parsearLinkedInHTML = (html) => {
+export const parsearLinkedInHTML = (html: string): VagaLinkedIn[] => {
   logInfo("Parseando HTML do LinkedIn...");
 
-  const vagas = [];
+  const vagas: VagaLinkedIn[] = [];
 
   // Extrair blocos de post (cada vaga é um post)
   const postRegex =
@@ -50,7 +61,7 @@ export const parsearLinkedInHTML = (html) => {
 /**
  * Extrai dados de uma vaga do conteúdo HTML de um post
  */
-function extrairVagaDoConteudo(html) {
+function extrairVagaDoConteudo(html: string): VagaLinkedIn | null {
   const texto = limparHTML(html);
 
   // Extrair email
@@ -99,14 +110,14 @@ function extrairVagaDoConteudo(html) {
   };
 }
 
-function extrairTituloGenerico(texto) {
+function extrairTituloGenerico(texto: string): string {
   const match = texto.match(
     /(?:Desenvolvedor|Engineer|Developer|Analista|Programador)\s+[\w\s]+/i,
   );
   return match ? match[0].trim().substring(0, 80) : "Vaga";
 }
 
-function extrairEmails(html) {
+function extrairEmails(html: string): string[] {
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
   const emails = [...new Set(html.match(emailRegex) || [])];
   return emails.filter(
@@ -114,10 +125,10 @@ function extrairEmails(html) {
   );
 }
 
-function extrairLinksVagas(html) {
+function extrairLinksVagas(html: string): string[] {
   const linkRegex =
     /href="(https?:\/\/[^"]*(?:linkedin\.com|lnkd\.in|jobs?)[^"]*)"/gi;
-  const links = [];
+  const links: string[] = [];
   let m;
   while ((m = linkRegex.exec(html)) !== null) {
     links.push(m[1]);
@@ -125,8 +136,8 @@ function extrairLinksVagas(html) {
   return [...new Set(links)];
 }
 
-function extrairTitulosVagas(html) {
-  const titulos = [];
+function extrairTitulosVagas(html: string): string[] {
+  const titulos: string[] = [];
   const regex =
     /(?:Desenvolvedor|Engineer|Developer|Analista|Programador|Full Stack|Frontend|Backend|React|Node|Java|Python|\.NET|C#)[\w\s.,()-]{5,60}/gi;
   let m;
@@ -136,7 +147,7 @@ function extrairTitulosVagas(html) {
   return [...new Set(titulos)].slice(0, 5);
 }
 
-function limparHTML(html) {
+function limparHTML(html: string): string {
   return html
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
@@ -147,10 +158,25 @@ function limparHTML(html) {
     .trim();
 }
 
+export interface VagaNormalizada {
+  source: string;
+  externalId: string;
+  title: string;
+  company: string;
+  description: string;
+  url: string;
+  location: string;
+  salary: string;
+  tags: string[];
+  postedAt: string;
+  type: string;
+  _emails: string[];
+}
+
 /**
  * Converte vagas do LinkedIn para o formato normalizado do sistema
  */
-export const normalizarVagasLinkedIn = (vagas) => {
+export const normalizarVagasLinkedIn = (vagas: VagaLinkedIn[]): VagaNormalizada[] => {
   return vagas.map((v) => ({
     source: "linkedin",
     externalId: `linkedin-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,

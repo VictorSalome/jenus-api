@@ -19,11 +19,33 @@ import {
 } from "./linkedinCron.service.js";
 import { logInfo, logError } from "../utils/logger.js";
 
+export interface BuscarVagasParams {
+  query?: string;
+  tags?: string[];
+  limit?: number;
+}
+
+export interface Vaga {
+  source: string;
+  externalId: string;
+  title: string;
+  company: string;
+  description: string;
+  url: string;
+  location: string;
+  salary: string;
+  tags: string[];
+  postedAt: string;
+  type: string;
+  match?: any;
+  score?: number;
+}
+
 /**
  * GET /buscar-vagas
  * Lista fontes disponíveis
  */
-export const listarFontesController = (req, res) => {
+export const listarFontesController = (req: any, res: any) => {
   res.json({ ok: true, fontes: getFontes() });
 };
 
@@ -31,7 +53,7 @@ export const listarFontesController = (req, res) => {
  * POST /buscar-vagas
  * Busca vagas em todas as fontes e retorna ranqueadas
  */
-export const buscarVagasController = async (req, res) => {
+export const buscarVagasController = async (req: any, res: any) => {
   try {
     const { query, tags, limit } = req.body || {};
 
@@ -52,7 +74,7 @@ export const buscarVagasController = async (req, res) => {
       total: ranqueadas.length,
       vagas: ranqueadas,
     });
-  } catch (err) {
+  } catch (err: any) {
     logError(`Erro na busca de vagas: ${err.message}`);
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -62,7 +84,7 @@ export const buscarVagasController = async (req, res) => {
  * POST /buscar-vagas/fonte
  * Busca vagas de uma fonte específica
  */
-export const buscarPorFonteController = async (req, res) => {
+export const buscarPorFonteController = async (req: any, res: any) => {
   try {
     const { fonte } = req.params;
     const { query, tags, limit } = req.body || {};
@@ -81,7 +103,7 @@ export const buscarPorFonteController = async (req, res) => {
       total: ranqueadas.length,
       vagas: ranqueadas,
     });
-  } catch (err) {
+  } catch (err: any) {
     logError(`Erro na busca por fonte: ${err.message}`);
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -91,7 +113,7 @@ export const buscarPorFonteController = async (req, res) => {
  * POST /buscar-vagas/auto-apply
  * Pipeline completo: busca → match → gera currículo → envia
  */
-export const autoApplyController = async (req, res) => {
+export const autoApplyController = async (req: any, res: any) => {
   try {
     const { query, tags, minScore, limit, autoSend } = req.body || {};
 
@@ -108,7 +130,7 @@ export const autoApplyController = async (req, res) => {
     });
 
     res.json({ ok: true, ...resultado });
-  } catch (err) {
+  } catch (err: any) {
     logError(`Erro no auto-apply: ${err.message}`);
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -116,27 +138,27 @@ export const autoApplyController = async (req, res) => {
 
 // ── Scheduler ──
 
-export const schedulerStatusController = (req, res) => {
+export const schedulerStatusController = (req: any, res: any) => {
   res.json({ ok: true, ...getStatus() });
 };
 
-export const schedulerStartController = (req, res) => {
+export const schedulerStartController = (req: any, res: any) => {
   const { cron, tags, minScore, autoSend } = req.body || {};
   const resultado = iniciarScheduler({ cron, tags, minScore, autoSend });
   res.json({ ok: true, ...resultado });
 };
 
-export const schedulerStopController = (req, res) => {
+export const schedulerStopController = (req: any, res: any) => {
   const resultado = pararScheduler();
   res.json({ ok: true, ...resultado });
 };
 
-export const schedulerRunNowController = async (req, res) => {
+export const schedulerRunNowController = async (req: any, res: any) => {
   try {
     const { tags, minScore, autoSend } = req.body || {};
     const resultado = await executarBusca({ tags, minScore, autoSend });
     res.json({ ok: true, ...resultado });
-  } catch (err) {
+  } catch (err: any) {
     logError(`Erro na execução manual: ${err.message}`);
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -144,7 +166,7 @@ export const schedulerRunNowController = async (req, res) => {
 
 // ── LinkedIn ──
 
-export const linkedinParseController = (req, res) => {
+export const linkedinParseController = (req: any, res: any) => {
   try {
     const { html } = req.body || {};
     if (!html)
@@ -155,7 +177,7 @@ export const linkedinParseController = (req, res) => {
     const ranqueadas = ranquearVagas(normalizadas);
 
     res.json({ ok: true, total: ranqueadas.length, vagas: ranqueadas });
-  } catch (err) {
+  } catch (err: any) {
     logError(`Erro no parse LinkedIn: ${err.message}`);
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -163,26 +185,26 @@ export const linkedinParseController = (req, res) => {
 
 // ── LinkedIn Cron ──
 
-export const linkedinCronStatusController = (req, res) => {
+export const linkedinCronStatusController = (req: any, res: any) => {
   res.json({ ok: true, ...getLinkedinStatus() });
 };
 
-export const linkedinCronStartController = (req, res) => {
+export const linkedinCronStartController = (req: any, res: any) => {
   const { cron } = req.body || {};
   const resultado = iniciarLinkedinCron({ cron });
   res.json({ ok: true, ...resultado });
 };
 
-export const linkedinCronStopController = (req, res) => {
+export const linkedinCronStopController = (req: any, res: any) => {
   const resultado = pararLinkedinCron();
   res.json({ ok: true, ...resultado });
 };
 
-export const linkedinCronRunNowController = async (req, res) => {
+export const linkedinCronRunNowController = async (req: any, res: any) => {
   try {
     const resultado = await executarLinkedinAgora();
     res.json({ ok: true, resultado });
-  } catch (err) {
+  } catch (err: any) {
     logError(`Erro LinkedIn cron: ${err.message}`);
     res.status(500).json({ ok: false, error: err.message });
   }

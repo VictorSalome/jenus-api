@@ -1,10 +1,10 @@
-import express from "express";
+import { Router } from "express";
 import { buscarVagasBrasil, buscarVagasPorTecnologia, buscarVagasRemotas } from "../buscas/scraperBR.service.js";
 import { calcularCompatibilidade } from "../buscas/match.service.js";
 import { logInfo, logError } from "../utils/logger.js";
 import { apiKeyAuth, optionalApiKeyAuth } from "../middleware/apiKeyAuth.js";
 
-const router = express.Router();
+const router = Router();
 
 /**
  * GET /scraper/vagas
@@ -12,7 +12,7 @@ const router = express.Router();
  * Query params: ?query=react&tags=javascript,typescript&limit=10
  * Autenticação: Opcional em dev, obrigatória em produção
  */
-router.get("/vagas", optionalApiKeyAuth, async (req, res) => {
+router.get("/vagas", optionalApiKeyAuth, async (req: any, res: any) => {
   const startTime = Date.now();
   const { query = "", tags = "", limit = "10" } = req.query;
 
@@ -20,10 +20,10 @@ router.get("/vagas", optionalApiKeyAuth, async (req, res) => {
     const tagsArray = tags ? tags.split(",") : [];
     const vagas = await buscarVagasBrasil(query, tagsArray, parseInt(limit));
 
-    const ranqueadas = vagas.map(vaga => ({
+    const ranqueadas = (await Promise.all(vagas.map(async vaga => ({
       ...vaga,
-      match: calcularCompatibilidade(vaga)
-    })).sort((a, b) => b.match.score - a.match.score);
+      match: await calcularCompatibilidade(vaga)
+    })))).sort((a, b) => b.match.score - a.match.score);
 
     res.json({
       success: true,
@@ -34,7 +34,7 @@ router.get("/vagas", optionalApiKeyAuth, async (req, res) => {
       tempo: Date.now() - startTime,
       autenticado: req.apiClient?.key !== "anonymous"
     });
-  } catch (err) {
+  } catch (err: any) {
     logError("Erro na busca de vagas", err);
     res.status(500).json({ success: false, error: err.message });
   }
@@ -46,7 +46,7 @@ router.get("/vagas", optionalApiKeyAuth, async (req, res) => {
  * Ex: /scraper/tecnologia/react
  * Autenticação: Opcional em dev, obrigatória em produção
  */
-router.get("/tecnologia/:tech", optionalApiKeyAuth, async (req, res) => {
+router.get("/tecnologia/:tech", optionalApiKeyAuth, async (req: any, res: any) => {
   const startTime = Date.now();
   const { tech } = req.params;
   const { nivel = "", limit = "5" } = req.query;
@@ -54,8 +54,8 @@ router.get("/tecnologia/:tech", optionalApiKeyAuth, async (req, res) => {
   try {
     const vagas = await buscarVagasPorTecnologia(tech, parseInt(limit));
 
-    const ranqueadas = vagas
-      .map(vaga => ({ ...vaga, match: calcularCompatibilidade(vaga) }))
+    const ranqueadas = (await Promise.all(vagas
+      .map(async vaga => ({ ...vaga, match: await calcularCompatibilidade(vaga) }))))
       .sort((a, b) => b.match.score - a.match.score);
 
     res.json({
@@ -67,7 +67,7 @@ router.get("/tecnologia/:tech", optionalApiKeyAuth, async (req, res) => {
       tempo: Date.now() - startTime,
       autenticado: req.apiClient?.key !== "anonymous"
     });
-  } catch (err) {
+  } catch (err: any) {
     logError(`Erro na busca por tecnologia ${tech}`, err);
     res.status(500).json({ success: false, error: err.message });
   }
@@ -78,15 +78,15 @@ router.get("/tecnologia/:tech", optionalApiKeyAuth, async (req, res) => {
  * Busca vagas remotas
  * Autenticação: Opcional em dev, obrigatória em produção
  */
-router.get("/remoto", optionalApiKeyAuth, async (req, res) => {
+router.get("/remoto", optionalApiKeyAuth, async (req: any, res: any) => {
   const startTime = Date.now();
   const { tecnologia = "", nivel = "pleno", limit = "10" } = req.query;
 
   try {
     const vagas = await buscarVagasRemotas(tecnologia, nivel);
 
-    const ranqueadas = vagas
-      .map(vaga => ({ ...vaga, match: calcularCompatibilidade(vaga) }))
+    const ranqueadas = (await Promise.all(vagas
+      .map(async vaga => ({ ...vaga, match: await calcularCompatibilidade(vaga) }))))
       .sort((a, b) => b.match.score - a.match.score);
 
     res.json({
@@ -99,7 +99,7 @@ router.get("/remoto", optionalApiKeyAuth, async (req, res) => {
       tempo: Date.now() - startTime,
       autenticado: req.apiClient?.key !== "anonymous"
     });
-  } catch (err) {
+  } catch (err: any) {
     logError("Erro na busca de vagas remotas", err);
     res.status(500).json({ success: false, error: err.message });
   }
@@ -111,12 +111,12 @@ router.get("/remoto", optionalApiKeyAuth, async (req, res) => {
  * Body: { tecnologias: ["react", "nodejs"], limit: 10 }
  * Autenticação: Obrigatória
  */
-router.post("/batch", apiKeyAuth, async (req, res) => {
+router.post("/batch", apiKeyAuth, async (req: any, res: any) => {
   const { tecnologias = [], limit = 10 } = req.body;
   const startTime = Date.now();
 
   try {
-    const todosResultados = [];
+    const todosResultados: any[] = [];
 
     for (const tech of tecnologias) {
       const vagas = await buscarVagasPorTecnologia(
@@ -126,8 +126,8 @@ router.post("/batch", apiKeyAuth, async (req, res) => {
       todosResultados.push(...vagas);
     }
 
-    const ranqueadas = todosResultados
-      .map(vaga => ({ ...vaga, match: calcularCompatibilidade(vaga) }))
+    const ranqueadas = (await Promise.all(todosResultados
+      .map(async vaga => ({ ...vaga, match: await calcularCompatibilidade(vaga) }))))
       .sort((a, b) => b.match.score - a.match.score)
       .slice(0, limit);
 
@@ -138,7 +138,7 @@ router.post("/batch", apiKeyAuth, async (req, res) => {
       vagas: ranqueadas,
       tempo: Date.now() - startTime
     });
-  } catch (err) {
+  } catch (err: any) {
     logError("Erro na busca em lote", err);
     res.status(500).json({ success: false, error: err.message });
   }
@@ -149,7 +149,7 @@ router.post("/batch", apiKeyAuth, async (req, res) => {
  * Status do serviço de scraping
  * Autenticação: Opcional
  */
-router.get("/status", optionalApiKeyAuth, (req, res) => {
+router.get("/status", optionalApiKeyAuth, (req: any, res: any) => {
   res.json({
     success: true,
     status: "online",

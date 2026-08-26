@@ -24,8 +24,72 @@ import fs from "fs/promises";
 import { readFileSync } from "node:fs";
 import path from "path";
 
-const gerarTextoCurriculo = (curriculo, vaga) => {
-  const linhas = [];
+interface PersonalInfo {
+  name?: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  linkedin?: string;
+  location?: string;
+}
+
+interface Experience {
+  role: string;
+  company: string;
+  period: string;
+  location?: string;
+  description?: string;
+  technologies?: string[];
+}
+
+interface SkillCategory {
+  [key: string]: string[];
+}
+
+interface Education {
+  degree: string;
+  institution: string;
+  period?: string;
+  location?: string;
+}
+
+interface Certification {
+  name: string;
+  issuer: string;
+  year?: string;
+}
+
+interface Language {
+  language: string;
+  proficiency: string;
+}
+
+interface CurriculoPersonalizado {
+  personalInfo?: PersonalInfo;
+  summary?: string;
+  experiences?: Experience[];
+  skills?: SkillCategory;
+  education?: Education[];
+  certifications?: Certification[];
+  languages?: Language[];
+  matchingSkills?: string[];
+  relevanceScore?: number;
+}
+
+interface DadosVaga {
+  titulo?: string;
+  empresa?: string;
+  senioridade?: string;
+  areaAtuacao?: string[];
+  stackTecnologica?: string[];
+  emailContato?: string | null;
+  descricao?: string;
+  requisitos?: string[];
+  responsabilidades?: string[];
+}
+
+const gerarTextoCurriculo = (curriculo: CurriculoPersonalizado, vaga: DadosVaga): string => {
+  const linhas: string[] = [];
   
   linhas.push(`${curriculo.personalInfo?.name || 'Candidato'}`);
   linhas.push(`${curriculo.personalInfo?.title || vaga.titulo || 'Profissional'}`);
@@ -193,7 +257,7 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
   }
 
   // 2. Parsear vaga com parser nativo (se for texto livre)
-  let dadosVaga;
+  let dadosVaga: DadosVaga | null = null;
   let vagaId = null;
   
   if (typeof textoParaAnalise === 'string' && textoParaAnalise.length > 100) {

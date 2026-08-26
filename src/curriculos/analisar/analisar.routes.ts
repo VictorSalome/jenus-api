@@ -14,7 +14,7 @@ import {
 const router = express.Router();
 
 // Middleware para validar token de pré-visualização de PDF
-const requirePdfPreviewToken = (req, res, next) => {
+const requirePdfPreviewToken = (req: any, res: any, next: any) => {
   const token = req.query.token;
   if (!token) {
     return res.status(401).json({
@@ -28,7 +28,7 @@ const requirePdfPreviewToken = (req, res, next) => {
   jwt.verify(
     token,
     process.env.JWT_ACCESS_SECRET || 'your-access-token-secret-change-me',
-    (err, decoded) => {
+    (err: any, decoded: any) => {
       if (err) {
         return res.status(401).json({
           success: false,
@@ -91,7 +91,7 @@ router.post("/gerar-curriculo", gerarCurriculoController);
 router.post("/enviar-curriculo", enviarCurriculoController);
 
 // Rota explícita para download/visualização do PDF na pasta temp
-router.get('/temp/:filename', requirePdfPreviewToken, async (req, res) => {
+router.get('/temp/:filename', requirePdfPreviewToken, async (req: any, res: any) => {
   const safeFilename = path.basename(req.params.filename);
   const filePath = path.join(config.paths.temp, safeFilename);
 
@@ -106,7 +106,7 @@ router.get('/temp/:filename', requirePdfPreviewToken, async (req, res) => {
   }
 
   res.setHeader('Content-Type', 'application/pdf');
-  res.sendFile(filePath, (err) => {
+  res.sendFile(filePath, (err: Error | null) => {
     if (err) {
       console.error('Erro ao servir o PDF:', err);
       return res.status(500).json({
@@ -120,7 +120,7 @@ router.get('/temp/:filename', requirePdfPreviewToken, async (req, res) => {
 });
 
 // Rota para gerar token temporário
-router.post('/temp/:filename/token', requireAuth, async (req, res) => {
+router.post('/temp/:filename/token', requireAuth, async (req: any, res: any) => {
   try {
     const { filename } = req.params;
     const safeFilename = path.basename(filename);

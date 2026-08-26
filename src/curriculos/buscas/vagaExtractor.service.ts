@@ -1,11 +1,30 @@
 import { logInfo, logError } from '../utils/logger.js';
 
 /**
+ * Dados estruturados de uma vaga extraída
+ */
+export interface DadosExtraidosVaga {
+  titulo: string;
+  areaAtuacao: string;
+  responsabilidades: string[];
+  requisitosObrigatorios: string[];
+  diferenciaisDesejaveis: string[];
+  stackTecnologica: string[];
+  beneficios: string[];
+  emailContato: string | null;
+  empresa: string;
+  localizacao: string;
+  modalidade: string;
+  salario: string;
+  nivel: string;
+}
+
+/**
  * Extrai dados estruturados de uma publicação de vaga
  * @param {string} textoVaga - Texto completo da vaga
  * @returns {Object} Dados estruturados da vaga
  */
-export const extrairDadosVaga = async (textoVaga) => {
+export const extrairDadosVaga = async (textoVaga: string): Promise<DadosExtraidosVaga> => {
   try {
     logInfo('Iniciando extração de dados da vaga');
     
@@ -16,7 +35,7 @@ export const extrairDadosVaga = async (textoVaga) => {
     const texto = textoVaga.trim();
     
     // Estrutura base dos dados extraídos
-    const dadosExtraidos = {
+    const dadosExtraidos: DadosExtraidosVaga = {
       titulo: '',
       areaAtuacao: '',
       responsabilidades: [],
@@ -88,7 +107,7 @@ export const extrairDadosVaga = async (textoVaga) => {
 /**
  * Extrai o título da vaga
  */
-const extrairTitulo = (texto) => {
+const extrairTitulo = (texto: string): string => {
   // Padrões para identificar títulos
   const padroesTitulo = [
     /^(.+?)(?:\s*[-—]|\n)/m,
@@ -111,8 +130,8 @@ const extrairTitulo = (texto) => {
 /**
  * Extrai área de atuação
  */
-const extrairAreaAtuacao = (texto) => {
-  const areas = {
+const extrairAreaAtuacao = (texto: string): string => {
+  const areas: Record<string, string[]> = {
     'desenvolvimento': ['desenvolvedor', 'developer', 'programador', 'software engineer', 'full stack', 'front-end', 'backend', 'mobile'],
     'design': ['designer', 'ui/ux', 'design', 'figma'],
     'dados': ['data', 'analytics', 'scientist', 'analyst', 'bi'],
@@ -136,7 +155,7 @@ const extrairAreaAtuacao = (texto) => {
 /**
  * Extrai nome da empresa
  */
-const extrairEmpresa = (texto) => {
+const extrairEmpresa = (texto: string): string => {
   const padroes = [
     /(?:empresa|company)\s*:?\s*(.+?)(?:\n|$)/i,
     /(?:na|da|para)\s+([A-Z][a-zA-Z\s]{2,30})(?:\s+busca|\s+está)/i
@@ -155,7 +174,7 @@ const extrairEmpresa = (texto) => {
 /**
  * Extrai modalidade de trabalho
  */
-const extrairModalidade = (texto) => {
+const extrairModalidade = (texto: string): string => {
   const textoLower = texto.toLowerCase();
   
   if (textoLower.includes('remoto') || textoLower.includes('remote')) {
@@ -174,7 +193,7 @@ const extrairModalidade = (texto) => {
 /**
  * Extrai localização
  */
-const extrairLocalizacao = (texto) => {
+const extrairLocalizacao = (texto: string): string => {
   const padroes = [
     /(?:localização|local|cidade)\s*:?\s*(.+?)(?:\n|$)/i,
     /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*),\s*([A-Z]{2})(?:\s|$)/,
@@ -194,7 +213,7 @@ const extrairLocalizacao = (texto) => {
 /**
  * Extrai nível da vaga
  */
-const extrairNivel = (texto) => {
+const extrairNivel = (texto: string): string => {
   const textoLower = texto.toLowerCase();
   
   if (textoLower.includes('sênior') || textoLower.includes('senior')) {
@@ -216,7 +235,7 @@ const extrairNivel = (texto) => {
 /**
  * Extrai responsabilidades
  */
-const extrairResponsabilidades = (texto) => {
+const extrairResponsabilidades = (texto: string): string[] => {
   return extrairListaItens(texto, [
     /(?:responsabilidades|atribuições|atividades)\s*:?([\s\S]*?)(?:\n\s*(?:requisitos|benefícios|stack|tecnologias)|$)/i
   ]);
@@ -225,7 +244,7 @@ const extrairResponsabilidades = (texto) => {
 /**
  * Extrai requisitos obrigatórios
  */
-const extrairRequisitosObrigatorios = (texto) => {
+const extrairRequisitosObrigatorios = (texto: string): string[] => {
   return extrairListaItens(texto, [
     /(?:requisitos?\s+(?:obrigatórios?|essenciais?)|requirements?)\s*:?([\s\S]*?)(?:\n\s*(?:diferenciais?|benefícios|stack)|$)/i,
     /(?:requisitos?)\s*:?([\s\S]*?)(?:\n\s*(?:diferenciais?|benefícios|stack)|$)/i
@@ -235,7 +254,7 @@ const extrairRequisitosObrigatorios = (texto) => {
 /**
  * Extrai diferenciais desejáveis
  */
-const extrairDiferenciaisDesejaveis = (texto) => {
+const extrairDiferenciaisDesejaveis = (texto: string): string[] => {
   return extrairListaItens(texto, [
     /(?:diferenciais?|desejáveis?|nice\s+to\s+have)\s*:?([\s\S]*?)(?:\n\s*(?:benefícios|stack|tecnologias)|$)/i
   ]);
@@ -244,7 +263,7 @@ const extrairDiferenciaisDesejaveis = (texto) => {
 /**
  * Extrai stack tecnológica
  */
-const extrairStackTecnologica = (texto) => {
+const extrairStackTecnologica = (texto: string): string[] => {
   const tecnologias = [
     // Frontend
     'React', 'Vue', 'Angular', 'JavaScript', 'TypeScript', 'HTML', 'CSS', 'Sass', 'Less',
@@ -262,7 +281,7 @@ const extrairStackTecnologica = (texto) => {
     'Git', 'GraphQL', 'REST', 'API', 'Microservices', 'Agile', 'Scrum'
   ];
   
-  const stackEncontrada = [];
+  const stackEncontrada: string[] = [];
   const textoLower = texto.toLowerCase();
   
   tecnologias.forEach(tech => {
@@ -277,7 +296,7 @@ const extrairStackTecnologica = (texto) => {
 /**
  * Extrai benefícios
  */
-const extrairBeneficios = (texto) => {
+const extrairBeneficios = (texto: string): string[] => {
   return extrairListaItens(texto, [
     /(?:benefícios|benefits)\s*:?([\s\S]*?)(?:\n\s*(?:requisitos|contato|email)|$)/i
   ]);
@@ -286,7 +305,7 @@ const extrairBeneficios = (texto) => {
 /**
  * Extrai email de contato
  */
-const extrairEmailContato = (texto) => {
+const extrairEmailContato = (texto: string): string | null => {
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
   const emails = texto.match(emailRegex) || [];
   
@@ -306,7 +325,7 @@ const extrairEmailContato = (texto) => {
 /**
  * Extrai informações de salário
  */
-const extrairSalario = (texto) => {
+const extrairSalario = (texto: string): string => {
   const padroesSalario = [
     /(?:salário|salary)\s*:?\s*([^\n]+)/i,
     /R\$\s*([\d.,]+(?:\s*(?:a|-)\s*[\d.,]+)?)/i,
@@ -326,7 +345,7 @@ const extrairSalario = (texto) => {
 /**
  * Função auxiliar para extrair listas de itens
  */
-const extrairListaItens = (texto, padroes) => {
+const extrairListaItens = (texto: string, padroes: RegExp[]): string[] => {
   for (const padrao of padroes) {
     const match = texto.match(padrao);
     if (match && match[1]) {

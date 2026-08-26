@@ -4,13 +4,18 @@ import fs from "fs";
 import path from "path";
 import { getDb } from "../../core/database.js";
 
-const normalizeText = (value = "") =>
+const normalizeText = (value = ""): string =>
   String(value)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 
-const CONTEXT_RULES = [
+interface ContextRule {
+  signals: string[];
+  inferredKeywords: string[];
+}
+
+const CONTEXT_RULES: ContextRule[] = [
   {
     signals: [
       "frontend",
@@ -82,11 +87,11 @@ const CONTEXT_RULES = [
  * Carrega as skills do candidato a partir do banco de dados
  * @returns {Array} Array com todas as skills do candidato
  */
-const carregarSkillsCandidato = async () => {
+const carregarSkillsCandidato = async (): Promise<string[]> => {
   try {
     const db = await getDb();
     const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
-    const todasSkills = [];
+    const todasSkills: string[] = [];
     
     for (const row of skillsRows) {
       todasSkills.push(row.tech);
@@ -104,18 +109,18 @@ const carregarSkillsCandidato = async () => {
 };
 
 // Carrega as skills do candidato (lazy loading)
-let minhasSkills = null;
+let minhasSkills: string[] | null = null;
 
-async function getMinhasSkills() {
+async function getMinhasSkills(): Promise<string[]> {
   if (!minhasSkills) {
     minhasSkills = await carregarSkillsCandidato();
   }
   return minhasSkills;
 }
 
-const expandirPalavrasChavePorContexto = (descricaoVaga, palavrasChave) => {
+const expandirPalavrasChavePorContexto = (descricaoVaga: string, palavrasChave: string[]): string[] => {
   const descricaoNormalizada = normalizeText(descricaoVaga);
-  const palavras = new Set(palavrasChave.map((item) => normalizeText(item)));
+  const palavras = new Set<string>(palavrasChave.map((item) => normalizeText(item)));
 
   CONTEXT_RULES.forEach((rule) => {
     if (
@@ -152,7 +157,7 @@ const FRASE_GENERICA =
  * @param {string} descricaoVaga - Descrição da vaga
  * @returns {Object} Objeto com três versões do resumo: { curto, medio, longo }
  */
-export const gerarResumo = async (descricaoVaga) => {
+export const gerarResumo = async (descricaoVaga: string): Promise<{ skills: string[]; responsabilidades: string[]; resumo: string }> => {
   try {
     logInfo("Iniciando geração de resumo profissional dinâmico");
 
@@ -191,9 +196,9 @@ export const gerarResumo = async (descricaoVaga) => {
  * @param {string} descricaoVaga - Descrição da vaga
  * @returns {Array} Array de palavras-chave identificadas
  */
-const extrairPalavrasChaveVaga = (descricaoVaga) => {
+const extrairPalavrasChaveVaga = (descricaoVaga: string): string[] => {
   const descricaoLower = normalizeText(descricaoVaga);
-  const palavrasChave = new Set();
+  const palavrasChave = new Set<string>();
 
   // Padrões para identificar tecnologias e skills
   const padroesTecnicos = [
@@ -268,8 +273,8 @@ const extrairPalavrasChaveVaga = (descricaoVaga) => {
  * @param {string} descricaoVaga - Descrição da vaga
  * @returns {Array} Array de skills encontradas que existem tanto na vaga quanto no perfil
  */
-const identificarSkillsRelevantes = async (descricaoVaga) => {
-  const skillsEncontradas = [];
+const identificarSkillsRelevantes = async (descricaoVaga: string): Promise<string[]> => {
+  const skillsEncontradas: { skill: string; relevancia: number; fonte: string }[] = [];
   const descricaoLower = normalizeText(descricaoVaga);
   const palavrasChaveVaga = extrairPalavrasChaveVaga(descricaoVaga);
   const minhasSkills = await getMinhasSkills();
@@ -337,8 +342,8 @@ const identificarSkillsRelevantes = async (descricaoVaga) => {
 };
 
 // Nova função para identificar responsabilidades/atribuições da vaga
-const identificarResponsabilidades = (descricaoVaga, skillsEncontradas) => {
-  const responsabilidadesEncontradas = [];
+const identificarResponsabilidades = (descricaoVaga: string, skillsEncontradas: string[]): { responsabilidade: string; skillsRelacionadas: string[] }[] => {
+  const responsabilidadesEncontradas: { responsabilidade: string; skillsRelacionadas: string[] }[] = [];
   const descricaoLower = normalizeText(descricaoVaga);
 
   Object.keys(mapeamentoResponsabilidades).forEach((responsabilidade) => {
@@ -347,7 +352,7 @@ const identificarResponsabilidades = (descricaoVaga, skillsEncontradas) => {
         mapeamentoResponsabilidades[responsabilidade];
 
       // Verifica se temos pelo menos uma skill correspondente
-      const temSkillCorrespondente = skillsCorrespondentes.some((skill) =>
+      const temSkillCorrespondente = skillsCorrespondentes.some((skill: string) =>
         skillsEncontradas.some(
           (minhaSkill) => normalizeText(minhaSkill) === normalizeText(skill),
         ),
@@ -356,7 +361,7 @@ const identificarResponsabilidades = (descricaoVaga, skillsEncontradas) => {
       if (temSkillCorrespondente) {
         responsabilidadesEncontradas.push({
           responsabilidade: responsabilidade,
-          skillsRelacionadas: skillsCorrespondentes.filter((skill) =>
+          skillsRelacionadas: skillsCorrespondentes.filter((skill: string) =>
             skillsEncontradas.some(
               (minhaSkill) =>
                 normalizeText(minhaSkill) === normalizeText(skill),
@@ -371,7 +376,7 @@ const identificarResponsabilidades = (descricaoVaga, skillsEncontradas) => {
 };
 
 // Mapeamento de termos relacionados para melhor correspondência
-const mapeamentoTermos = {
+const mapeamentoTermos: Record<string, string[]> = {
   react: ["react.js", "reactjs", "react js"],
   "node.js": ["nodejs", "node js", "node"],
   javascript: ["js", "ecmascript"],
@@ -392,7 +397,7 @@ const mapeamentoTermos = {
 };
 
 // Mapeamento de responsabilidades/atribuições para skills correspondentes
-const mapeamentoResponsabilidades = {
+const mapeamentoResponsabilidades: Record<string, string[]> = {
   "integração de apis": ["REST API", "APIs", "GraphQL", "Node.js", "Express"],
   "integração de api": ["REST API", "APIs", "GraphQL", "Node.js", "Express"],
   "consumo de apis": [
@@ -485,9 +490,9 @@ const mapeamentoResponsabilidades = {
  * @param {string} skill - Skill em lowercase
  * @returns {boolean} True se houver correspondência parcial
  */
-const verificarCorrespondenciaParcial = (descricao, skill) => {
+const verificarCorrespondenciaParcial = (descricao: string, skill: string): boolean => {
   // Mapeamento de termos relacionados
-  const mapeamentos = {
+  const mapeamentos: Record<string, string[]> = {
     javascript: ["js", "ecmascript", "javascript es6"],
     typescript: ["ts"],
     react: ["reactjs", "react.js"],
@@ -545,7 +550,7 @@ const verificarCorrespondenciaParcial = (descricao, skill) => {
  * @param {string} skill - Skill a ser avaliada
  * @returns {number} Pontuação de relevância
  */
-const calcularRelevanciaSkill = (descricao, skill) => {
+const calcularRelevanciaSkill = (descricao: string, skill: string): number => {
   const descricaoLower = normalizeText(descricao);
   const skillLower = normalizeText(skill);
 
@@ -583,7 +588,7 @@ const calcularRelevanciaSkill = (descricao, skill) => {
  * @param {Array} responsabilidades - Responsabilidades identificadas
  * @returns {string} Resumo personalizado de 6-7 linhas
  */
-const gerarResumoCompleto = (skillsEncontradas, responsabilidades = []) => {
+const gerarResumoCompleto = (skillsEncontradas: string[], responsabilidades: { responsibilidade: string; skillsRelacionadas: string[] }[] = []): string => {
   // Fallback caso não encontre skills relevantes
   if (skillsEncontradas.length === 0) {
     return `${TRECHO_FIXO} ${FRASE_GENERICA} Tenho familiaridade com metodologias ágeis e boas práticas de desenvolvimento, sempre focando na qualidade e escalabilidade das soluções. Busco constantemente aprimorar minhas habilidades técnicas e contribuir em projetos inovadores que gerem impacto positivo.`;
@@ -615,7 +620,7 @@ const gerarResumoCompleto = (skillsEncontradas, responsabilidades = []) => {
   // Segunda frase: Responsabilidades ou práticas gerais
   if (responsabilidades.length >= 2) {
     const responsabilidadesSelecionadas = responsabilidades.slice(0, 3);
-    const listaResponsabilidades = responsabilidadesSelecionadas
+    const listaResponsabilidades = responsibilidadesSelecionadas
       .map((r) => r.responsabilidade)
       .join(", ");
 
@@ -644,7 +649,7 @@ const gerarResumoCompleto = (skillsEncontradas, responsabilidades = []) => {
  * @param {Array} skills - Array de skills
  * @returns {string} Tipo de desenvolvimento identificado
  */
-const identificarTipoDesenvolvimento = (skills) => {
+const identificarTipoDesenvolvimento = (skills: string[]): string => {
   const skillsLower = skills.map((s) => s.toLowerCase());
 
   const temMobile = skillsLower.some(
@@ -691,12 +696,12 @@ const identificarTipoDesenvolvimento = (skills) => {
  * @param {Array} skills - Array de skills
  * @returns {string} Skills formatadas para texto
  */
-const formatarListaSkills = (skills) => {
+const formatarListaSkills = (skills: string[]): string => {
   if (skills.length === 0) return "";
   if (skills.length === 1) return skills[0];
   if (skills.length === 2) return `${skills[0]} e ${skills[1]}`;
 
-  const ultimaSkill = skills.pop();
+  const ultimaSkill = skills.pop()!;
   return `${skills.join(", ")} e ${ultimaSkill}`;
 };
 
@@ -704,8 +709,8 @@ const formatarListaSkills = (skills) => {
  * Função auxiliar para obter lista de skills disponíveis
  * @returns {Array} Array com todas as skills disponíveis
  */
-export const obterSkillsDisponiveis = () => {
-  return [...minhasSkills];
+export const obterSkillsDisponiveis = (): string[] => {
+  return minhasSkills || [];
 };
 
 /**
@@ -713,6 +718,6 @@ export const obterSkillsDisponiveis = () => {
  * @param {string} skill - Skill a ser validada
  * @returns {boolean} True se a skill estiver disponível
  */
-export const validarSkill = (skill) => {
-  return minhasSkills.some((s) => s.toLowerCase() === skill.toLowerCase());
+export const validarSkill = (skill: string): boolean => {
+  return (minhasSkills || []).some((s) => s.toLowerCase() === skill.toLowerCase());
 };
