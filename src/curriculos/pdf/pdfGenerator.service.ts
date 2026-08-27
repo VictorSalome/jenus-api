@@ -353,13 +353,13 @@ const adicionarHabilidades = (
 
   // Organizar habilidades por categoria
   const categorias = {
-    "Stack Principal": skills.stackPrincipal || [],
+    "Stack Principal": skills.stackPrincipal || skills.programming || [],
     "Front-end": skills.frontEnd || skills.frameworks || [],
     "Back-end": skills.backEnd || [],
     "Banco de Dados": skills.databases || [],
-    "Cloud e DevOps": skills.cloudDevOps || skills.cloud || [],
+    "Cloud e DevOps": skills.cloudDevOps || skills.cloud || skills.devops || [],
     "Testes e Qualidade": skills.testing || [],
-    Integrações: skills.integrations || [],
+    "Integrações": skills.integrations || skills.aiAutomation || [],
     "Arquitetura e Boas Práticas":
       skills.architecture || skills.methodologies || [],
     "Gerenciamento de Estado": skills.stateManagement || [],

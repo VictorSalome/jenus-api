@@ -45,3 +45,48 @@ export const me = (req: Request, res: Response): void => {
     res.status(401).json({ success: false, message: 'Não autenticado' });
   }
 };
+
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      res.status(400).json({ success: false, message: 'Email é obrigatório' });
+      return;
+    }
+
+    const result = await authService.forgotPassword();
+
+    if (result.success && result.tempPassword) {
+      // Enviar email com senha temporária
+      try {
+        const { criarTransporter } = await import('../../curriculos/email/email.service.js');
+        const transporter = criarTransporter();
+        await transporter.sendMail({
+          from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+          to: email,
+          subject: 'Recuperação de senha - Jenus',
+          html: `
+            <h2>Recuperação de Senha</h2>
+            <p>Uma nova senha temporária foi gerada para sua conta:</p>
+            <p style="font-size:24px;font-weight:bold;background:#f0f0f0;padding:10px;border-radius:4px;">${result.tempPassword}</p>
+            <p>Use esta senha para fazer login. Recomendamos alterá-la após o acesso.</p>
+            <p style="color:#666;font-size:12px;">Se você não solicitou esta recuperação, ignore este email.</p>
+          `,
+        });
+      } catch (emailErr) {
+        console.error('Erro ao enviar email de recuperação:', emailErr);
+        // Mesmo se email falhar, a senha já foi gerada — retorna para debug
+      }
+
+      res.json({
+        success: true,
+        message: 'Senha temporária enviada para seu email',
+      });
+    } else {
+      res.status(500).json({ success: false, message: 'Erro ao gerar senha temporária' });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Erro interno no servidor' });
+  }
+};

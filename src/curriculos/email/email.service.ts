@@ -318,21 +318,21 @@ const gerarCorpoEmail = (dadosVaga, candidato) => {
 
             <div class="contact-info">
                 <strong>Informações de Contato:</strong><br>
-                📧 E-mail: ${candidato.email || "Não informado"}<br>
-                📱 Telefone: ${
+                📧 E-mail: <a href="mailto:${candidato.email || ''}">${candidato.email || "Não informado"}</a><br>
+                📱 WhatsApp: ${
                   candidato.phone
-                    ? `<a href="https://wa.me/5511987319331">${candidato.phone}</a>`
+                    ? `<a href="https://wa.me/55${candidato.phone.replace(/\D/g, '')}">${candidato.phone}</a>`
                     : "Não informado"
                 }<br>
                 ${
                   candidato.linkedin
-                    ? `🔗 LinkedIn: ${candidato.linkedin}<br>`
+                    ? `🔗 LinkedIn: <a href="${candidato.linkedin}">${candidato.linkedin}</a><br>`
                     : ""
                 }
-                ${candidato.github ? `💻 GitHub: ${candidato.github}<br>` : ""}
+                ${candidato.github ? `💻 GitHub: <a href="${candidato.github}">${candidato.github}</a><br>` : ""}
                 ${
                   candidato.portfolio
-                    ? `🌐 Portfolio: ${candidato.portfolio}<br>`
+                    ? `🌐 Portfolio: <a href="${candidato.portfolio}">${candidato.portfolio}</a><br>`
                     : ""
                 }
             </div>
