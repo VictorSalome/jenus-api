@@ -136,7 +136,7 @@ export const executarPipeline = async ({
         const db = await getDb();
         
         // Ler dados pessoais do banco
-        let personalInfo = { name: "Candidato", email: process.env.SMTP_USER || "", phone: "", linkedin: "", github: "", portfolio: "", title: "" };
+        let personalInfo = { name: "Candidato", email: process.env.SMTP_USER || "", phone: "", hasWhatsApp: true, linkedin: "", github: "", portfolio: "", title: "" };
         try {
           const personal = await db.get('SELECT * FROM profile_personal WHERE id = 1');
           if (personal) {
@@ -144,6 +144,7 @@ export const executarPipeline = async ({
               name: personal.name || "Candidato",
               email: personal.email || process.env.SMTP_USER || "",
               phone: personal.phone || "",
+              hasWhatsApp: personal.has_whatsapp === 1,
               linkedin: personal.linkedin || "",
               github: personal.github || "",
               portfolio: personal.portfolio || "",

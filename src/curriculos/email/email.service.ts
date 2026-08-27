@@ -319,23 +319,19 @@ const gerarCorpoEmail = (dadosVaga, candidato) => {
             <div class="contact-info">
                 <strong>Informações de Contato:</strong><br>
                 📧 E-mail: <a href="mailto:${candidato.email || process.env.SMTP_USER || ''}">${candidato.email || process.env.SMTP_USER || "Não informado"}</a><br>
-                📱 WhatsApp: ${
-                  candidato.phone && candidato.phone.trim()
-                    ? `<a href="https://wa.me/55${candidato.phone.replace(/\D/g, '')}">${candidato.phone}</a>`
-                    : "Não informado"
-                }<br>
-                ${
+                ${candidato.phone && candidato.phone.trim()
+                  ? candidato.hasWhatsApp !== false
+                    ? `📱 WhatsApp: <a href="https://wa.me/55${candidato.phone.replace(/\D/g, '')}">${candidato.phone}</a><br>`
+                    : `📞 Telefone: ${candidato.phone}<br>`
+                  : ""
+                }${
                   candidato.linkedin && candidato.linkedin.trim()
                     ? `🔗 LinkedIn: <a href="${candidato.linkedin}">${candidato.linkedin}</a><br>`
                     : ""
-                }
-                ${candidato.github && candidato.github.trim() ? `💻 GitHub: <a href="${candidato.github}">${candidato.github}</a><br>` : ""}
-                ${
-                  candidato.portfolio && candidato.portfolio.trim()
+                }${candidato.github && candidato.github.trim() ? `💻 GitHub: <a href="${candidato.github}">${candidato.github}</a><br>` : ""}${candidato.portfolio && candidato.portfolio.trim()
                     ? `🌐 Portfolio: <a href="${candidato.portfolio}">${candidato.portfolio}</a><br>`
                     : ""
                 }
-            </div>
 
             <p>Em anexo, segue meu currículo para esta oportunidade, destacando as experiências e competências mais relevantes para a posição.</p>
 

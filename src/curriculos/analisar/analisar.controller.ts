@@ -438,7 +438,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
   }
 
   // Ler dados pessoais do banco
-  let personalInfo = { name: "Candidato", email: process.env.SMTP_USER || "", phone: "", linkedin: "", github: "", portfolio: "", title: "" };
+  let personalInfo = { name: "Candidato", email: process.env.SMTP_USER || "", phone: "", hasWhatsApp: true, linkedin: "", github: "", portfolio: "", title: "" };
   try {
     const db = await getDb();
     const personal = await db.get('SELECT * FROM profile_personal WHERE id = 1');
@@ -447,6 +447,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
         name: personal.name || "Candidato",
         email: personal.email || process.env.SMTP_USER || "",
         phone: personal.phone || "",
+        hasWhatsApp: personal.has_whatsapp === 1,
         linkedin: personal.linkedin || "",
         github: personal.github || "",
         portfolio: personal.portfolio || "",
@@ -466,6 +467,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
         name: personalInfo.name,
         email: personalInfo.email,
         phone: personalInfo.phone,
+        hasWhatsApp: personalInfo.hasWhatsApp,
         linkedin: personalInfo.linkedin,
         github: personalInfo.github,
         portfolio: personalInfo.portfolio,

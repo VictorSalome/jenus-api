@@ -49,6 +49,7 @@ export const migrations = {
       name TEXT,
       email TEXT,
       phone TEXT,
+      has_whatsapp INTEGER DEFAULT 1,
       linkedin TEXT,
       github TEXT,
       portfolio TEXT,
@@ -109,6 +110,11 @@ export const migrations = {
       text TEXT,
       sort_order INTEGER DEFAULT 0
     );
+  `,
+
+  '005_add_has_whatsapp': `
+    -- Adicionar coluna has_whatsapp se não existir
+    ALTER TABLE profile_personal ADD COLUMN has_whatsapp INTEGER DEFAULT 1;
   `
 } as const;
 
@@ -119,7 +125,8 @@ export const migrationOrder = [
   '001_initial',
   '002_vagas',
   '003_envios',
-  '004_profile'
+  '004_profile',
+  '005_add_has_whatsapp'
 ] as const;
 
 export type MigrationName = typeof migrationOrder[number];
