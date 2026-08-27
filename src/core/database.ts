@@ -289,9 +289,9 @@ const seedProfileFromJson = async (): Promise<void> => {
   if (profileData.personalInfo) {
     const pi = profileData.personalInfo;
     await database.run(`
-      INSERT INTO profile_personal (id, name, email, phone, linkedin, github, portfolio, location, title, summary)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, pi.name, pi.email, pi.phone, pi.linkedin, pi.github, pi.portfolio, pi.location, pi.title, pi.summary);
+      INSERT INTO profile_personal (id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, pi.name, pi.email, pi.phone, pi.hasWhatsApp !== false ? 1 : 0, pi.linkedin, pi.github, pi.portfolio, pi.location, pi.title, pi.summary);
   }
 
   // experiences
@@ -346,6 +346,18 @@ const seedProfileFromJson = async (): Promise<void> => {
         INSERT INTO profile_specializations (text, sort_order)
         VALUES (?, ?)
       `, profileData.specializations[i], i);
+    }
+  }
+
+  // skills
+  if (profileData.skills) {
+    for (const [category, techs] of Object.entries(profileData.skills)) {
+      for (const tech of techs as string[]) {
+        await database.run(
+          'INSERT OR IGNORE INTO profile_skills (category, tech) VALUES (?, ?)',
+          category, tech
+        );
+      }
     }
   }
 
