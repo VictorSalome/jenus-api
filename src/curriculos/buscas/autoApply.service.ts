@@ -136,13 +136,13 @@ export const executarPipeline = async ({
         const db = await getDb();
         
         // Ler dados pessoais do banco
-        let personalInfo = { name: "Candidato", email: "", phone: "", linkedin: "", github: "", portfolio: "", title: "" };
+        let personalInfo = { name: "Candidato", email: process.env.SMTP_USER || "", phone: "", linkedin: "", github: "", portfolio: "", title: "" };
         try {
           const personal = await db.get('SELECT * FROM profile_personal WHERE id = 1');
           if (personal) {
             personalInfo = {
               name: personal.name || "Candidato",
-              email: personal.email || "",
+              email: personal.email || process.env.SMTP_USER || "",
               phone: personal.phone || "",
               linkedin: personal.linkedin || "",
               github: personal.github || "",
