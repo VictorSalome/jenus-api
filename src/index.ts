@@ -14,7 +14,7 @@ import * as logger from "./core/logger.js";
 import authApp from "./apps/auth/index.js";
 import promoApp from "./apps/promo-monitor/index.js";
 import curriculosApp, { pdfPreviewRouter } from "./apps/curriculo-monitor/index.js";
-import { requireAuth } from "./promo/auth/auth.middleware.js";
+import { requireAuth } from "./shared/auth/auth.middleware.js";
 
 const app = express();
 

@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { buscarVagasBrasil, buscarVagasPorTecnologia, buscarVagasRemotas } from "../buscas/scraperBR.service.js";
 import { calcularCompatibilidade } from "../buscas/match.service.js";
-import { logInfo, logError } from "../utils/logger.js";
-import { apiKeyAuth, optionalApiKeyAuth } from "../middleware/apiKeyAuth.js";
+import { logInfo, logError } from "../shared/utils/logger.js";
+import { apiKeyAuth, optionalApiKeyAuth } from "../shared/middleware/apiKeyAuth.js";
 
 const router = Router();
 

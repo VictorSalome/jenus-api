@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { asyncHandler } from "../middleware/errorHandler.js";
-import { getSmtpRuntimeConfig } from "../smtp/smtpConfig.service.js";
 
 const router = Router();
 

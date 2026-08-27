@@ -17,7 +17,7 @@ import {
   executarLinkedinAgora,
   getLinkedinStatus,
 } from "./linkedinCron.service.js";
-import { logInfo, logError } from "../utils/logger.js";
+import { logInfo, logError } from "../shared/utils/logger.js";
 
 export interface BuscarVagasParams {
   query?: string;
@@ -67,7 +67,7 @@ export const buscarVagasController = async (req: any, res: any) => {
       limit: Math.min(limit || 10, 20),
     });
 
-    const ranqueadas = ranquearVagas(vagas);
+    const ranqueadas = await ranquearVagas(vagas);
 
     res.json({
       ok: true,
@@ -95,7 +95,7 @@ export const buscarPorFonteController = async (req: any, res: any) => {
       limit: Math.min(limit || 10, 20),
     });
 
-    const ranqueadas = ranquearVagas(vagas);
+    const ranqueadas = await ranquearVagas(vagas);
 
     res.json({
       ok: true,
@@ -166,7 +166,7 @@ export const schedulerRunNowController = async (req: any, res: any) => {
 
 // ── LinkedIn ──
 
-export const linkedinParseController = (req: any, res: any) => {
+export const linkedinParseController = async (req: any, res: any) => {
   try {
     const { html } = req.body || {};
     if (!html)
@@ -174,7 +174,7 @@ export const linkedinParseController = (req: any, res: any) => {
 
     const vagas = parsearLinkedInHTML(html);
     const normalizadas = normalizarVagasLinkedIn(vagas);
-    const ranqueadas = ranquearVagas(normalizadas);
+    const ranqueadas = await ranquearVagas(normalizadas);
 
     res.json({ ok: true, total: ranqueadas.length, vagas: ranqueadas });
   } catch (err: any) {

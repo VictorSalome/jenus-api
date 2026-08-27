@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { executarPipeline } from "./autoApply.service.js";
-import { logInfo, logError } from "../utils/logger.js";
+import { logInfo, logError } from "../shared/utils/logger.js";
 
 let tarefaAtiva = null;
 let ultimaExecucao = null;
@@ -88,6 +88,10 @@ export const executarBusca = async ({
   tags,
   minScore = 70,
   autoSend = false,
+}: {
+  tags?: string[];
+  minScore?: number;
+  autoSend?: boolean;
 } = {}) => {
   const startTime = Date.now();
   logInfo("Executando busca agendada...");

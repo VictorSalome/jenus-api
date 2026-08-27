@@ -1,4 +1,4 @@
-import { logInfo, logError } from "../utils/logger.js";
+import { logInfo, logError } from "../shared/utils/logger.js";
 import { httpGet } from "../shared/http.js";
 import config from "../config/index.js";
 
@@ -61,7 +61,7 @@ export const executarPipeline = async ({
   for (const vaga of vagas) {
     try {
       const { calcularCompatibilidade } = await import("./match.service.js");
-      const match = calcularCompatibilidade(vaga);
+      const match = await calcularCompatibilidade(vaga);
       resultados.buscas.push({
         title: vaga.title,
         score: match.score,
@@ -104,12 +104,13 @@ export const executarPipeline = async ({
 
       // 4. Gerar currículo
       let nomeArquivo: string | null = null;
+      let pdfPath: string | null = null;
       try {
         const { personalizarCurriculo } = await import("../analisar/curriculoPersonalizador.service.js");
-        const { gerarPdfCurriculo } = await import("../pdf/pdfGenerator.service.js");
-        
+        const { gerarPdfCurriculo } = await import("../shared/pdf/pdfGenerator.service.js");
+
         const curriculo = await personalizarCurriculo(dadosVaga);
-        const pdfPath = await gerarPdfCurriculo(curriculo, dadosVaga);
+        pdfPath = await gerarPdfCurriculo(curriculo, dadosVaga);
         if (pdfPath) {
           nomeArquivo = path.basename(pdfPath);
           resultados.stats.gerados++;
@@ -199,7 +200,7 @@ export const executarPipeline = async ({
           salario: dadosVaga.salario || '',
         };
         
-        const { enviarCurriculo } = await import("../email/email.service.js");
+        const { enviarCurriculo } = await import("../shared/email/email.service.js");
         await enviarCurriculo(
           emailFinal,
           pdfPath,
@@ -272,7 +273,7 @@ function extrairEmailDoTexto(texto: string): string | null {
   return valido || null;
 }
 
-import { logWarn } from "../utils/logger.js";
+import { logWarn } from "../shared/utils/logger.js";
 import path from "path";
 
 export { getStats } from "../monitor/stats.service.js";

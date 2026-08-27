@@ -1,24 +1,24 @@
 import { extrairDadosVaga } from "./vagaExtractor.service.js";
 import { parseVaga } from "./vagaParser.js";
 import { personalizarCurriculo } from "./curriculoPersonalizador.service.js";
-import { gerarPdfCurriculo } from "../pdf/pdfGenerator.service.js";
+import { gerarPdfCurriculo } from "../shared/pdf/pdfGenerator.service.js";
 import { getDb } from "../../core/database.js";
 import {
   enviarCurriculoComRegistro,
   validarConfiguracaoEmail,
   testarConexaoSMTP,
-} from "../email/email.service.js";
-import { getSmtpConfig, updateSmtpConfig } from "../smtp/smtpConfig.service.js";
+} from "../shared/email/email.service.js";
+import { getSmtpConfig, updateSmtpConfig } from "../shared/smtp/smtpConfig.service.js";
 import {
   validateVagaText,
   validateExtractedJobData,
-} from "../utils/validators.js";
-import { logInfo, logError, logWarn } from "../utils/logger.js";
+} from "../shared/utils/validators.js";
+import { logInfo, logError, logWarn } from "../shared/utils/logger.js";
 import {
   asyncHandler,
   ValidationError,
   AppError,
-} from "../middleware/errorHandler.js";
+} from "../shared/middleware/errorHandler.js";
 import config from "../config/index.js";
 import fs from "fs/promises";
 import { readFileSync } from "node:fs";
@@ -298,7 +298,18 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
   // Fallback: usar extractor original se parser não funcionou
   if (!dadosVaga) {
     logInfo("Usando extractor original", { requestId });
-    dadosVaga = await extrairDadosVaga(textoParaAnalise);
+    const dadosExtraidos = await extrairDadosVaga(textoParaAnalise);
+    dadosVaga = {
+      titulo: dadosExtraidos.titulo,
+      empresa: dadosExtraidos.empresa,
+      senioridade: dadosExtraidos.nivel,
+      areaAtuacao: dadosExtraidos.areaAtuacao ? [dadosExtraidos.areaAtuacao] : [],
+      stackTecnologica: dadosExtraidos.stackTecnologica,
+      emailContato: dadosExtraidos.emailContato,
+      descricao: textoParaAnalise,
+      requisitos: dadosExtraidos.requisitosObrigatorios,
+      responsabilidades: dadosExtraidos.responsabilidades,
+    };
   }
 
   const extractionValidation = validateExtractedJobData(dadosVaga);

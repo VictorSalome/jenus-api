@@ -1,4 +1,4 @@
-import { logInfo, logError } from "../utils/logger.js";
+import { logInfo, logError } from "../shared/utils/logger.js";
 
 export interface VagaLinkedIn {
   titulo: string;

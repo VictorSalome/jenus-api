@@ -2,15 +2,24 @@ import nodemailer from "nodemailer";
 import fs from "fs/promises";
 import path from "path";
 import { logInfo, logError } from "../utils/logger.js";
-import { getDb } from "../../core/database.js";
+import { getDb } from "../../../core/database.js";
+
+interface SmtpOverrides {
+  host?: string;
+  port?: string | number;
+  secure?: boolean | string;
+  user?: string;
+  pass?: string;
+  emailFrom?: string;
+}
 
 /**
  * Configuração do transporter de e-mail
  */
-export const getSmtpRuntimeConfig = (overrides = {}) => {
+export const getSmtpRuntimeConfig = (overrides: SmtpOverrides = {}) => {
   const basePort = parseInt(process.env.SMTP_PORT, 10) || 587;
   const port =
-    overrides.port !== undefined ? parseInt(overrides.port, 10) : basePort;
+    overrides.port !== undefined ? parseInt(String(overrides.port), 10) : basePort;
 
   return {
     host: overrides.host ?? process.env.SMTP_HOST,
@@ -28,7 +37,7 @@ export const getSmtpRuntimeConfig = (overrides = {}) => {
   };
 };
 
-export const criarTransporter = (overrides = {}) => {
+export const criarTransporter = (overrides: SmtpOverrides = {}) => {
   const smtp = getSmtpRuntimeConfig(overrides);
   const config = {
     host: smtp.host,
@@ -79,7 +88,7 @@ const isTimeoutLikeError = (error) => {
   );
 };
 
-const getTransportFallbacks = (baseConfig = {}) => {
+const getTransportFallbacks = (baseConfig: SmtpOverrides = {}) => {
   const runtimeConfig = getSmtpRuntimeConfig(baseConfig);
   const host = String(runtimeConfig.host || "").toLowerCase();
   const port = runtimeConfig.port;
@@ -419,7 +428,7 @@ const calcularAnosExperiencia = (experiences) => {
     const fim = exp.endDate === "present" ? new Date() : new Date(exp.endDate);
 
     if (inicio && fim && fim > inicio) {
-      const diffTime = Math.abs(fim - inicio);
+      const diffTime = Math.abs(fim.getTime() - inicio.getTime());
       const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30));
       totalMeses += diffMonths;
     }
@@ -449,7 +458,7 @@ export const validarConfiguracaoEmail = () => {
  * Testa conexão SMTP
  * @returns {Promise<boolean>} True se conexão está funcionando
  */
-export const testarConexaoSMTP = async (overrides = {}) => {
+export const testarConexaoSMTP = async (overrides: SmtpOverrides = {}) => {
   const runtimeConfig = getSmtpRuntimeConfig(overrides);
 
   try {

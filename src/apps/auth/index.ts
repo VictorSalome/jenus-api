@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import authRoutes from '../../promo/auth/auth.routes.js';
+import authRoutes from '../../shared/auth/auth.routes.js';
 import { refreshToken } from '../../shared/auth/jwt-auth.js';
 
 const router = Router();

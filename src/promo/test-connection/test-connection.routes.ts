@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as testController from './test-connection.controller.js';
-import { requireAuth } from '../auth/auth.middleware.js';
+import { requireAuth } from '../../shared/auth/auth.middleware.js';
 
 const router = Router();
 

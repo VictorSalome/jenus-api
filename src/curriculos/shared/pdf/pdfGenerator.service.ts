@@ -4,7 +4,7 @@ import { createWriteStream } from "fs";
 import path from "path";
 import { logInfo, logError } from "../utils/logger.js";
 import { formatarData, formatarTelefone } from "../utils/formatters.js";
-import config from "../config/index.js";
+import config from "../../config/index.js";
 
 /**
  * Gera PDF do currículo seguindo normas ABNT

@@ -1,5 +1,5 @@
 import { getDb } from "../core/database.js";
-import { logInfo } from "./utils/logger.js";
+import { logInfo } from "./shared/utils/logger.js";
 
 // ── Category map from database ──
 
@@ -52,7 +52,7 @@ const TECH_KEYWORDS: Record<string, string> = {
   selenium: "testing", mocha: "testing", chai: "testing",
   // State Management
   redux: "stateManagement", zustand: "stateManagement", "context api": "stateManagement",
-  "react query": "stateManagement", "react query": "stateManagement", mobx: "stateManagement",
+  "react query": "stateManagement", mobx: "stateManagement",
   // Methodologies
   agile: "methodologies", scrum: "methodologies", kanban: "methodologies",
   tdd: "methodologies", bdd: "methodologies", "clean code": "methodologies",

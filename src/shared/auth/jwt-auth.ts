@@ -13,7 +13,7 @@
  */
 
 import jwt from 'jsonwebtoken';
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
 import crypto from 'crypto';
 
 // Configurações
@@ -130,55 +130,9 @@ export function cleanupExpiredTokens(): void {
   }
 }
 
-/**
- * Middleware de autenticação JWT
- * Usa tanto Authorization header quanto cookies
- */
-export const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.split(' ')[1] || req.cookies?.accessToken;
-  
-  if (!token) {
-    res.status(401).json({ 
-      success: false, 
-      message: 'Token não fornecido',
-      needsRefresh: true
-    });
-    return;
-  }
-  
-  const decoded = verifyAccessToken(token);
-  
-  if (!decoded) {
-    res.status(401).json({ 
-      success: false, 
-      message: 'Token inválido ou expirado',
-      needsRefresh: true
-    });
-    return;
-  }
-  
-  // Adiciona usuário ao request
-  (req as any).user = decoded;
-  next();
-};
-
-/**
- * Middleware opcional - não bloqueia se não tem token
- */
-export const optionalAuth = (req: Request, _res: Response, next: NextFunction): void => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.split(' ')[1] || req.cookies?.accessToken;
-  
-  if (token) {
-    const decoded = verifyAccessToken(token);
-    if (decoded) {
-      (req as any).user = decoded;
-    }
-  }
-  
-  next();
-};
+// requireAuth/optionalAuth foram consolidados em auth.middleware.ts para evitar
+// duas implementações quase idênticas convivendo em shared/auth/. Importe-os de
+// './auth.middleware.js'.
 
 /**
  * Endpoint de refresh token

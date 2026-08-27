@@ -1,4 +1,4 @@
-import { logInfo, logError } from '../utils/logger.js';
+import { logInfo, logError } from '../shared/utils/logger.js';
 
 export interface DadosExtraidosVaga {
   titulo: string;
@@ -234,7 +234,7 @@ const extrairBeneficios = (texto: string): string[] => {
 
 const extrairEmailContato = (texto: string): string | null => {
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  const emails = texto.match(emailRegex) || [];
+  const emails: string[] = texto.match(emailRegex) || [];
   
   if (emails.length === 0) {
     return null;

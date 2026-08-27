@@ -1,7 +1,7 @@
 import axios from "axios";
 import fs from "fs/promises";
 import path from "path";
-import { logInfo, logError } from "./utils/logger.js";
+import { logInfo, logError } from "./shared/utils/logger.js";
 
 /**
  * Serviço SCRAPER LEVE para busca de vagas brasileiras

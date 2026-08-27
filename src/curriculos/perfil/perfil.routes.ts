@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getDb } from "../../core/database.js";
-import { asyncHandler, ValidationError } from "../middleware/errorHandler.js";
-import { logInfo, logError } from "../utils/logger.js";
+import { asyncHandler, ValidationError } from "../shared/middleware/errorHandler.js";
+import { logInfo, logError } from "../shared/utils/logger.js";
 
 const router = Router();
 
@@ -76,7 +76,7 @@ router.get(
   asyncHandler(async (_req, res) => {
     const db = await getDb();
     const personal = await db.get("SELECT * FROM profile_personal WHERE id = 1");
-    res.json({ success: true, personalInfo: { ...personal, hasWhatsApp: personal?.has_whatsapp === 1 } || {} });
+    res.json({ success: true, personalInfo: { ...(personal || {}), hasWhatsApp: personal?.has_whatsapp === 1 } });
   })
 );
 
@@ -176,7 +176,7 @@ for (const [section, config] of Object.entries(SECTIONS)) {
   router.get(`/profile/${section}`, asyncHandler(async (_req, res) => {
     const db = await getDb();
     const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
-    res.json({ success: true, [section]: rows.map(config.mapRow) });
+    res.json({ success: true, [section]: rows.map((row) => config.mapRow(row)) });
   }));
 
   // POST (add)
@@ -196,7 +196,7 @@ for (const [section, config] of Object.entries(SECTIONS)) {
 
     logInfo(`Item adicionado em ${section}`, { id: fields.id });
     const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
-    res.json({ success: true, [section]: rows.map(config.mapRow) });
+    res.json({ success: true, [section]: rows.map((row) => config.mapRow(row)) });
   }));
 
   // PATCH (update)
@@ -212,7 +212,7 @@ for (const [section, config] of Object.entries(SECTIONS)) {
 
     logInfo(`Item atualizado em ${section}`, { id: req.params.id });
     const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
-    res.json({ success: true, [section]: rows.map(config.mapRow) });
+    res.json({ success: true, [section]: rows.map((row) => config.mapRow(row)) });
   }));
 
   // DELETE
@@ -221,7 +221,7 @@ for (const [section, config] of Object.entries(SECTIONS)) {
     await db.run(`DELETE FROM ${config.table} WHERE id = ?`, req.params.id);
     logInfo(`Item removido de ${section}`, { id: req.params.id });
     const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
-    res.json({ success: true, [section]: rows.map(config.mapRow) });
+    res.json({ success: true, [section]: rows.map((row) => config.mapRow(row)) });
   }));
 }
 

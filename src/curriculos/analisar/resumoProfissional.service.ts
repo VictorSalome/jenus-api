@@ -1,5 +1,5 @@
-import { logInfo, logError } from "../utils/logger.js";
-import { calculateSimilarity } from "../utils/textUtils.js";
+import { logInfo, logError } from "../shared/utils/logger.js";
+import { calculateSimilarity } from "../shared/utils/textUtils.js";
 import fs from "fs";
 import path from "path";
 import { getDb } from "../../core/database.js";
@@ -588,7 +588,7 @@ const calcularRelevanciaSkill = (descricao: string, skill: string): number => {
  * @param {Array} responsabilidades - Responsabilidades identificadas
  * @returns {string} Resumo personalizado de 6-7 linhas
  */
-const gerarResumoCompleto = (skillsEncontradas: string[], responsabilidades: { responsibilidade: string; skillsRelacionadas: string[] }[] = []): string => {
+const gerarResumoCompleto = (skillsEncontradas: string[], responsabilidades: { responsabilidade: string; skillsRelacionadas: string[] }[] = []): string => {
   // Fallback caso não encontre skills relevantes
   if (skillsEncontradas.length === 0) {
     return `${TRECHO_FIXO} ${FRASE_GENERICA} Tenho familiaridade com metodologias ágeis e boas práticas de desenvolvimento, sempre focando na qualidade e escalabilidade das soluções. Busco constantemente aprimorar minhas habilidades técnicas e contribuir em projetos inovadores que gerem impacto positivo.`;
@@ -620,7 +620,7 @@ const gerarResumoCompleto = (skillsEncontradas: string[], responsabilidades: { r
   // Segunda frase: Responsabilidades ou práticas gerais
   if (responsabilidades.length >= 2) {
     const responsabilidadesSelecionadas = responsabilidades.slice(0, 3);
-    const listaResponsabilidades = responsibilidadesSelecionadas
+    const listaResponsabilidades = responsabilidadesSelecionadas
       .map((r) => r.responsabilidade)
       .join(", ");
 

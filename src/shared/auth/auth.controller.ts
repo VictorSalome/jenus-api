@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import * as authService from './auth.service.js';
-import { generateAccessToken, generateRefreshToken } from '../../shared/auth/jwt-auth.js';
+import { generateAccessToken, generateRefreshToken } from './jwt-auth.js';
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -60,7 +60,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     if (result.success && result.tempPassword) {
       // Enviar email com senha temporária
       try {
-        const { criarTransporter } = await import('../../curriculos/email/email.service.js');
+        const { criarTransporter } = await import('../../curriculos/shared/email/email.service.js');
         const transporter = criarTransporter();
         await transporter.sendMail({
           from: process.env.EMAIL_FROM || process.env.SMTP_USER,

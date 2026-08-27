@@ -20,7 +20,7 @@ console.log("TESTE DO SERVIÇO DE RESUMO PROFISSIONAL DINÂMICO");
 console.log("=".repeat(80));
 
 try {
-  const resumo = gerarResumo(descricaoVaga);
+  const resumo = await gerarResumo(descricaoVaga);
 
   console.log("\n📋 DESCRIÇÃO DA VAGA:");
   console.log(descricaoVaga.trim());
@@ -45,7 +45,7 @@ Kubernetes e machine learning.
 `;
 
 try {
-  const resumoSemSkills = gerarResumo(vagaSemSkills);
+  const resumoSemSkills = await gerarResumo(vagaSemSkills);
 
   console.log("\n📋 DESCRIÇÃO DA VAGA:");
   console.log(vagaSemSkills.trim());

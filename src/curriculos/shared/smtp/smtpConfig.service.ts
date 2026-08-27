@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { logInfo, logWarn } from "../utils/logger.js";
-import config from "../config/index.js";
+import config from "../../config/index.js";
 
 const SMTP_CONFIG_FILE = path.join(
   config.paths.data,
@@ -142,7 +142,7 @@ export const updateSmtpConfig = async (payload) => {
 
   const validation = validateConfigInput(nextConfig);
   if (!validation.isValid) {
-    const error = new Error("Dados SMTP inválidos");
+    const error: Error & { details?: string[] } = new Error("Dados SMTP inválidos");
     error.details = validation.errors;
     throw error;
   }

@@ -2,26 +2,26 @@ import express from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import config from './config/index.js';
-import { initializeSmtpRuntimeConfig } from './smtp/smtpConfig.service.js';
+import { initializeSmtpRuntimeConfig } from './shared/smtp/smtpConfig.service.js';
 import {
   errorHandler,
   notFoundHandler,
   requestIdMiddleware,
   timeoutMiddleware,
   contentTypeMiddleware,
-} from './middleware/errorHandler.js';
-import { loggerMiddleware } from './utils/logger.js';
+} from './shared/middleware/errorHandler.js';
+import { loggerMiddleware } from './shared/utils/logger.js';
 import { autoStartScheduler } from './buscas/scheduler.service.js';
 
 import analisarRoutes, { pdfPreviewRouter } from './analisar/analisar.routes.js';
 import testeRoutes from './teste/teste.routes.js';
-import smtpRoutes from './smtp/smtp.routes.js';
+import smtpRoutes from './shared/smtp/smtp.routes.js';
 import buscasRoutes from './buscas/buscas.routes.js';
 import scraperRoutes from './scraper/scraper.routes.js';
 import monitorRoutes from './monitor/monitor.routes.js';
 import perfilRoutes from './perfil/perfil.routes.js';
 import compatibilidadeRoutes from './compatibilidade.routes.js';
-import emailTestRoutes from './email/emailTest.routes.js';
+import emailTestRoutes from './shared/email/emailTest.routes.js';
 
 const app = express();
 
@@ -58,7 +58,7 @@ app.use(
 app.use(
   express.json({
     limit: '10mb',
-    verify: (req, res, buf) => {
+    verify: (req, res: express.Response, buf) => {
       try {
         JSON.parse(buf.toString());
       } catch {

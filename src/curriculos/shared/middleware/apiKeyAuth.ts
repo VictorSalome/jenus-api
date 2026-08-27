@@ -1,5 +1,5 @@
 import { logInfo, logError } from "../utils/logger.js";
-import config from "../config/index.js";
+import config from "../../config/index.js";
 
 /**
  * Middleware de autenticação por API Key

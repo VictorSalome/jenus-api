@@ -18,11 +18,11 @@ export const formatarData = (data: string | Date | null | undefined, formato: 's
       return String(data); // Retorna o valor original se não for uma data válida
     }
     
-    const options: Intl.DateTimeFormatOptions = {
+    const options = ({
       'short': { year: 'numeric', month: '2-digit' },
       'long': { year: 'numeric', month: 'long', day: 'numeric' },
       'month-year': { year: 'numeric', month: 'long' }
-    }[formato] || { year: 'numeric', month: 'long' };
+    } as Record<string, Intl.DateTimeFormatOptions>)[formato] || { year: 'numeric', month: 'long' };
     
     return date.toLocaleDateString('pt-BR', options);
   } catch (error) {

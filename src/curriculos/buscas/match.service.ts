@@ -1,4 +1,4 @@
-import { logInfo } from "../utils/logger.js";
+import { logInfo } from "../shared/utils/logger.js";
 import { getDb } from "../../core/database.js";
 
 let cachedProfileSkills = null;
@@ -91,7 +91,7 @@ export const calcularCompatibilidade = async (vaga) => {
  * Extrai skills/tecnologias mencionadas na vaga
  */
 function extrairSkillsDaVaga(vaga) {
-  const skills = new Set();
+  const skills = new Set<string>();
   const texto =
     `${vaga.title} ${vaga.description} ${(vaga.tags || []).join(" ")}`.toLowerCase();
 
@@ -236,11 +236,12 @@ function gerarResumo(score, matches, missing) {
 /**
  * Ranqueia vagas por score de compatibilidade
  */
-export const ranquearVagas = (vagas) => {
-  return vagas
-    .map((vaga) => ({
+export const ranquearVagas = async (vagas) => {
+  const comMatch = await Promise.all(
+    vagas.map(async (vaga) => ({
       ...vaga,
-      match: calcularCompatibilidade(vaga),
-    }))
-    .sort((a, b) => b.match.score - a.match.score);
+      match: await calcularCompatibilidade(vaga),
+    })),
+  );
+  return comMatch.sort((a, b) => b.match.score - a.match.score);
 };

@@ -321,7 +321,7 @@ export const validateEmailConfig = () => {
   
   // Validar porta SMTP
   const smtpPort = process.env.SMTP_PORT;
-  if (smtpPort && (isNaN(smtpPort) || parseInt(smtpPort) < 1 || parseInt(smtpPort) > 65535)) {
+  if (smtpPort && (isNaN(Number(smtpPort)) || parseInt(smtpPort) < 1 || parseInt(smtpPort) > 65535)) {
     warnings.push('Porta SMTP pode estar inválida');
   }
   

@@ -1,5 +1,5 @@
 import { logError } from '../utils/logger.js';
-import { serverConfig } from '../config/index.js';
+import { serverConfig } from '../../config/index.js';
 import type { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
 
 export class AppError extends Error {
@@ -132,7 +132,8 @@ export const errorHandler: ErrorRequestHandler = (
     statusCode = 400;
     message = 'Dados inválidos';
     errors = Object.values(
-      (error as unknown as Record<string, { message: string }>).errors || {},
+      (error as unknown as { errors?: Record<string, { message: string }> })
+        .errors || {},
     ).map((err) => err.message);
   } else if (error.name === 'CastError') {
     statusCode = 400;

@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import jwt from "jsonwebtoken";
-import { requireAuth } from "../../shared/auth/jwt-auth.js";
+import { requireAuth } from "../../shared/auth/auth.middleware.js";
 import config from "../config/index.js";
 import {
   gerarCurriculoController,

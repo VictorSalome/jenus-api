@@ -1,18 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyAccessToken } from '../../shared/auth/jwt-auth.js';
+import { verifyAccessToken } from './jwt-auth.js';
 
 export const requireAuth = (req: Request, res: Response, next: NextFunction): void => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.replace('Bearer ', '') || (req as any).cookies?.accessToken;
 
   if (!token) {
-    res.status(401).json({ success: false, message: 'Acesso negado. Faça login.' });
+    res.status(401).json({ success: false, message: 'Acesso negado. Faça login.', needsRefresh: true });
     return;
   }
 
   const decoded = verifyAccessToken(token);
   if (!decoded) {
-    res.status(401).json({ success: false, message: 'Token inválido ou expirado' });
+    res.status(401).json({ success: false, message: 'Token inválido ou expirado', needsRefresh: true });
     return;
   }
 

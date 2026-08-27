@@ -1,5 +1,5 @@
 import { httpGet } from "../shared/http.js";
-import { logInfo, logError } from "../utils/logger.js";
+import { logInfo, logError } from "../shared/utils/logger.js";
 import config from "../config/index.js";
 
 export interface Feed {

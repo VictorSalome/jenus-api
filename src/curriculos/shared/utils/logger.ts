@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import config from '../config/index.js';
+import config from '../../config/index.js';
 import type { Request, Response, NextFunction } from 'express';
 
 const LOG_LEVELS: Record<string, number> = {

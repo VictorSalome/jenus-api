@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { asyncHandler } from "./middleware/errorHandler.js";
+import { asyncHandler } from "./shared/middleware/errorHandler.js";
 import { getCompatibilidade, listarVagasComCompatibilidade } from "./compatibilidade.service.js";
-import { logInfo } from "./utils/logger.js";
+import { logInfo } from "./shared/utils/logger.js";
 
 const router = Router();
 

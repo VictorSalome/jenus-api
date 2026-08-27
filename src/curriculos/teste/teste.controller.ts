@@ -1,15 +1,15 @@
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
-import { logInfo, logError, logWarn } from "../utils/logger.js";
+import { logInfo, logError, logWarn } from "../shared/utils/logger.js";
 import { personalizarCurriculo } from "../analisar/curriculoPersonalizador.service.js";
-import { gerarPdfCurriculo } from "../pdf/pdfGenerator.service.js";
+import { gerarPdfCurriculo } from "../shared/pdf/pdfGenerator.service.js";
 import {
   enviarCurriculo,
   validarConfiguracaoEmail,
-} from "../email/email.service.js";
+} from "../shared/email/email.service.js";
 import { gerarResumo } from "../analisar/resumoProfissional.service.js";
-import { asyncHandler, AppError } from "../middleware/errorHandler.js";
+import { asyncHandler, AppError } from "../shared/middleware/errorHandler.js";
 import config from "../config/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -557,7 +557,7 @@ export const enviarCurriculoTesteHTML = asyncHandler(async (req, res) => {
 
   // 2.1. Gerar resumo profissional dinâmico para demonstração
   const descricaoVagaCompleta = `${dadosVaga.titulo} ${dadosVaga.descricao} ${dadosVaga.stackTecnologica.join(" ")} ${dadosVaga.requisitos.join(" ")}`;
-  const resumosDinamicos = gerarResumo(descricaoVagaCompleta);
+  const resumosDinamicos = await gerarResumo(descricaoVagaCompleta);
 
   logInfo("Dados da vaga simulada criados", {
     vaga: dadosVaga.titulo,
@@ -667,27 +667,26 @@ export const enviarCurriculoTesteHTML = asyncHandler(async (req, res) => {
       requisitosEncontrados: curriculoPersonalizado.matchingSkills || [],
     },
     resumosProfissionais: {
-      curto: resumosDinamicos.curto,
-      medio: resumosDinamicos.medio,
-      longo: resumosDinamicos.longo,
-      resumoUsado: "medio",
+      resumo: resumosDinamicos.resumo,
+      skills: resumosDinamicos.skills,
+      responsabilidades: resumosDinamicos.responsabilidades,
     },
     requestId,
   };
 
   // Adicionar informações do e-mail se disponível
   if (resultadoEmail) {
-    response.email = {
+    (response as any).email = {
       enviado: resultadoEmail.sucesso,
       messageId: resultadoEmail.messageId,
     };
 
     if (resultadoEmail.previewUrl && config.server.env === "development") {
-      response.email.previewUrl = resultadoEmail.previewUrl;
+      (response as any).email.previewUrl = resultadoEmail.previewUrl;
     }
 
     if (resultadoEmail.erro) {
-      response.email.erro = resultadoEmail.erro;
+      (response as any).email.erro = resultadoEmail.erro;
     }
   }
 

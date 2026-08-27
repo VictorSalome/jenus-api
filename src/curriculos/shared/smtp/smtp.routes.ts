@@ -3,7 +3,7 @@ import {
   testarSMTPController,
   obterConfigSMTPController,
   atualizarConfigSMTPController,
-} from "../analisar/analisar.controller.js";
+} from "../../analisar/analisar.controller.js";
 
 const router = express.Router();
 

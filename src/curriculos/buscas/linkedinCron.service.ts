@@ -1,13 +1,13 @@
-import cron from "node-cron";
+import cron, { type ScheduledTask } from "node-cron";
 import { exec } from "child_process";
 import { promisify } from "util";
 import path from "path";
-import { logInfo, logError } from "../utils/logger.js";
+import { logInfo, logError } from "../shared/utils/logger.js";
 import config from "../config/index.js";
 
 const execAsync = promisify(exec);
 
-let tarefaAtiva: cron.ScheduledTask | null = null;
+let tarefaAtiva: ScheduledTask | null = null;
 let ultimaExecucao: any = null;
 
 const SCRAPER_PATH = path.resolve(

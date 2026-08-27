@@ -3,7 +3,7 @@ import { getStats } from "../buscas/autoApply.service.js";
 import { registrarEnvio, registrarErro } from "../monitor/stats.service.js";
 import { buscarVagasBrasil } from "../scraperBR.service.js";
 import { executarPipeline } from "../buscas/autoApply.service.js";
-import { getEnviosCount } from "../email/email.service.js";
+import { getEnviosCount } from "../shared/email/email.service.js";
 import fs from "fs/promises";
 import path from "path";
 import config from "../config/index.js";
@@ -47,8 +47,8 @@ router.get("/monitor", async (req, res) => {
       // Novos campos para histórico
       history: history,
       historyCount: history.length,
-      successCount: stats.successCount || 0,
-      errorCount: stats.errorCount || 0,
+      successCount: stats.enviados || 0,
+      errorCount: stats.erros || 0,
       todayCount: history.filter(h => {
         const hDate = new Date(h.timestamp);
         const today = new Date();
