@@ -1,9 +1,9 @@
 import fetch from "node-fetch";
-import { config } from "../../core/config.js";
+import { promoConfig } from "../config.js";
 import * as logger from "../../core/logger.js";
 
-const BOT_TOKEN = config.TELEGRAM_BOT_TOKEN;
-const GROUP_ID = config.TELEGRAM_BOT_GROUP_ID;
+const BOT_TOKEN = promoConfig.TELEGRAM_BOT_TOKEN;
+const GROUP_ID = promoConfig.TELEGRAM_BOT_GROUP_ID;
 
 export async function sendTelegramMessage(text: string): Promise<boolean> {
   if (!BOT_TOKEN || !GROUP_ID) {

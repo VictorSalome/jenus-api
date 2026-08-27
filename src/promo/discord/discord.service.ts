@@ -1,5 +1,5 @@
 import fetch from "node-fetch";
-import { config } from "../../core/config.js";
+import { promoConfig } from "../config.js";
 import * as logger from "../../core/logger.js";
 
 interface PromoData {
@@ -15,7 +15,7 @@ interface PromoData {
   imageBuffer?: { data: Buffer; ext: string } | null;
 }
 
-const WEBHOOK_URL = config.DISCORD_WEBHOOK_URL;
+const WEBHOOK_URL = promoConfig.DISCORD_WEBHOOK_URL;
 const TIMEOUT = 5000;
 
 const STORE_THUMBNAILS: Record<string, string> = {
@@ -80,6 +80,11 @@ async function sendWebhook(
   payload: object,
   imageBuffer?: { data: Buffer; ext: string } | null,
 ): Promise<boolean> {
+  if (!WEBHOOK_URL) {
+    logger.warn("DISCORD_WEBHOOK_URL não configurado, pulando envio", "Discord");
+    return false;
+  }
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), TIMEOUT);

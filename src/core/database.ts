@@ -1,6 +1,7 @@
 import sqlite3 from 'sqlite3';
 import { open, Database } from 'sqlite';
 import { config } from './config.js';
+import { promoConfig } from '../promo/config.js';
 import * as logger from './logger.js';
 import fs from 'fs';
 import path from 'path';
@@ -180,15 +181,15 @@ export const seedDatabase = async (): Promise<void> => {
     await database.run(`
       INSERT INTO telegram_config (id, api_id, api_hash, phone, is_connected)
       VALUES (1, ?, ?, '', 0)
-    `, config.API_ID || '', config.API_HASH || '');
-  } else if (config.API_ID && config.API_HASH) {
+    `, promoConfig.API_ID || '', promoConfig.API_HASH || '');
+  } else if (promoConfig.API_ID && promoConfig.API_HASH) {
     // Preencher com valores do .env se estiverem vazios
     const existing = await database.get('SELECT api_id, api_hash FROM telegram_config WHERE id = 1');
     if (!existing?.api_id && !existing?.api_hash) {
       logger.info('Preenchendo API_ID/API_HASH do .env na config existente...', 'Database');
       await database.run(`
         UPDATE telegram_config SET api_id = ?, api_hash = ? WHERE id = 1
-      `, config.API_ID, config.API_HASH);
+      `, promoConfig.API_ID, promoConfig.API_HASH);
     }
   }
 
