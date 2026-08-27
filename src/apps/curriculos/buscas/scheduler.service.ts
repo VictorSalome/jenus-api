@@ -9,7 +9,9 @@ let configAtual = {};
 
 /**
  * Inicia o scheduler de busca automática
- * Default: a cada 1 hora, auto-send ativo
+ * Default: a cada 1 hora. Nunca envia sozinho — só descobre vagas, calcula
+ * compatibilidade e deixa candidaturas prontas aguardando revisão em
+ * /api/curriculo/pending-applications.
  */
 export const iniciarScheduler = ({
   cron: cronExpr = "0 */1 * * *",
@@ -41,16 +43,15 @@ export const iniciarScheduler = ({
     "docker",
   ],
   minScore = 60,
-  autoSend = true,
 } = {}) => {
   if (tarefaAtiva) {
     logInfo("Scheduler já está rodando, parando anterior...");
     pararScheduler();
   }
 
-  configAtual = { cron: cronExpr, tags, minScore, autoSend };
+  configAtual = { cron: cronExpr, tags, minScore };
   logInfo(
-    `Iniciando scheduler: ${cronExpr} | tags: ${tags.join(",")} | minScore: ${minScore} | autoSend: ${autoSend}`,
+    `Iniciando scheduler: ${cronExpr} | tags: ${tags.join(",")} | minScore: ${minScore}`,
   );
 
   tarefaAtiva = cron.schedule(cronExpr, async () => {
@@ -87,11 +88,9 @@ export const pararScheduler = () => {
 export const executarBusca = async ({
   tags,
   minScore = 70,
-  autoSend = false,
 }: {
   tags?: string[];
   minScore?: number;
-  autoSend?: boolean;
 } = {}) => {
   const startTime = Date.now();
   logInfo("Executando busca agendada...");
@@ -101,15 +100,13 @@ export const executarBusca = async ({
       tags,
       minScore,
       limit: 10,
-      autoSend,
     });
     const registro = {
       timestamp: new Date().toISOString(),
       duracao: `${Date.now() - startTime}ms`,
       total: resultado.resumo.total,
       compatveis: resultado.resumo.compatveis,
-      enviados: resultado.resumo.enviados,
-      gerados: resultado.resumo.gerados,
+      pendentes: resultado.resumo.pendentes,
     };
 
     historico.push(registro);

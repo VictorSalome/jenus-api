@@ -138,4 +138,25 @@ export const curriculoMigrations: Migration[] = [
       ALTER TABLE profile_skills RENAME TO curriculo_profile_skills;
     `,
   },
+  {
+    id: "curriculo_007_pending_applications",
+    up: `
+      CREATE TABLE IF NOT EXISTS curriculo_pending_applications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        vaga_source TEXT,
+        vaga_title TEXT,
+        vaga_company TEXT,
+        vaga_url TEXT,
+        score INTEGER,
+        email_destino TEXT,
+        dados_vaga_json TEXT NOT NULL,
+        status TEXT CHECK(status IN ('pending','approved','rejected','sent','error')) DEFAULT 'pending',
+        erro TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        reviewed_at TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pending_applications_status ON curriculo_pending_applications(status);
+    `,
+  },
 ];

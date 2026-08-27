@@ -10,31 +10,34 @@ export interface PipelineResult {
   applied: Array<any>;
   skipped: Array<any>;
   erros: Array<{ title: string; error: string }>;
-  stats: { gerados: number; enviados: number; semEmail: number; erroEnvio: number };
+  stats: { pendentes: number; semEmail: number };
   resumo: {
     total: number;
     compatveis: number;
-    gerados: number;
-    enviados: number;
+    pendentes: number;
     semEmail: number;
     erros: number;
-    erroEnvio: number;
     tempoTotal: string;
   };
 }
 
+/**
+ * Pipeline de descoberta: busca vagas, calcula compatibilidade, extrai
+ * email do recrutador, gera currículo adequado à vaga e deixa PRONTO
+ * PARA REVISÃO em `curriculo_pending_applications` — nunca envia email
+ * sozinho. O envio de fato só acontece quando alguém aprova cada
+ * candidatura via `pendingApplications.service.ts::aprovarEEnviar`.
+ */
 export const executarPipeline = async ({
   query = "",
   tags = [],
   minScore = 60,
   limit = 10,
-  autoSend = true,
 }: {
   query?: string;
   tags?: string[];
   minScore?: number;
   limit?: number;
-  autoSend?: boolean;
 } = {}): Promise<PipelineResult> => {
   const startTime = Date.now();
   const resultados: PipelineResult = {
@@ -42,14 +45,13 @@ export const executarPipeline = async ({
     applied: [],
     skipped: [],
     erros: [],
-    stats: { gerados: 0, enviados: 0, semEmail: 0, erroEnvio: 0 },
+    stats: { pendentes: 0, semEmail: 0 },
     resumo: {} as any,
   };
 
-  logInfo("Iniciando pipeline auto-apply", {
+  logInfo("Iniciando pipeline de descoberta de vagas", {
     tags: tags.join(","),
     minScore,
-    autoSend,
   });
 
   // 1. Buscar vagas
@@ -102,89 +104,10 @@ export const executarPipeline = async ({
         `📧 Vaga com email: ${vaga.title} | Score: ${match.score}% | Email: ${emailFinal}`,
       );
 
-      // 4. Gerar currículo
-      let nomeArquivo: string | null = null;
-      let pdfPath: string | null = null;
+      // 4. Deixar pronto para revisão (o currículo/PDF só é gerado de fato
+      // na aprovação, em pendingApplications.service.ts::aprovarEEnviar —
+      // evita gastar trabalho gerando PDF de vaga que pode ser rejeitada).
       try {
-        const { personalizarCurriculo } = await import("../analisar/curriculoPersonalizador.service.js");
-        const { gerarPdfCurriculo } = await import("../shared/pdf/pdfGenerator.service.js");
-
-        const curriculo = await personalizarCurriculo(dadosVaga);
-        pdfPath = await gerarPdfCurriculo(curriculo, dadosVaga);
-        if (pdfPath) {
-          nomeArquivo = path.basename(pdfPath);
-          resultados.stats.gerados++;
-        }
-      } catch (err: any) {
-        logError(`Erro ao gerar PDF para "${vaga.title}": ${err.message}`);
-      }
-
-      if (!nomeArquivo) {
-        resultados.applied.push({
-          title: vaga.title,
-          company: vaga.company,
-          score: match.score,
-          email: emailFinal,
-          status: "erro_pdf",
-        });
-        continue;
-      }
-
-      // 5. ENVIAR EMAIL (só chega aqui se tem email + PDF)
-      try {
-        // Carregar dados do candidato do banco
-        const { getDb } = await import("../../../core/database.js");
-        const db = await getDb();
-        
-        // Ler dados pessoais do banco
-        let personalInfo = { name: "Candidato", email: process.env.SMTP_USER || "", phone: "", hasWhatsApp: true, linkedin: "", github: "", portfolio: "", title: "" };
-        try {
-          const personal = await db.get('SELECT * FROM curriculo_profile_personal WHERE id = 1');
-          if (personal) {
-            personalInfo = {
-              name: personal.name || "Candidato",
-              email: personal.email || process.env.SMTP_USER || "",
-              phone: personal.phone || "",
-              hasWhatsApp: personal.has_whatsapp === 1,
-              linkedin: personal.linkedin || "",
-              github: personal.github || "",
-              portfolio: personal.portfolio || "",
-              title: personal.title || "",
-            };
-          }
-        } catch {}
-        
-        const skillsRows = await db.all('SELECT category, tech FROM curriculo_profile_skills');
-        const skills: Record<string, string[]> = {
-          programming: [],
-          frameworks: [],
-          databases: [],
-          methodologies: [],
-          testing: [],
-          devops: [],
-          aiAutomation: []
-        };
-        const categoryMap: Record<string, string> = {
-          'programming': 'programming',
-          'frameworks': 'frameworks',
-          'databases': 'databases',
-          'methodologies': 'methodologies',
-          'testing': 'testing',
-          'devops': 'devops',
-          'aiAutomation': 'aiAutomation'
-        };
-        for (const row of skillsRows) {
-          const cat = categoryMap[row.category] || row.category;
-          if (skills[cat]) {
-            skills[cat].push(row.tech);
-          }
-        }
-        
-        const candidatoData = {
-          personalInfo: personalInfo
-        };
-        
-        // Construir dadosVaga completo
         const dadosVagaCompleto = {
           titulo: vaga.title,
           empresa: vaga.company,
@@ -199,34 +122,36 @@ export const executarPipeline = async ({
           localizacao: dadosVaga.localizacao || '',
           salario: dadosVaga.salario || '',
         };
-        
-        const { enviarCurriculo } = await import("../shared/email/email.service.js");
-        await enviarCurriculo(
-          emailFinal,
-          pdfPath,
+
+        const { salvarPendente } = await import("./pendingApplications.service.js");
+        const pendingId = await salvarPendente({
+          vagaSource: (vaga as any).source || "",
+          vagaTitle: vaga.title,
+          vagaCompany: vaga.company,
+          vagaUrl: vaga.url || "",
+          score: match.score,
+          emailDestino: emailFinal,
           dadosVagaCompleto,
-          candidatoData.personalInfo
-        );
-        resultados.stats.enviados++;
-        logInfo(`✅ ENVIADO: ${vaga.title} → ${emailFinal}`);
+        });
+
+        resultados.stats.pendentes++;
+        logInfo(`📋 Aguardando revisão: ${vaga.title} → ${emailFinal} (pendingId=${pendingId})`);
         resultados.applied.push({
           title: vaga.title,
           company: vaga.company,
           score: match.score,
           email: emailFinal,
-          arquivo: nomeArquivo,
-          status: "enviado",
+          pendingId,
+          status: "aguardando_revisao",
         });
       } catch (err: any) {
-        resultados.stats.erroEnvio++;
-        logError(`❌ Erro envio "${vaga.title}": ${err.message}`);
+        logError(`Erro ao salvar candidatura pendente "${vaga.title}": ${err.message}`);
         resultados.applied.push({
           title: vaga.title,
           company: vaga.company,
           score: match.score,
           email: emailFinal,
-          arquivo: nomeArquivo,
-          status: "erro_envio",
+          status: "erro_pendencia",
           erro: err.message,
         });
       }
@@ -274,6 +199,5 @@ function extrairEmailDoTexto(texto: string): string | null {
 }
 
 import { logWarn } from "../shared/utils/logger.js";
-import path from "path";
 
 export { getStats } from "../monitor/stats.service.js";

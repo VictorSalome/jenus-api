@@ -115,18 +115,15 @@ export const buscarPorFonteController = async (req: any, res: any) => {
  */
 export const autoApplyController = async (req: any, res: any) => {
   try {
-    const { query, tags, minScore, limit, autoSend } = req.body || {};
+    const { query, tags, minScore, limit } = req.body || {};
 
-    logInfo(
-      `Auto-apply iniciado: minScore=${minScore || 70} autoSend=${autoSend || false}`,
-    );
+    logInfo(`Auto-apply iniciado: minScore=${minScore || 70}`);
 
     const resultado = await executarPipeline({
       query: query || "",
       tags: tags || [],
       minScore: minScore || 70,
       limit: Math.min(limit || 10, 20),
-      autoSend: autoSend || false,
     });
 
     res.json({ ok: true, ...resultado });
@@ -143,8 +140,8 @@ export const schedulerStatusController = (req: any, res: any) => {
 };
 
 export const schedulerStartController = (req: any, res: any) => {
-  const { cron, tags, minScore, autoSend } = req.body || {};
-  const resultado = iniciarScheduler({ cron, tags, minScore, autoSend });
+  const { cron, tags, minScore } = req.body || {};
+  const resultado = iniciarScheduler({ cron, tags, minScore });
   res.json({ ok: true, ...resultado });
 };
 
@@ -155,8 +152,8 @@ export const schedulerStopController = (req: any, res: any) => {
 
 export const schedulerRunNowController = async (req: any, res: any) => {
   try {
-    const { tags, minScore, autoSend } = req.body || {};
-    const resultado = await executarBusca({ tags, minScore, autoSend });
+    const { tags, minScore } = req.body || {};
+    const resultado = await executarBusca({ tags, minScore });
     res.json({ ok: true, ...resultado });
   } catch (err: any) {
     logError(`Erro na execução manual: ${err.message}`);

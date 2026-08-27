@@ -17,6 +17,7 @@ import analisarRoutes, { pdfPreviewRouter } from './analisar/analisar.routes.js'
 import testeRoutes from './teste/teste.routes.js';
 import smtpRoutes from './shared/smtp/smtp.routes.js';
 import buscasRoutes from './buscas/buscas.routes.js';
+import pendingRoutes from './buscas/pending.routes.js';
 import scraperRoutes from './scraper/scraper.routes.js';
 import monitorRoutes from './monitor/monitor.routes.js';
 import perfilRoutes from './perfil/perfil.routes.js';
@@ -83,6 +84,7 @@ if (config.dev.logRequests) {
 app.use('/', analisarRoutes);
 app.use('/', perfilRoutes);
 app.use('/', buscasRoutes);
+app.use('/', pendingRoutes);
 app.use('/', scraperRoutes);
 app.use('/', monitorRoutes);
 app.use('/', compatibilidadeRoutes);

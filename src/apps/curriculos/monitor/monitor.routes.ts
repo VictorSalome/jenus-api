@@ -4,6 +4,7 @@ import { registrarEnvio, registrarErro } from "../monitor/stats.service.js";
 import { buscarVagasBrasil } from "../scraperBR.service.js";
 import { executarPipeline } from "../buscas/autoApply.service.js";
 import { getEnviosCount } from "../shared/email/email.service.js";
+import { listarPendentes } from "../buscas/pendingApplications.service.js";
 import fs from "fs/promises";
 import path from "path";
 import config from "../config/index.js";
@@ -34,12 +35,14 @@ router.get("/monitor", async (req, res) => {
 
     // Total histórico de envios com status SENT (do banco)
     const totalEnviados = await getEnviosCount();
+    const pendentesRevisao = await listarPendentes("pending");
 
     res.json({
       success: true,
       total: stats.totalVagas || 0,
       enviados: stats.enviados || 0,
       totalEnviados,
+      pendentesRevisaoCount: pendentesRevisao.length,
       erros: stats.erros || 0,
       tempoMedio: stats.tempoMedio || "0ms",
       ultimoEnvio: stats.ultimoEnvio || null,
@@ -75,14 +78,13 @@ router.get("/monitor", async (req, res) => {
  */
 router.post("/auto-apply", async (req, res) => {
   try {
-    const { query = "", tags = [], minScore = 60, limit = 5, autoSend = true } = req.body;
+    const { query = "", tags = [], minScore = 60, limit = 5 } = req.body;
 
     const resultados = await executarPipeline({
       query,
       tags,
       minScore,
       limit,
-      autoSend,
     });
 
     // Registrar no histórico
