@@ -77,6 +77,14 @@ export const toggle = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+export const deactivateAlert = async (id: number): Promise<void> => {
+  const db = await getDb();
+  await db.run(
+    'UPDATE promo_price_alerts SET is_active = 0 WHERE id = ?',
+    id,
+  );
+};
+
 export const remove = async (req: Request, res: Response): Promise<void> => {
   try {
     const id = Number(req.params.id);

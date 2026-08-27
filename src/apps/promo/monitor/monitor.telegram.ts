@@ -478,8 +478,22 @@ async function sendPromoMessage(
         'SELECT * FROM promo_price_alerts WHERE is_active = 1'
       ) as any[];
 
+      const normalizarProduto = (texto: string): string =>
+        texto
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .trim();
+
       for (const alert of alerts) {
-        if (price && alert.target_price >= price) {
+        const produtoAlerta = normalizarProduto(alert.product_name || '');
+        const produtoPromo = normalizarProduto(product || '');
+        const mesmoProduto =
+          produtoAlerta.length > 0 &&
+          produtoPromo.length > 0 &&
+          (produtoPromo.includes(produtoAlerta) || produtoAlerta.includes(produtoPromo));
+
+        if (price && mesmoProduto && alert.target_price >= price) {
           const { sendPushNotification: sendPush } = await import('../push/push.service.js');
           await sendPush({
             title: '💰 Alerta de preço!',
@@ -487,6 +501,10 @@ async function sendPromoMessage(
             data: { screen: 'price-alert', productId: alert.product_name },
             priority: 'high',
           });
+
+          // Desativa o alerta para não repetir a notificação em promoções futuras
+          const { deactivateAlert } = await import('../price-alert/price-alert.controller.js');
+          await deactivateAlert(alert.id);
         }
       }
     } catch (e) {
