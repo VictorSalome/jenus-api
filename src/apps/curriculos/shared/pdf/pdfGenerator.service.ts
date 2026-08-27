@@ -7,6 +7,35 @@ import { formatarData, formatarTelefone } from "../utils/formatters.js";
 import config from "../../config/index.js";
 
 /**
+ * Cores e espaçamentos usados em todo o PDF — um único lugar para manter
+ * consistência visual entre as seções (evita valores mágicos duplicados
+ * e divergentes espalhados pelos helpers de cada seção).
+ */
+const CORES = {
+  texto: "#1a1a1a",
+  textoSecundario: "#555555",
+  textoTerciario: "#777777",
+  linha: "#1a1a1a",
+};
+
+const ESTILOS = {
+  nomeCompleto: { font: "Helvetica-Bold", size: 18 },
+  titulo: { font: "Helvetica-Bold", size: 14 },
+  subtitulo: { font: "Helvetica-Bold", size: 12 },
+  texto: { font: "Helvetica", size: 11 },
+  textoSmall: { font: "Helvetica", size: 10 },
+  contato: { font: "Helvetica", size: 10 },
+  espacamento: {
+    entreSecoes: 28,
+    entreItens: 16,
+    entreLinhas: 10,
+    cabecalho: 25,
+    aposTitulo: 20,
+    sublinhadoOffset: 14,
+  },
+};
+
+/**
  * Gera PDF do currículo seguindo normas ABNT
  * @param {Object} curriculo - Currículo personalizado
  * @param {Object} dadosVaga - Dados da vaga
@@ -33,10 +62,10 @@ export const gerarPdfCurriculo = async (curriculo, dadosVaga) => {
     const doc = new PDFDocument({
       size: "A4",
       margins: {
-        top: 50, // 1.8cm
-        bottom: 50, // 1.8cm
-        left: 50, // 1.8cm
-        right: 50, // 1.8cm
+        top: 50,
+        bottom: 50,
+        left: 50,
+        right: 50,
       },
       info: {
         Title: `Currículo - ${curriculo.personalInfo.name}`,
@@ -50,22 +79,7 @@ export const gerarPdfCurriculo = async (curriculo, dadosVaga) => {
     // Stream para arquivo
     const stream = doc.pipe(createWriteStream(caminhoArquivo));
 
-    // Configurações de fonte e estilo ABNT melhoradas
-    const estilos = {
-      nomeCompleto: { font: "Helvetica-Bold", size: 18 },
-      titulo: { font: "Helvetica-Bold", size: 14 },
-      subtitulo: { font: "Helvetica-Bold", size: 12 },
-      texto: { font: "Helvetica", size: 11 },
-      textoSmall: { font: "Helvetica", size: 10 },
-      contato: { font: "Helvetica", size: 10 },
-      espacamento: {
-        entreSecoes: 35,
-        entreItens: 20,
-        entreLinhas: 10,
-        cabecalho: 25,
-        aposTitulo: 30,
-      },
-    };
+    const estilos = ESTILOS;
 
     let yPosition = doc.y;
 
@@ -168,53 +182,6 @@ export const gerarPdfCurriculo = async (curriculo, dadosVaga) => {
 };
 
 /**
- * Adiciona cabeçalho com informações pessoais
- */
-const adicionarCabecalho = (doc, personalInfo, estilos, yPosition) => {
-  const pageWidth =
-    doc.page.width - doc.page.margins.left - doc.page.margins.right;
-
-  // Nome completo em destaque (similar à segunda imagem)
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(20)
-    .fillColor("black")
-    .text(`${personalInfo.name}`, doc.page.margins.left, yPosition);
-
-  yPosition += 30;
-
-  // Informações de contato em linha horizontal
-  const contatos = [];
-  if (personalInfo.email) contatos.push(`Email: ${personalInfo.email}`);
-  if (personalInfo.phone)
-    contatos.push(`Telefone: ${formatarTelefone(personalInfo.phone)}`);
-  if (personalInfo.linkedin)
-    contatos.push(`LinkedIn: ${personalInfo.linkedin}`);
-  if (personalInfo.github) contatos.push(`GitHub: ${personalInfo.github}`);
-  if (personalInfo.location)
-    contatos.push(`Localização: ${personalInfo.location}`);
-
-  // Adicionar informações de contato em linhas separadas (mais limpo)
-  doc.font("Helvetica").fontSize(10).fillColor("black");
-
-  contatos.forEach((contato, index) => {
-    doc.text(contato, doc.page.margins.left, yPosition + index * 12);
-  });
-
-  yPosition += contatos.length * 12 + 25;
-
-  // Linha separadora simples
-  doc
-    .strokeColor("black")
-    .lineWidth(1)
-    .moveTo(doc.page.margins.left, yPosition)
-    .lineTo(doc.page.width - doc.page.margins.right, yPosition)
-    .stroke();
-
-  return yPosition + 25;
-};
-
-/**
  * Verifica se precisa de nova página
  */
 const verificarNovaPagina = (doc, yPosition, espacoNecessario = 100) => {
@@ -229,6 +196,75 @@ const verificarNovaPagina = (doc, yPosition, espacoNecessario = 100) => {
 };
 
 /**
+ * Escreve o título de uma seção (com sublinhado) e devolve o yPosition
+ * logo abaixo, pronto para o conteúdo da seção. Centraliza a formatação
+ * que antes era repetida (e divergia sutilmente) em cada helper de seção.
+ */
+const escreverTituloSecao = (doc, titulo, estilos, yPosition) => {
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(12)
+    .fillColor(CORES.linha)
+    .text(titulo, doc.page.margins.left, yPosition);
+
+  const tituloWidth = doc.widthOfString(titulo);
+  doc
+    .strokeColor(CORES.linha)
+    .lineWidth(0.8)
+    .moveTo(doc.page.margins.left, yPosition + estilos.espacamento.sublinhadoOffset)
+    .lineTo(
+      doc.page.margins.left + tituloWidth,
+      yPosition + estilos.espacamento.sublinhadoOffset,
+    )
+    .stroke();
+
+  return yPosition + estilos.espacamento.aposTitulo;
+};
+
+/**
+ * Adiciona cabeçalho com informações pessoais
+ */
+const adicionarCabecalho = (doc, personalInfo, estilos, yPosition) => {
+  // Nome completo em destaque
+  doc
+    .font(estilos.nomeCompleto.font)
+    .fontSize(estilos.nomeCompleto.size)
+    .fillColor(CORES.texto)
+    .text(`${personalInfo.name}`, doc.page.margins.left, yPosition);
+
+  yPosition += estilos.nomeCompleto.size + 10;
+
+  // Informações de contato em linha horizontal
+  const contatos = [];
+  if (personalInfo.email) contatos.push(`Email: ${personalInfo.email}`);
+  if (personalInfo.phone)
+    contatos.push(`Telefone: ${formatarTelefone(personalInfo.phone)}`);
+  if (personalInfo.linkedin)
+    contatos.push(`LinkedIn: ${personalInfo.linkedin}`);
+  if (personalInfo.github) contatos.push(`GitHub: ${personalInfo.github}`);
+  if (personalInfo.location)
+    contatos.push(`Localização: ${personalInfo.location}`);
+
+  doc.font(estilos.contato.font).fontSize(estilos.contato.size).fillColor(CORES.texto);
+
+  contatos.forEach((contato, index) => {
+    doc.text(contato, doc.page.margins.left, yPosition + index * 12);
+  });
+
+  yPosition += contatos.length * 12 + estilos.espacamento.cabecalho;
+
+  // Linha separadora simples
+  doc
+    .strokeColor(CORES.linha)
+    .lineWidth(1)
+    .moveTo(doc.page.margins.left, yPosition)
+    .lineTo(doc.page.width - doc.page.margins.right, yPosition)
+    .stroke();
+
+  return yPosition + estilos.espacamento.cabecalho;
+};
+
+/**
  * Adiciona seção genérica
  */
 const adicionarSecao = (
@@ -239,30 +275,10 @@ const adicionarSecao = (
   yPosition,
   tipo = "texto",
 ) => {
-  // Verificar se precisa de nova página
   yPosition = verificarNovaPagina(doc, yPosition, 120);
+  yPosition = escreverTituloSecao(doc, titulo, estilos, yPosition);
 
-  // Título da seção com formatação limpa
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(12)
-    .fillColor("black")
-    .text(titulo, doc.page.margins.left, yPosition);
-
-  // Linha sublinhada simples
-  const tituloWidth = doc.widthOfString(titulo);
-  doc
-    .strokeColor("black")
-    .lineWidth(0.8)
-    .moveTo(doc.page.margins.left, yPosition + 14)
-    .lineTo(doc.page.margins.left + tituloWidth, yPosition + 14)
-    .stroke();
-
-  // Espaçamento padrão para todas as seções
-  yPosition += 25;
-
-  // Conteúdo
-  doc.font(estilos.texto.font).fontSize(estilos.texto.size).fillColor("black");
+  doc.font(estilos.texto.font).fontSize(estilos.texto.size).fillColor(CORES.texto);
 
   if (tipo === "paragrafo") {
     doc.text(conteudo, {
@@ -272,7 +288,7 @@ const adicionarSecao = (
       width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
       indent: 0,
     });
-    yPosition = doc.y + estilos.espacamento.entreSecoes + 10;
+    yPosition = doc.y + estilos.espacamento.entreSecoes;
   } else {
     doc.text(conteudo, doc.x, yPosition);
     yPosition += estilos.espacamento.entreSecoes;
@@ -285,43 +301,26 @@ const adicionarSecao = (
  * Adiciona seção de especializações
  */
 const adicionarEspecializacoes = (doc, especializacoes, estilos, yPosition) => {
-  // Verificar se precisa de nova página
   yPosition = verificarNovaPagina(doc, yPosition, 80);
+  yPosition = escreverTituloSecao(doc, "Áreas de Atuação", estilos, yPosition);
 
-  // Título da seção
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(12)
-    .fillColor("black")
-    .text("Áreas de Atuação", doc.page.margins.left, yPosition);
+  doc.font(estilos.texto.font).fontSize(estilos.texto.size).fillColor(CORES.texto);
 
-  // Linha sublinhada
-  const tituloWidth = doc.widthOfString("Áreas de Atuação");
-  doc
-    .strokeColor("black")
-    .lineWidth(0.8)
-    .moveTo(doc.page.margins.left, yPosition + 14)
-    .lineTo(doc.page.margins.left + tituloWidth, yPosition + 14)
-    .stroke();
-
-  yPosition += 25;
-
-  // Listar especializações
-  doc.font("Helvetica").fontSize(11).fillColor("black");
-
-  especializacoes.forEach((esp, index) => {
-    // Verificar se precisa de nova página
+  especializacoes.forEach((esp) => {
     yPosition = verificarNovaPagina(doc, yPosition, 30);
-
     doc.text(`• ${esp}`, doc.page.margins.left, yPosition);
-    yPosition += 16;
+    yPosition += estilos.espacamento.entreLinhas + 6;
   });
 
   return yPosition + estilos.espacamento.entreSecoes;
 };
 
 /**
- * Adiciona seção de habilidades técnicas
+ * Adiciona seção de habilidades técnicas.
+ *
+ * As chaves abaixo espelham exatamente o formato retornado por
+ * carregarPerfilCandidato() (curriculoPersonalizador.service.ts): programming,
+ * frameworks, databases, methodologies, testing, devops, aiAutomation.
  */
 const adicionarHabilidades = (
   doc,
@@ -330,68 +329,48 @@ const adicionarHabilidades = (
   estilos,
   yPosition,
 ) => {
-  // Verificar se precisa de nova página
   yPosition = verificarNovaPagina(doc, yPosition, 150);
+  yPosition = escreverTituloSecao(doc, "Habilidades Técnicas", estilos, yPosition);
 
-  // Título da seção
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(12)
-    .fillColor("black")
-    .text("Habilidades Técnicas", doc.page.margins.left, yPosition);
-
-  // Linha sublinhada
-  const tituloWidth = doc.widthOfString("Habilidades Técnicas");
-  doc
-    .strokeColor("black")
-    .lineWidth(0.8)
-    .moveTo(doc.page.margins.left, yPosition + 14)
-    .lineTo(doc.page.margins.left + tituloWidth, yPosition + 14)
-    .stroke();
-
-  yPosition += 25;
-
-  // Organizar habilidades por categoria
   const categorias = {
-    "Stack Principal": skills.stackPrincipal || skills.programming || [],
-    "Front-end": skills.frontEnd || skills.frameworks || [],
-    "Back-end": skills.backEnd || [],
+    "Linguagens de Programação": skills.programming || [],
+    "Frameworks e Bibliotecas": skills.frameworks || [],
     "Banco de Dados": skills.databases || [],
-    "Cloud e DevOps": skills.cloudDevOps || skills.cloud || skills.devops || [],
+    "Metodologias": skills.methodologies || [],
     "Testes e Qualidade": skills.testing || [],
-    "Integrações": skills.integrations || skills.aiAutomation || [],
-    "Arquitetura e Boas Práticas":
-      skills.architecture || skills.methodologies || [],
-    "Gerenciamento de Estado": skills.stateManagement || [],
-    "Conhecimentos Adicionais": skills.additionalKnowledge || [],
+    "Cloud e DevOps": skills.devops || [],
+    "IA e Automação": skills.aiAutomation || [],
   };
+
+  let algumaCategoriaComItens = false;
 
   Object.entries(categorias).forEach(([categoria, habilidades]) => {
     if (habilidades.length > 0) {
-      // Verificar se precisa de nova página
+      algumaCategoriaComItens = true;
       yPosition = verificarNovaPagina(doc, yPosition, 80);
 
-      // Nome da categoria com formatação melhorada
       doc
         .font(estilos.texto.font)
         .fontSize(estilos.texto.size)
-        .fillColor("#333333")
+        .fillColor(CORES.textoSecundario)
         .text(`${categoria}:`, doc.x, yPosition);
 
       yPosition += estilos.espacamento.entreLinhas + 4;
 
-      // Habilidades (destacar as relevantes)
+      // Habilidades compatíveis com a vaga recebem um marcador "*" —
+      // evitamos glyphs Unicode (ex.: ★) que não existem na fonte base
+      // Helvetica do PDFKit e podem renderizar como caixa vazia.
       const habilidadesTexto = habilidades
         .map((skill) => {
           const isRelevant = matchingSkills && matchingSkills.includes(skill);
-          return isRelevant ? `${skill} ★` : skill;
+          return isRelevant ? `${skill} *` : skill;
         })
         .join(" • ");
 
       doc
         .font(estilos.textoSmall.font)
         .fontSize(estilos.textoSmall.size)
-        .fillColor("black")
+        .fillColor(CORES.texto)
         .text(habilidadesTexto, {
           indent: 25,
           y: yPosition,
@@ -403,9 +382,19 @@ const adicionarHabilidades = (
           lineGap: 2,
         });
 
-      yPosition = doc.y + estilos.espacamento.entreLinhas + 4;
+      yPosition = doc.y + estilos.espacamento.entreLinhas;
     }
   });
+
+  if (algumaCategoriaComItens && matchingSkills && matchingSkills.length > 0) {
+    yPosition = verificarNovaPagina(doc, yPosition, 20);
+    doc
+      .font(estilos.textoSmall.font)
+      .fontSize(9)
+      .fillColor(CORES.textoTerciario)
+      .text("* Habilidade diretamente relacionada aos requisitos da vaga", doc.x, yPosition);
+    yPosition += estilos.espacamento.entreLinhas;
+  }
 
   return yPosition + estilos.espacamento.entreSecoes;
 };
@@ -414,56 +403,34 @@ const adicionarHabilidades = (
  * Adiciona experiências profissionais
  */
 const adicionarExperiencias = (doc, experiences, estilos, yPosition) => {
-  // Verificar se precisa de nova página
   yPosition = verificarNovaPagina(doc, yPosition, 150);
-
-  // Título da seção
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(12)
-    .fillColor("black")
-    .text("Experiência Profissional", doc.page.margins.left, yPosition);
-
-  // Linha sublinhada
-  const tituloWidth = doc.widthOfString("Experiência Profissional");
-  doc
-    .strokeColor("black")
-    .lineWidth(0.8)
-    .moveTo(doc.page.margins.left, yPosition + 14)
-    .lineTo(doc.page.margins.left + tituloWidth, yPosition + 14)
-    .stroke();
-
-  yPosition += 25;
+  yPosition = escreverTituloSecao(doc, "Experiência Profissional", estilos, yPosition);
 
   experiences.forEach((exp, index) => {
-    // Verificar se precisa de nova página para cada experiência
     yPosition = verificarNovaPagina(doc, yPosition, 120);
 
-    // Cargo e empresa com formatação melhorada
     doc
       .font(estilos.texto.font)
       .fontSize(estilos.texto.size)
-      .fillColor("black")
+      .fillColor(CORES.texto)
       .text(`${exp.position} - ${exp.company}`, doc.x, yPosition);
 
     yPosition += estilos.espacamento.entreLinhas + 3;
 
-    // Período e localização
     const periodo = `${formatarData(exp.startDate)} - ${exp.endDate === "present" ? "Atual" : formatarData(exp.endDate)}`;
     doc
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
-      .fillColor("#666666")
+      .fillColor(CORES.textoSecundario)
       .text(`${periodo} | ${exp.location}`, doc.x, yPosition);
 
     yPosition += estilos.espacamento.entreLinhas + 4;
 
-    // Descrição
     if (exp.description) {
       doc
         .font(estilos.textoSmall.font)
         .fontSize(estilos.textoSmall.size)
-        .fillColor("black")
+        .fillColor(CORES.texto)
         .text(exp.description, {
           indent: 10,
           y: yPosition,
@@ -476,13 +443,12 @@ const adicionarExperiencias = (doc, experiences, estilos, yPosition) => {
       yPosition = doc.y + 6;
     }
 
-    // Principais realizações
     if (exp.achievements && exp.achievements.length > 0) {
       exp.achievements.slice(0, 4).forEach((achievement) => {
         doc
           .font(estilos.textoSmall.font)
           .fontSize(estilos.textoSmall.size)
-          .fillColor("black")
+          .fillColor(CORES.texto)
           .text(`• ${achievement}`, {
             indent: 15,
             y: yPosition,
@@ -496,13 +462,12 @@ const adicionarExperiencias = (doc, experiences, estilos, yPosition) => {
       });
     }
 
-    // Tecnologias utilizadas
     if (exp.technologies && exp.technologies.length > 0) {
       yPosition += 4;
       doc
         .font(estilos.textoSmall.font)
         .fontSize(9)
-        .fillColor("gray")
+        .fillColor(CORES.textoTerciario)
         .text(`Tecnologias: ${exp.technologies.join(", ")}`, {
           indent: 10,
           y: yPosition,
@@ -527,51 +492,29 @@ const adicionarExperiencias = (doc, experiences, estilos, yPosition) => {
  * Adiciona formação acadêmica
  */
 const adicionarFormacao = (doc, education, estilos, yPosition) => {
-  // Verificar se precisa de nova página
   yPosition = verificarNovaPagina(doc, yPosition, 120);
-
-  // Título da seção
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(12)
-    .fillColor("black")
-    .text("Formação Acadêmica", doc.page.margins.left, yPosition);
-
-  // Linha sublinhada
-  const tituloWidth = doc.widthOfString("Formação Acadêmica");
-  doc
-    .strokeColor("black")
-    .lineWidth(0.8)
-    .moveTo(doc.page.margins.left, yPosition + 14)
-    .lineTo(doc.page.margins.left + tituloWidth, yPosition + 14)
-    .stroke();
-
-  yPosition += 25;
+  yPosition = escreverTituloSecao(doc, "Formação Acadêmica", estilos, yPosition);
 
   education.forEach((edu, index) => {
-    // Verificar espaço para cada formação
     yPosition = verificarNovaPagina(doc, yPosition, 60);
 
-    // Curso
     doc
       .font(estilos.texto.font)
       .fontSize(estilos.texto.size)
-      .fillColor("black")
+      .fillColor(CORES.texto)
       .text(edu.degree, doc.x, yPosition);
 
     yPosition += estilos.espacamento.entreLinhas + 2;
 
-    // Instituição e período
     const periodo = `${formatarData(edu.startDate)} - ${formatarData(edu.endDate)}`;
     doc
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
-      .fillColor("gray")
+      .fillColor(CORES.textoSecundario)
       .text(`${edu.institution} | ${periodo}`, doc.x, yPosition);
 
     yPosition += estilos.espacamento.entreLinhas + 2;
 
-    // Espaçamento entre formações
     if (index < education.length - 1) {
       yPosition += estilos.espacamento.entreItens / 2;
     }
@@ -584,40 +527,21 @@ const adicionarFormacao = (doc, education, estilos, yPosition) => {
  * Adiciona certificações
  */
 const adicionarCertificacoes = (doc, certifications, estilos, yPosition) => {
-  // Verificar se precisa de nova página
   yPosition = verificarNovaPagina(doc, yPosition, 100);
-
-  // Título da seção
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(12)
-    .fillColor("black")
-    .text("Certificações", doc.page.margins.left, yPosition);
-
-  // Linha sublinhada
-  const tituloWidth = doc.widthOfString("Certificações");
-  doc
-    .strokeColor("black")
-    .lineWidth(0.8)
-    .moveTo(doc.page.margins.left, yPosition + 14)
-    .lineTo(doc.page.margins.left + tituloWidth, yPosition + 14)
-    .stroke();
-
-  yPosition += 25;
+  yPosition = escreverTituloSecao(doc, "Certificações", estilos, yPosition);
 
   certifications.forEach((cert) => {
-    // Verificar espaço para cada certificação
     yPosition = verificarNovaPagina(doc, yPosition, 30);
 
     doc
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
-      .fillColor("black")
+      .fillColor(CORES.texto)
       .text(`• ${cert.name} - ${cert.issuer} (${cert.date})`, {
         indent: 10,
         y: yPosition,
       });
-    yPosition = doc.y + 4;
+    yPosition = doc.y + estilos.espacamento.entreLinhas / 2;
   });
 
   return yPosition + estilos.espacamento.entreSecoes;
@@ -627,40 +551,21 @@ const adicionarCertificacoes = (doc, certifications, estilos, yPosition) => {
  * Adiciona idiomas
  */
 const adicionarIdiomas = (doc, languages, estilos, yPosition) => {
-  // Verificar se precisa de nova página
   yPosition = verificarNovaPagina(doc, yPosition, 80);
-
-  // Título da seção
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(12)
-    .fillColor("black")
-    .text("Idiomas", doc.page.margins.left, yPosition);
-
-  // Linha sublinhada
-  const tituloWidth = doc.widthOfString("Idiomas");
-  doc
-    .strokeColor("black")
-    .lineWidth(0.8)
-    .moveTo(doc.page.margins.left, yPosition + 14)
-    .lineTo(doc.page.margins.left + tituloWidth, yPosition + 14)
-    .stroke();
-
-  yPosition += 25;
+  yPosition = escreverTituloSecao(doc, "Idiomas", estilos, yPosition);
 
   languages.forEach((lang) => {
-    // Verificar espaço para cada idioma
     yPosition = verificarNovaPagina(doc, yPosition, 25);
 
     doc
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
-      .fillColor("black")
+      .fillColor(CORES.texto)
       .text(`• ${lang.language}: ${lang.level}`, {
         indent: 10,
         y: yPosition,
       });
-    yPosition = doc.y + 4;
+    yPosition = doc.y + estilos.espacamento.entreLinhas / 2;
   });
 
   return yPosition + estilos.espacamento.entreSecoes;

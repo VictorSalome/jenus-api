@@ -343,11 +343,24 @@ export const personalizarCurriculo = async (dadosVaga: Record<string, any>): Pro
 
     // Gerar resumo profissional dinâmico baseado na descrição da vaga
     const descricaoCompleta = `${dadosVaga.titulo || ""} ${dadosVaga.descricao || ""} ${dadosVaga.stackTecnologica?.join(" ") || ""} ${dadosVaga.responsabilidades?.join(" ") || ""} ${dadosVaga.requisitosObrigatorios?.join(" ") || ""} ${dadosVaga.diferenciaisDesejaveis?.join(" ") || ""}`;
-    const resumoDinamico = await gerarResumo(descricaoCompleta);
+    const anosExperienciaCandidato = calcularAnosExperiencia(perfilCandidato.experiences || []);
+    const resumoDinamico = await gerarResumo(descricaoCompleta, anosExperienciaCandidato);
 
     // Personalizar título baseado na vaga
+    const skillsCandidatoFlat = Object.values(perfilCandidato.skills || {})
+      .filter((categoria) => Array.isArray(categoria))
+      .flat()
+      .filter((skill): skill is string => typeof skill === "string" && skill.trim().length > 0);
     const tituloPersonalizado = personalizarTitulo(
       perfilCandidato.personalInfo.title,
+      dadosVaga,
+      skillsCandidatoFlat,
+    );
+
+    // areasAtuacao e specializations sempre foram o mesmo dado — calculamos
+    // uma vez só (o PDF já tem fallback pra usar um ou outro).
+    const areasAtuacaoRelevantes = filtrarEspecializacoesRelevantes(
+      perfilCandidato.specializations || [],
       dadosVaga,
     );
 
@@ -369,14 +382,8 @@ export const personalizarCurriculo = async (dadosVaga: Record<string, any>): Pro
       ),
       skills: organizarHabilidadesRelevantes(perfilCandidato.skills, dadosVaga),
       languages: perfilCandidato.languages,
-      areasAtuacao: filtrarEspecializacoesRelevantes(
-        perfilCandidato.specializations || [],
-        dadosVaga,
-      ),
-      specializations: filtrarEspecializacoesRelevantes(
-        perfilCandidato.specializations || [],
-        dadosVaga,
-      ),
+      areasAtuacao: areasAtuacaoRelevantes,
+      specializations: areasAtuacaoRelevantes,
       matchingSkills: identificarHabilidadesCorrespondentes(
         perfilCandidato.skills,
         dadosVaga,
@@ -495,40 +502,55 @@ const carregarPerfilCandidato = async (): Promise<any> => {
   }
 };
 
+const RULE_FRONTEND = CONTEXT_RULES.find((r) => r.name === "frontend-moderno")!;
+const RULE_BACKEND = CONTEXT_RULES.find((r) => r.name === "backend-escalavel")!;
+const SIGNALS_MOBILE = ["mobile", "react native", "ios", "android"];
+
 /**
- * Personaliza o título do candidato baseado na vaga
+ * Personaliza o título do candidato baseado na vaga. Usa o texto completo
+ * da vaga (título + área + descrição + stack + requisitos — não só o
+ * campo `titulo`, que pode vir truncado) e a stack REAL do candidato, em
+ * vez de strings fixas desconectadas do perfil.
  */
-const personalizarTitulo = (tituloOriginal: string, dadosVaga: Record<string, any>): string => {
-  const { titulo: tituloVaga, areaAtuacao, nivel } = dadosVaga;
+const personalizarTitulo = (
+  tituloOriginal: string,
+  dadosVaga: Record<string, any>,
+  skillsCandidato: string[] = [],
+): string => {
+  const textoVaga = buildJobText(dadosVaga);
 
-  // Se a vaga tem um título claro, adaptar o título do candidato
-  if (tituloVaga) {
-    const keywordsVaga = tituloVaga.toLowerCase();
+  const ehFrontend = hasAnySignal(textoVaga, RULE_FRONTEND.signals);
+  const ehBackend = hasAnySignal(textoVaga, RULE_BACKEND.signals);
+  const ehMobile = hasAnySignal(textoVaga, SIGNALS_MOBILE);
 
-    if (
-      keywordsVaga.includes("react native") ||
-      keywordsVaga.includes("mobile")
-    ) {
-      return tituloOriginal.replace("Full Stack", "Full Stack | Mobile");
-    }
-    if (
-      keywordsVaga.includes("frontend") ||
-      keywordsVaga.includes("front-end")
-    ) {
-      return "Desenvolvedor Front-end | React, Next.js, TypeScript, Tailwind | UI/UX & Performance";
-    }
-    if (keywordsVaga.includes("backend") || keywordsVaga.includes("back-end")) {
-      return "Desenvolvedor Backend | Node.js, Express, APIs RESTful, Bancos de Dados";
-    }
-    if (
-      keywordsVaga.includes("full stack") ||
-      keywordsVaga.includes("fullstack")
-    ) {
-      return tituloOriginal;
-    }
+  let linha = "";
+  if (ehFrontend && ehBackend) linha = "Full Stack";
+  else if (ehFrontend) linha = "Front-end";
+  else if (ehBackend) linha = "Back-end";
+
+  if (ehMobile) {
+    linha = linha ? `${linha} | Mobile` : "Mobile";
   }
 
-  return tituloOriginal;
+  // Nenhum contexto reconhecido na vaga: mantém o título original em vez
+  // de forçar um rótulo genérico que pode não fazer sentido pra vaga.
+  if (!linha) {
+    return tituloOriginal || "Desenvolvedor de Software";
+  }
+
+  const { skills: skillsContextuais } = inferContextualMatches(textoVaga);
+  const skillsRelevantes = skillsContextuais.filter((skill) =>
+    skillsCandidato.some((s) => normalizeText(s) === normalizeText(skill)),
+  );
+
+  const senioridade = inferirSenioridade(dadosVaga);
+  const sufixoSenioridade =
+    senioridade === "senior" ? " Sênior" : senioridade === "junior" ? " Júnior" : "";
+
+  const destaqueStack =
+    skillsRelevantes.length > 0 ? ` | ${skillsRelevantes.slice(0, 4).join(", ")}` : "";
+
+  return `Desenvolvedor ${linha}${sufixoSenioridade}${destaqueStack}`;
 };
 
 /**

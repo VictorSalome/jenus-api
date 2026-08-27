@@ -138,15 +138,37 @@ const expandirPalavrasChavePorContexto = (descricaoVaga: string, palavrasChave: 
 };
 
 /**
- * Trecho fixo obrigatório do resumo
- */
-const TRECHO_FIXO = "Atuo como desenvolvedor Full Stack há cerca de 3 anos.";
-
-/**
  * Frase genérica para quando nenhuma skill é encontrada
  */
 const FRASE_GENERICA =
   "Tenho experiência com tecnologias modernas aplicadas em projetos escaláveis e de alta qualidade.";
+
+/**
+ * Frase de abertura do resumo. Usa o tempo de experiência REAL do
+ * candidato (calculado a partir das experiências cadastradas) em vez de
+ * um número fixo — evita ficar desatualizado com o tempo e mentir sobre
+ * a experiência real.
+ */
+const gerarTrechoAbertura = (anosExperiencia?: number): string => {
+  if (anosExperiencia && anosExperiencia >= 1) {
+    const anos = Math.round(anosExperiencia);
+    return `Atuo como desenvolvedor Full Stack há ${anos === 1 ? "1 ano" : `${anos} anos`}.`;
+  }
+  return "Atuo como desenvolvedor Full Stack.";
+};
+
+/**
+ * Pequena variação na frase de fechamento pra não deixar 100% dos
+ * currículos gerados com a frase final idêntica.
+ */
+const FRASES_FECHAMENTO = [
+  "Busco constantemente aprimorar minhas habilidades técnicas e contribuir em projetos inovadores que gerem valor e impacto positivo.",
+  "Estou sempre em busca de novos desafios técnicos que me permitam evoluir e agregar valor real aos projetos em que atuo.",
+  "Tenho como objetivo aplicar meu conhecimento técnico na entrega de soluções sólidas, contribuindo de forma consistente para os resultados do time.",
+];
+
+const escolherFraseFechamento = (skillsEncontradas: string[]): string =>
+  FRASES_FECHAMENTO[skillsEncontradas.length % FRASES_FECHAMENTO.length];
 
 // Removido RESUMO_FALLBACK - agora sempre usa o trecho fixo + lógica dinâmica
 
@@ -157,7 +179,10 @@ const FRASE_GENERICA =
  * @param {string} descricaoVaga - Descrição da vaga
  * @returns {Object} Objeto com três versões do resumo: { curto, medio, longo }
  */
-export const gerarResumo = async (descricaoVaga: string): Promise<{ skills: string[]; responsabilidades: string[]; resumo: string }> => {
+export const gerarResumo = async (
+  descricaoVaga: string,
+  anosExperiencia?: number,
+): Promise<{ skills: string[]; responsabilidades: string[]; resumo: string }> => {
   try {
     logInfo("Iniciando geração de resumo profissional dinâmico");
 
@@ -177,6 +202,7 @@ export const gerarResumo = async (descricaoVaga: string): Promise<{ skills: stri
     const resumoCompleto = gerarResumoCompleto(
       skillsEncontradas,
       responsabilidades,
+      anosExperiencia,
     );
 
     logInfo("Resumo profissional gerado com sucesso");
@@ -588,10 +614,16 @@ const calcularRelevanciaSkill = (descricao: string, skill: string): number => {
  * @param {Array} responsabilidades - Responsabilidades identificadas
  * @returns {string} Resumo personalizado de 6-7 linhas
  */
-const gerarResumoCompleto = (skillsEncontradas: string[], responsabilidades: { responsabilidade: string; skillsRelacionadas: string[] }[] = []): string => {
+const gerarResumoCompleto = (
+  skillsEncontradas: string[],
+  responsabilidades: { responsabilidade: string; skillsRelacionadas: string[] }[] = [],
+  anosExperiencia?: number,
+): string => {
+  const trechoAbertura = gerarTrechoAbertura(anosExperiencia);
+
   // Fallback caso não encontre skills relevantes
   if (skillsEncontradas.length === 0) {
-    return `${TRECHO_FIXO} ${FRASE_GENERICA} Tenho familiaridade com metodologias ágeis e boas práticas de desenvolvimento, sempre focando na qualidade e escalabilidade das soluções. Busco constantemente aprimorar minhas habilidades técnicas e contribuir em projetos inovadores que gerem impacto positivo.`;
+    return `${trechoAbertura} ${FRASE_GENERICA} Tenho familiaridade com metodologias ágeis e boas práticas de desenvolvimento, sempre focando na qualidade e escalabilidade das soluções. ${escolherFraseFechamento(skillsEncontradas)}`;
   }
 
   // Seleciona até 6 skills mais relevantes para manter o texto conciso
@@ -601,8 +633,8 @@ const gerarResumoCompleto = (skillsEncontradas: string[], responsabilidades: { r
   // Identifica o tipo de desenvolvimento baseado nas skills
   const tipoDesenvolvimento = identificarTipoDesenvolvimento(skillsPrincipais);
 
-  // Primeira frase: Trecho fixo + experiência com skills
-  let resumo = `${TRECHO_FIXO} Tenho experiência com ${listaSkills}, `;
+  // Primeira frase: abertura (com anos reais de experiência) + experiência com skills
+  let resumo = `${trechoAbertura} Tenho experiência com ${listaSkills}, `;
 
   // Contextualiza baseado no tipo de desenvolvimento
   if (tipoDesenvolvimento.includes("mobile")) {
@@ -638,8 +670,7 @@ const gerarResumoCompleto = (skillsEncontradas: string[], responsabilidades: { r
   }
 
   // Terceira frase: Objetivos e foco profissional
-  resumo +=
-    "Busco constantemente aprimorar minhas habilidades técnicas e contribuir em projetos inovadores que gerem valor e impacto positivo.";
+  resumo += escolherFraseFechamento(skillsEncontradas);
 
   return resumo;
 };

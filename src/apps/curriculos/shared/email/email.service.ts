@@ -134,146 +134,171 @@ const gerarAssunto = (dadosVaga, candidato) => {
 };
 
 /**
- * Gera corpo do e-mail em HTML
+ * Escapa caracteres HTML especiais pra evitar quebrar a marcação com dados
+ * vindos do banco/vaga (nomes, empresas, etc podem conter & < > " ').
+ */
+const escapeHtml = (valor: unknown): string =>
+  String(valor ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+/**
+ * Garante que um link tenha protocolo (http/https) antes de virar href,
+ * senão o link fica relativo ao domínio do cliente de e-mail e abre errado.
+ */
+const normalizarUrl = (url: string): string => {
+  const limpo = url.trim();
+  if (!limpo) return "";
+  return /^https?:\/\//i.test(limpo) ? limpo : `https://${limpo}`;
+};
+
+const CORES = {
+  texto: "#1f2937",
+  textoSecundario: "#6b7280",
+  fundo: "#f4f5f7",
+  card: "#ffffff",
+  borda: "#e5e7eb",
+  destaque: "#2563eb",
+};
+
+/**
+ * Gera corpo do e-mail em HTML. CSS inline em cada elemento (não em
+ * <style>) e layout em <table> — necessário pra renderizar de forma
+ * consistente em clientes de e-mail restritivos como Gmail (que ignora
+ * blocos <style> em vários contextos) e Outlook desktop (motor MSO/Word,
+ * suporte limitado a CSS moderno e a <div>).
  * @param {Object} dadosVaga - Dados da vaga
  * @param {Object} candidato - Dados do candidato
  * @returns {string} Corpo do e-mail em HTML
  */
 const gerarCorpoEmail = (dadosVaga, candidato) => {
-  const nomeVaga = dadosVaga.titulo || "a vaga anunciada";
-  const nomeCandidato = candidato.name || "Candidato";
-  const empresa = dadosVaga.empresa || "sua empresa";
+  const nomeVaga = escapeHtml(dadosVaga.titulo || "a vaga anunciada");
+  const nomeCandidato = escapeHtml(candidato.name || "Candidato");
+  const cargoCandidato = escapeHtml(candidato.title || "");
+  const empresa = escapeHtml(dadosVaga.empresa || "sua empresa");
+  const emailContato = candidato.email || process.env.SMTP_USER || "";
 
-  return `
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Candidatura - ${nomeCandidato}</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 600px;
-                margin: 0 auto;
-                padding: 20px;
-            }
-            .header {
-                background-color: #f8f9fa;
-                padding: 20px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                text-align: center;
-            }
-            .content {
-                background-color: #ffffff;
-                padding: 20px;
-                border-radius: 8px;
-                border: 1px solid #e9ecef;
-            }
-            .footer {
-                margin-top: 20px;
-                padding: 15px;
-                background-color: #f8f9fa;
-                border-radius: 8px;
-                font-size: 0.9em;
-                color: #6c757d;
-            }
-            .highlight {
-                color: #007bff;
-                font-weight: bold;
-            }
-            .contact-info {
-                margin: 15px 0;
-                padding: 10px;
-                background-color: #f8f9fa;
-                border-radius: 4px;
-            }
-            ul {
-                padding-left: 20px;
-            }
-            li {
-                margin-bottom: 5px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <h2>Candidatura para: <span class="highlight">${nomeVaga}</span></h2>
-        </div>
+  const linhasContato: string[] = [];
+  if (emailContato) {
+    linhasContato.push(
+      `E-mail: <a href="mailto:${escapeHtml(emailContato)}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(emailContato)}</a>`,
+    );
+  }
+  if (candidato.phone && candidato.phone.trim()) {
+    const digitos = candidato.phone.replace(/\D/g, "");
+    linhasContato.push(
+      candidato.hasWhatsApp !== false
+        ? `WhatsApp: <a href="https://wa.me/55${digitos}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(candidato.phone)}</a>`
+        : `Telefone: ${escapeHtml(candidato.phone)}`,
+    );
+  }
+  if (candidato.linkedin && candidato.linkedin.trim()) {
+    linhasContato.push(
+      `LinkedIn: <a href="${normalizarUrl(candidato.linkedin)}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(candidato.linkedin)}</a>`,
+    );
+  }
+  if (candidato.github && candidato.github.trim()) {
+    linhasContato.push(
+      `GitHub: <a href="${normalizarUrl(candidato.github)}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(candidato.github)}</a>`,
+    );
+  }
+  if (candidato.portfolio && candidato.portfolio.trim()) {
+    linhasContato.push(
+      `Portfólio: <a href="${normalizarUrl(candidato.portfolio)}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(candidato.portfolio)}</a>`,
+    );
+  }
 
-        <div class="content">
-            <p>Prezados(as) Senhores(as),</p>
+  const linhaEstilo = `margin:0 0 6px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:${CORES.textoSecundario};`;
+  const contatoHtml = linhasContato
+    .map((linha) => `<p style="${linhaEstilo}">${linha}</p>`)
+    .join("\n");
 
-            <p>Venho por meio desta apresentar minha candidatura para a posição de <strong>${nomeVaga}</strong> em ${empresa}.</p>
+  const pontosHtml = gerarPontosRelevantes(dadosVaga, candidato);
 
-            <p>Após analisar detalhadamente os requisitos da vaga, acredito que meu perfil profissional está alinhado com as necessidades da posição. Destaco alguns pontos relevantes:</p>
-
-            <ul>
-                ${gerarPontosRelevantes(dadosVaga, candidato)}
-            </ul>
-
-            <div class="contact-info">
-                <strong>Informações de Contato:</strong><br>
-                📧 E-mail: <a href="mailto:${candidato.email || process.env.SMTP_USER || ''}">${candidato.email || process.env.SMTP_USER || "Não informado"}</a><br>
-                ${candidato.phone && candidato.phone.trim()
-                  ? candidato.hasWhatsApp !== false
-                    ? `📱 WhatsApp: <a href="https://wa.me/55${candidato.phone.replace(/\D/g, '')}">${candidato.phone}</a><br>`
-                    : `📞 Telefone: ${candidato.phone}<br>`
-                  : ""
-                }${
-                  candidato.linkedin && candidato.linkedin.trim()
-                    ? `🔗 LinkedIn: <a href="${candidato.linkedin}">${candidato.linkedin}</a><br>`
-                    : ""
-                }${candidato.github && candidato.github.trim() ? `💻 GitHub: <a href="${candidato.github}">${candidato.github}</a><br>` : ""}${candidato.portfolio && candidato.portfolio.trim()
-                    ? `🌐 Portfolio: <a href="${candidato.portfolio}">${candidato.portfolio}</a><br>`
-                    : ""
-                }
-
-            <p>Em anexo, segue meu currículo para esta oportunidade, destacando as experiências e competências mais relevantes para a posição.</p>
-
-            <p>Estou disponível para uma conversa e agradeço desde já pela atenção dispensada.</p>
-
-            <p>Atenciosamente,<br>
-            <strong>${nomeCandidato}</strong></p>
-        </div>
-
-
-    </body>
-    </html>
-  `;
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Candidatura - ${nomeCandidato}</title>
+</head>
+<body style="margin:0;padding:0;background-color:${CORES.fundo};">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${CORES.fundo};">
+    <tr>
+      <td align="center" style="padding:24px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background-color:${CORES.card};border:1px solid ${CORES.borda};border-radius:8px;overflow:hidden;">
+          <tr>
+            <td style="background-color:${CORES.texto};padding:24px 32px;">
+              <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:#9ca3af;">Candidatura</p>
+              <h1 style="margin:4px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:20px;color:#ffffff;">${nomeVaga}</h1>
+              <p style="margin:4px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#d1d5db;">${empresa}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:${CORES.texto};">Prezados(as),</p>
+              <p style="margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:${CORES.texto};">
+                Venho apresentar minha candidatura para a posição de <strong>${nomeVaga}</strong> em ${empresa}. Após analisar os requisitos da vaga, acredito que meu perfil está alinhado com o que buscam:
+              </p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">
+                ${pontosHtml}
+              </table>
+              <p style="margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:${CORES.texto};">
+                Em anexo, segue meu currículo com as experiências e competências mais relevantes para esta oportunidade.
+              </p>
+              <p style="margin:0 0 24px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:${CORES.texto};">
+                Fico à disposição para uma conversa e agradeço desde já pela atenção.
+              </p>
+              <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:${CORES.texto};">Atenciosamente,</p>
+              <p style="margin:2px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:${CORES.texto};">${nomeCandidato}</p>
+              ${cargoCandidato ? `<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:${CORES.textoSecundario};">${cargoCandidato}</p>` : ""}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;background-color:${CORES.fundo};border-top:1px solid ${CORES.borda};">
+              ${contatoHtml}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 };
 
 /**
  * Gera pontos relevantes para o corpo do e-mail
  * @param {Object} dadosVaga - Dados da vaga
  * @param {Object} candidato - Dados do candidato
- * @returns {string} HTML com pontos relevantes
+ * @returns {string} HTML (linhas de <table>) com pontos relevantes
  */
 const gerarPontosRelevantes = (dadosVaga, candidato) => {
-  const pontos = [];
+  const pontos: string[] = [];
 
-  // Experiência na área
-  if (dadosVaga.area && candidato.title) {
+  // Experiência na área (nomes de campo reais do pipeline: areaAtuacao/stackTecnologica)
+  if (dadosVaga.areaAtuacao && candidato.title) {
     pontos.push(
-      `<li>Experiência comprovada em <strong>${dadosVaga.area}</strong></li>`,
+      `Experiência comprovada em <strong>${escapeHtml(dadosVaga.areaAtuacao)}</strong>`,
     );
   }
 
   // Stack tecnológica
-  if (dadosVaga.stack && dadosVaga.stack.length > 0) {
-    const stackPrincipal = dadosVaga.stack.slice(0, 3).join(", ");
+  if (dadosVaga.stackTecnologica && dadosVaga.stackTecnologica.length > 0) {
+    const stackPrincipal = dadosVaga.stackTecnologica.slice(0, 3).join(", ");
     pontos.push(
-      `<li>Domínio das principais tecnologias: <strong>${stackPrincipal}</strong></li>`,
+      `Domínio das principais tecnologias: <strong>${escapeHtml(stackPrincipal)}</strong>`,
     );
   }
 
   // Formação
   if (candidato.education && candidato.education.length > 0) {
     const formacao = candidato.education[0].degree;
-    pontos.push(`<li>Formação em <strong>${formacao}</strong></li>`);
+    pontos.push(`Formação em <strong>${escapeHtml(formacao)}</strong>`);
   }
 
   // Experiência profissional
@@ -281,26 +306,33 @@ const gerarPontosRelevantes = (dadosVaga, candidato) => {
     const anosExperiencia = calcularAnosExperiencia(candidato.experiences);
     if (anosExperiencia > 0) {
       pontos.push(
-        `<li>Mais de <strong>${anosExperiencia} anos</strong> de experiência profissional</li>`,
+        `Mais de <strong>${anosExperiencia} anos</strong> de experiência profissional`,
       );
     }
   }
 
   // Certificações relevantes
   if (candidato.certifications && candidato.certifications.length > 0) {
-    pontos.push(`<li>Certificações profissionais relevantes</li>`);
+    pontos.push(`Certificações profissionais relevantes`);
   }
 
   // Se não houver pontos específicos, adicionar genéricos
   if (pontos.length === 0) {
     pontos.push(
-      "<li>Perfil profissional alinhado com os requisitos da vaga</li>",
-      "<li>Experiência prática e conhecimento técnico atualizado</li>",
-      "<li>Motivação para contribuir com o crescimento da empresa</li>",
+      "Perfil profissional alinhado com os requisitos da vaga",
+      "Experiência prática e conhecimento técnico atualizado",
+      "Motivação para contribuir com o crescimento da empresa",
     );
   }
 
-  return pontos.join("\n                ");
+  return pontos
+    .map(
+      (ponto) => `<tr>
+                  <td style="padding:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:${CORES.texto};vertical-align:top;width:16px;">•</td>
+                  <td style="padding:0 0 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:${CORES.texto};">${ponto}</td>
+                </tr>`,
+    )
+    .join("\n");
 };
 
 /**
