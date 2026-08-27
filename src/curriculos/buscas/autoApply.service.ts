@@ -139,7 +139,7 @@ export const executarPipeline = async ({
         // Ler dados pessoais do banco
         let personalInfo = { name: "Candidato", email: process.env.SMTP_USER || "", phone: "", hasWhatsApp: true, linkedin: "", github: "", portfolio: "", title: "" };
         try {
-          const personal = await db.get('SELECT * FROM profile_personal WHERE id = 1');
+          const personal = await db.get('SELECT * FROM curriculo_profile_personal WHERE id = 1');
           if (personal) {
             personalInfo = {
               name: personal.name || "Candidato",
@@ -154,7 +154,7 @@ export const executarPipeline = async ({
           }
         } catch {}
         
-        const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
+        const skillsRows = await db.all('SELECT category, tech FROM curriculo_profile_skills');
         const skills: Record<string, string[]> = {
           programming: [],
           frameworks: [],

@@ -3,7 +3,7 @@ import { getDb } from '../../core/database.js';
 
 export const getConfig = async (): Promise<TelegramConfig | null | undefined> => {
   const db = await getDb();
-  const row = await db.get('SELECT * FROM telegram_config WHERE id = 1');
+  const row = await db.get('SELECT * FROM promo_telegram_config WHERE id = 1');
   
   if (!row) return null;
   
@@ -40,13 +40,13 @@ export const saveConfig = async (config: Partial<TelegramConfig>): Promise<void>
     if (updates.length > 0) {
       params.push(1);
       await db.run(
-        `UPDATE telegram_config SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        `UPDATE promo_telegram_config SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         ...params
       );
     }
   } else {
     await db.run(
-      `INSERT INTO telegram_config (id, api_id, api_hash, phone, is_connected)
+      `INSERT INTO promo_telegram_config (id, api_id, api_hash, phone, is_connected)
        VALUES (1, ?, ?, ?, 0)`,
       config.apiId || '',
       config.apiHash || '',
@@ -58,7 +58,7 @@ export const saveConfig = async (config: Partial<TelegramConfig>): Promise<void>
 export const updateSession = async (sessionString: string, isConnected: boolean): Promise<void> => {
   const db = await getDb();
   await db.run(
-    'UPDATE telegram_config SET session_string = ?, is_connected = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1',
+    'UPDATE promo_telegram_config SET session_string = ?, is_connected = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1',
     sessionString,
     isConnected ? 1 : 0
   );

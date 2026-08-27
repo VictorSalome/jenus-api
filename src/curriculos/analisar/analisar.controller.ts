@@ -193,7 +193,7 @@ export const analisarVagaController = asyncHandler(async (req, res) => {
 
   // Calcular match com perfil do candidato
   const db = await getDb();
-  const perfilSkills = await db.all('SELECT category, tech FROM profile_skills');
+  const perfilSkills = await db.all('SELECT category, tech FROM curriculo_profile_skills');
   const flatSkills = perfilSkills.map(s => s.tech.toLowerCase());
   const vagaSkills = (vagaParseada.skills || []).map(s => s.toLowerCase());
   const matched = vagaSkills.filter(s => flatSkills.includes(s));
@@ -268,7 +268,7 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
       // Persistir vaga no banco
       const db = await getDb();
       const result = await db.run(
-        `INSERT INTO vagas (title, company, seniority, raw_description, skills_json, requirements_json)
+        `INSERT INTO curriculo_vagas (title, company, seniority, raw_description, skills_json, requirements_json)
          VALUES (?, ?, ?, ?, ?, ?)`,
         vagaParseada.title,
         vagaParseada.company,
@@ -422,7 +422,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
 
   // Carregar perfil do candidato do banco
   const db = await getDb();
-  const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
+  const skillsRows = await db.all('SELECT category, tech FROM curriculo_profile_skills');
   const skills = {
     programming: [],
     frameworks: [],
@@ -452,7 +452,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
   let personalInfo = { name: "Candidato", email: process.env.SMTP_USER || "", phone: "", hasWhatsApp: true, linkedin: "", github: "", portfolio: "", title: "" };
   try {
     const db = await getDb();
-    const personal = await db.get('SELECT * FROM profile_personal WHERE id = 1');
+    const personal = await db.get('SELECT * FROM curriculo_profile_personal WHERE id = 1');
     if (personal) {
       personalInfo = {
         name: personal.name || "Candidato",

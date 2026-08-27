@@ -402,10 +402,10 @@ export const testarConexaoSMTP = async (overrides: SmtpOverrides = {}) => {
 /**
  * Envia currículo com registro atômico no banco (PENDING → SENT/FAILED)
  * Fluxo:
- * 1. INSERT INTO envios (status='PENDING') → COMMIT
+ * 1. INSERT INTO curriculo_envios (status='PENDING') → COMMIT
  * 2. Tentar envio via nodemailer
- * 3. Sucesso → UPDATE envios SET status='SENT' WHERE id=?
- * 4. Falha → UPDATE envios SET status='FAILED' WHERE id=?
+ * 3. Sucesso → UPDATE curriculo_envios SET status='SENT' WHERE id=?
+ * 4. Falha → UPDATE curriculo_envios SET status='FAILED' WHERE id=?
  * 
  * @param {Object} params
  * @param {string} params.emailDestino - E-mail de destino
@@ -429,7 +429,7 @@ export const enviarCurriculoComRegistro = async ({
   try {
     await db.exec("BEGIN TRANSACTION");
     const result = await db.run(
-      `INSERT INTO envios (vaga_id, filename, email_destino, vaga_titulo, status)
+      `INSERT INTO curriculo_envios (vaga_id, filename, email_destino, vaga_titulo, status)
        VALUES (?, ?, ?, ?, 'PENDING')`,
       vagaId,
       path.basename(caminhoArquivoPdf),
@@ -454,7 +454,7 @@ export const enviarCurriculoComRegistro = async ({
     
     // 3. Sucesso → UPDATE status = SENT
     await db.run(
-      "UPDATE envios SET status = 'SENT' WHERE id = ?",
+      "UPDATE curriculo_envios SET status = 'SENT' WHERE id = ?",
       envioId
     );
     logInfo("Envio marcado como SENT", { envioId, messageId: resultadoEmail.messageId });
@@ -470,7 +470,7 @@ export const enviarCurriculoComRegistro = async ({
     // 4. Falha → UPDATE status = FAILED
     try {
       await db.run(
-        "UPDATE envios SET status = 'FAILED' WHERE id = ?",
+        "UPDATE curriculo_envios SET status = 'FAILED' WHERE id = ?",
         envioId
       );
       logInfo("Envio marcado como FAILED", { envioId, error: error.message });
@@ -488,7 +488,7 @@ export const enviarCurriculoComRegistro = async ({
 export const getEnviosCount = async () => {
   const db = await getDb();
   const result = await db.get(
-    "SELECT COUNT(*) as count FROM envios WHERE status = 'SENT'"
+    "SELECT COUNT(*) as count FROM curriculo_envios WHERE status = 'SENT'"
   );
   return result?.count || 0;
 };
@@ -500,7 +500,7 @@ export const getEnviosHistory = async (limit = 50) => {
   const db = await getDb();
   const envios = await db.all(
     `SELECT id, vaga_id, filename, email_destino, vaga_titulo, status, created_at
-     FROM envios ORDER BY created_at DESC LIMIT ?`,
+     FROM curriculo_envios ORDER BY created_at DESC LIMIT ?`,
     limit
   );
   return envios;

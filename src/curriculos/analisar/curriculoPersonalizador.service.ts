@@ -405,7 +405,7 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     const db = await getDb();
     
     // Carregar skills do banco
-    const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
+    const skillsRows = await db.all('SELECT category, tech FROM curriculo_profile_skills');
     const skills = {
       programming: [] as string[],
       frameworks: [] as string[],
@@ -434,7 +434,7 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     }
     
     // Ler dados pessoais do banco
-    const personal = await db.get('SELECT * FROM profile_personal WHERE id = 1');
+    const personal = await db.get('SELECT * FROM curriculo_profile_personal WHERE id = 1');
     const personalInfo = personal ? {
       name: personal.name || "",
       email: personal.email || "",
@@ -448,7 +448,7 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     } : { name: "Candidato", email: "", phone: "", linkedin: "", github: "", portfolio: "", location: "", title: "", summary: "" };
     
     // Ler experiências do banco
-    const expRows = await db.all("SELECT * FROM profile_experiences ORDER BY start_date DESC");
+    const expRows = await db.all("SELECT * FROM curriculo_profile_experiences ORDER BY start_date DESC");
     const experiences = expRows.map((e: any) => ({
       id: e.id, company: e.company, position: e.position,
       startDate: e.start_date, endDate: e.end_date, location: e.location,
@@ -458,7 +458,7 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     }));
     
     // Ler educação do banco
-    const eduRows = await db.all('SELECT * FROM profile_education ORDER BY sort_order');
+    const eduRows = await db.all('SELECT * FROM curriculo_profile_education ORDER BY sort_order');
     const education = eduRows.map((e: any) => ({
       id: e.id, institution: e.institution, degree: e.degree,
       startDate: e.start_date, endDate: e.end_date, location: e.location,
@@ -466,18 +466,18 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     }));
     
     // Ler certificações do banco
-    const certRows = await db.all('SELECT * FROM profile_certifications ORDER BY sort_order');
+    const certRows = await db.all('SELECT * FROM curriculo_profile_certifications ORDER BY sort_order');
     const certifications = certRows.map((c: any) => ({
       id: c.id, name: c.name, issuer: c.issuer, date: c.date,
       credentialId: c.credential_id, url: c.url,
     }));
     
     // Ler idiomas do banco
-    const langRows = await db.all('SELECT * FROM profile_languages ORDER BY sort_order');
+    const langRows = await db.all('SELECT * FROM curriculo_profile_languages ORDER BY sort_order');
     const languages = langRows.map((l: any) => ({ language: l.language, level: l.level }));
     
     // Ler especializações do banco
-    const specRows = await db.all('SELECT * FROM profile_specializations ORDER BY sort_order');
+    const specRows = await db.all('SELECT * FROM curriculo_profile_specializations ORDER BY sort_order');
     const specializations = specRows.map((s: any) => s.text);
     
     return {

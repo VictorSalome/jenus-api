@@ -475,7 +475,7 @@ async function sendPromoMessage(
       const { getDb } = await import('../../core/database.js');
       const db = await getDb();
       const alerts = await db.all(
-        'SELECT * FROM price_alerts WHERE is_active = 1'
+        'SELECT * FROM promo_price_alerts WHERE is_active = 1'
       ) as any[];
 
       for (const alert of alerts) {

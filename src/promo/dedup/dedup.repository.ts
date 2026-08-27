@@ -11,7 +11,7 @@ export const addSentMessage = async (data: {
 }): Promise<void> => {
   const db = await getDb();
   await db.run(
-    `INSERT INTO sent_messages (link, product, price, store, channel, message_text, matched_filters)
+    `INSERT INTO promo_sent_messages (link, product, price, store, channel, message_text, matched_filters)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     data.link || null,
     data.product || null,
@@ -29,7 +29,7 @@ export const isDuplicate = async (link?: string, product?: string, price?: numbe
   const safeMinutes = Math.max(1, Math.floor(minutes)); // Sanitize: integer >= 1
 
   const existing = await db.get(
-    `SELECT 1 FROM sent_messages 
+    `SELECT 1 FROM promo_sent_messages 
      WHERE (
        (link = ? AND price = ?)
        OR (product = ? AND price = ?)
@@ -44,7 +44,7 @@ export const isDuplicate = async (link?: string, product?: string, price?: numbe
 export const getRecentMessages = async (limit: number = 50): Promise<any[]> => {
   const db = await getDb();
   return db.all(
-    'SELECT * FROM sent_messages ORDER BY sent_at DESC LIMIT ?',
+    'SELECT * FROM promo_sent_messages ORDER BY sent_at DESC LIMIT ?',
     limit
   );
 };

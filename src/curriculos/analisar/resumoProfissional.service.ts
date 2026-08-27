@@ -90,7 +90,7 @@ const CONTEXT_RULES: ContextRule[] = [
 const carregarSkillsCandidato = async (): Promise<string[]> => {
   try {
     const db = await getDb();
-    const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
+    const skillsRows = await db.all('SELECT category, tech FROM curriculo_profile_skills');
     const todasSkills: string[] = [];
     
     for (const row of skillsRows) {

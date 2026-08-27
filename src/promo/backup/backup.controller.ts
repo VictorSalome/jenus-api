@@ -5,9 +5,9 @@ export const exportConfig = async (_req: Request, res: Response): Promise<void> 
   try {
     const db = await getDb();
     
-    const channels = await db.all('SELECT username, name, is_active FROM channels');
-    const categories = await db.all('SELECT name, color, icon, sort_order, is_active FROM categories');
-    const filters = await db.all('SELECT name, type, keywords, is_active FROM filters');
+    const channels = await db.all('SELECT username, name, is_active FROM promo_channels');
+    const categories = await db.all('SELECT name, color, icon, sort_order, is_active FROM promo_categories');
+    const filters = await db.all('SELECT name, type, keywords, is_active FROM promo_filters');
     
     const config = {
       channels,
@@ -34,7 +34,7 @@ export const importConfig = async (req: Request, res: Response): Promise<void> =
       for (const ch of channels) {
         try {
           await db.run(
-            'INSERT OR REPLACE INTO channels (username, name, is_active) VALUES (?, ?, ?)',
+            'INSERT OR REPLACE INTO promo_channels (username, name, is_active) VALUES (?, ?, ?)',
             ch.username, ch.name, ch.is_active
           );
         } catch {}

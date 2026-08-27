@@ -4,7 +4,7 @@ import { getDb } from '../../core/database.js';
 export const list = async (_req: Request, res: Response): Promise<void> => {
   try {
     const db = await getDb();
-    const alerts = await db.all('SELECT * FROM price_alerts ORDER BY created_at DESC');
+    const alerts = await db.all('SELECT * FROM promo_price_alerts ORDER BY created_at DESC');
     res.json({ success: true, data: alerts });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Erro ao listar alertas' });
@@ -24,7 +24,7 @@ export const create = async (req: Request, res: Response): Promise<void> => {
     
     // Verificar se já existe alerta para o mesmo produto+preço
     const existing = await db.get(
-      'SELECT * FROM price_alerts WHERE product_name = ? AND target_price = ? AND is_active = 1',
+      'SELECT * FROM promo_price_alerts WHERE product_name = ? AND target_price = ? AND is_active = 1',
       productName, targetPrice
     );
     if (existing) {
@@ -33,7 +33,7 @@ export const create = async (req: Request, res: Response): Promise<void> => {
     }
     
     const result = await db.run(
-      'INSERT INTO price_alerts (product_name, target_price) VALUES (?, ?)',
+      'INSERT INTO promo_price_alerts (product_name, target_price) VALUES (?, ?)',
       productName, targetPrice
     );
     res.json({ success: true, message: 'Alerta criado', data: { id: result.lastID } });
@@ -54,7 +54,7 @@ export const update = async (req: Request, res: Response): Promise<void> => {
     
     const db = await getDb();
     await db.run(
-      'UPDATE price_alerts SET product_name = ?, target_price = ? WHERE id = ?',
+      'UPDATE promo_price_alerts SET product_name = ?, target_price = ? WHERE id = ?',
       productName, targetPrice, id
     );
     res.json({ success: true, message: 'Alerta atualizado' });
@@ -68,7 +68,7 @@ export const toggle = async (req: Request, res: Response): Promise<void> => {
     const id = Number(req.params.id);
     const db = await getDb();
     await db.run(
-      'UPDATE price_alerts SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?',
+      'UPDATE promo_price_alerts SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?',
       id,
     );
     res.json({ success: true, message: 'Status alterado' });
@@ -81,7 +81,7 @@ export const remove = async (req: Request, res: Response): Promise<void> => {
   try {
     const id = Number(req.params.id);
     const db = await getDb();
-    await db.run('DELETE FROM price_alerts WHERE id = ?', id);
+    await db.run('DELETE FROM promo_price_alerts WHERE id = ?', id);
     res.json({ success: true, message: 'Alerta removido' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Erro ao remover alerta' });

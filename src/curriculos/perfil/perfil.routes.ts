@@ -14,13 +14,13 @@ router.get(
   asyncHandler(async (_req, res) => {
     const db = await getDb();
 
-    const personal = await db.get("SELECT * FROM profile_personal WHERE id = 1");
-    const experiences = await db.all("SELECT * FROM profile_experiences ORDER BY sort_order");
-    const education = await db.all("SELECT * FROM profile_education ORDER BY sort_order");
-    const certifications = await db.all("SELECT * FROM profile_certifications ORDER BY sort_order");
-    const languages = await db.all("SELECT * FROM profile_languages ORDER BY sort_order");
-    const specializations = await db.all("SELECT * FROM profile_specializations ORDER BY sort_order");
-    const skillsRows = await db.all("SELECT category, tech FROM profile_skills ORDER BY category, tech");
+    const personal = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
+    const experiences = await db.all("SELECT * FROM curriculo_profile_experiences ORDER BY sort_order");
+    const education = await db.all("SELECT * FROM curriculo_profile_education ORDER BY sort_order");
+    const certifications = await db.all("SELECT * FROM curriculo_profile_certifications ORDER BY sort_order");
+    const languages = await db.all("SELECT * FROM curriculo_profile_languages ORDER BY sort_order");
+    const specializations = await db.all("SELECT * FROM curriculo_profile_specializations ORDER BY sort_order");
+    const skillsRows = await db.all("SELECT category, tech FROM curriculo_profile_skills ORDER BY category, tech");
 
     const skills: Record<string, string[]> = {};
     for (const row of skillsRows) {
@@ -75,7 +75,7 @@ router.get(
   "/profile/personal",
   asyncHandler(async (_req, res) => {
     const db = await getDb();
-    const personal = await db.get("SELECT * FROM profile_personal WHERE id = 1");
+    const personal = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
     res.json({ success: true, personalInfo: { ...(personal || {}), hasWhatsApp: personal?.has_whatsapp === 1 } });
   })
 );
@@ -88,10 +88,10 @@ router.patch(
     const db = await getDb();
     const data = req.body;
 
-    const existing = await db.get("SELECT * FROM profile_personal WHERE id = 1");
+    const existing = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
     if (existing) {
       await db.run(`
-        UPDATE profile_personal SET name=?, email=?, phone=?, has_whatsapp=?, linkedin=?, github=?, portfolio=?, location=?, title=?, summary=?, updated_at=CURRENT_TIMESTAMP
+        UPDATE curriculo_profile_personal SET name=?, email=?, phone=?, has_whatsapp=?, linkedin=?, github=?, portfolio=?, location=?, title=?, summary=?, updated_at=CURRENT_TIMESTAMP
         WHERE id=1
       `, data.name ?? existing.name, data.email ?? existing.email, data.phone ?? existing.phone,
          data.hasWhatsApp !== undefined ? (data.hasWhatsApp ? 1 : 0) : (existing.has_whatsapp ?? 1),
@@ -99,12 +99,12 @@ router.patch(
          data.location ?? existing.location, data.title ?? existing.title, data.summary ?? existing.summary);
     } else {
       await db.run(`
-        INSERT INTO profile_personal (id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary)
+        INSERT INTO curriculo_profile_personal (id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary)
         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, data.name, data.email, data.phone, data.hasWhatsApp ? 1 : 0, data.linkedin, data.github, data.portfolio, data.location, data.title, data.summary);
     }
 
-    const updated = await db.get("SELECT * FROM profile_personal WHERE id = 1");
+    const updated = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
     logInfo("Dados pessoais atualizados");
     res.json({ success: true, personalInfo: updated });
   })
@@ -114,7 +114,7 @@ router.patch(
 
 const SECTIONS = {
   experiences: {
-    table: "profile_experiences",
+    table: "curriculo_profile_experiences",
     mapRow: (e: any) => ({
       id: e.id, company: e.company, position: e.position,
       startDate: e.start_date, endDate: e.end_date, location: e.location,
@@ -132,7 +132,7 @@ const SECTIONS = {
     }),
   },
   education: {
-    table: "profile_education",
+    table: "curriculo_profile_education",
     mapRow: (e: any) => ({
       id: e.id, institution: e.institution, degree: e.degree,
       startDate: e.start_date, endDate: e.end_date, location: e.location,
@@ -146,7 +146,7 @@ const SECTIONS = {
     }),
   },
   certifications: {
-    table: "profile_certifications",
+    table: "curriculo_profile_certifications",
     mapRow: (c: any) => ({
       id: c.id, name: c.name, issuer: c.issuer, date: c.date,
       credentialId: c.credential_id, url: c.url,
@@ -158,13 +158,13 @@ const SECTIONS = {
     }),
   },
   languages: {
-    table: "profile_languages",
+    table: "curriculo_profile_languages",
     mapRow: (l: any) => ({ id: l.id, language: l.language, level: l.level }),
     fields: ["id", "language", "level", "sort_order"],
     insertFields: (data: any) => ({ id: data.id || genId(), language: data.language, level: data.level }),
   },
   specializations: {
-    table: "profile_specializations",
+    table: "curriculo_profile_specializations",
     mapRow: (s: any) => ({ id: s.id, text: s.text }),
     fields: ["id", "text", "sort_order"],
     insertFields: (data: any) => ({ id: data.id || genId(), text: data.text || data.specialization }),
@@ -234,16 +234,16 @@ router.patch(
     const data = req.body;
 
     if (data.personalInfo) {
-      const existing = await db.get("SELECT * FROM profile_personal WHERE id = 1");
+      const existing = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
       if (existing) {
-        await db.run(`UPDATE profile_personal SET name=?, email=?, phone=?, linkedin=?, github=?, portfolio=?, location=?, title=?, summary=?, updated_at=CURRENT_TIMESTAMP WHERE id=1`,
+        await db.run(`UPDATE curriculo_profile_personal SET name=?, email=?, phone=?, linkedin=?, github=?, portfolio=?, location=?, title=?, summary=?, updated_at=CURRENT_TIMESTAMP WHERE id=1`,
           data.personalInfo.name ?? existing.name, data.personalInfo.email ?? existing.email,
           data.personalInfo.phone ?? existing.phone, data.personalInfo.linkedin ?? existing.linkedin,
           data.personalInfo.github ?? existing.github, data.personalInfo.portfolio ?? existing.portfolio,
           data.personalInfo.location ?? existing.location, data.personalInfo.title ?? existing.title,
           data.personalInfo.summary ?? existing.summary);
       } else {
-        await db.run(`INSERT INTO profile_personal (id, name, email, phone, linkedin, github, portfolio, location, title, summary) VALUES (1,?,?,?,?,?,?,?,?,?)`,
+        await db.run(`INSERT INTO curriculo_profile_personal (id, name, email, phone, linkedin, github, portfolio, location, title, summary) VALUES (1,?,?,?,?,?,?,?,?,?)`,
           data.personalInfo.name, data.personalInfo.email, data.personalInfo.phone,
           data.personalInfo.linkedin, data.personalInfo.github, data.personalInfo.portfolio,
           data.personalInfo.location, data.personalInfo.title, data.personalInfo.summary);
@@ -270,17 +270,17 @@ router.patch(
           throw new ValidationError("Cada skill deve ter category, tech e action");
         }
         if (item.action === "add") {
-          await db.run("INSERT OR REPLACE INTO profile_skills (category, tech) VALUES (?, ?)", item.category, item.tech);
+          await db.run("INSERT OR REPLACE INTO curriculo_profile_skills (category, tech) VALUES (?, ?)", item.category, item.tech);
         } else if (item.action === "remove") {
-          await db.run("DELETE FROM profile_skills WHERE category = ? AND tech = ?", item.category, item.tech);
+          await db.run("DELETE FROM curriculo_profile_skills WHERE category = ? AND tech = ?", item.category, item.tech);
         }
       }
       await db.exec("COMMIT");
     } else if (category && tech && action) {
       if (action === "add") {
-        await db.run("INSERT OR REPLACE INTO profile_skills (category, tech) VALUES (?, ?)", category, tech);
+        await db.run("INSERT OR REPLACE INTO curriculo_profile_skills (category, tech) VALUES (?, ?)", category, tech);
       } else if (action === "remove") {
-        await db.run("DELETE FROM profile_skills WHERE category = ? AND tech = ?", category, tech);
+        await db.run("DELETE FROM curriculo_profile_skills WHERE category = ? AND tech = ?", category, tech);
       } else {
         throw new ValidationError("Action deve ser 'add' ou 'remove'");
       }
@@ -288,7 +288,7 @@ router.patch(
       throw new ValidationError("Envie {category, tech, action} ou {skills: [...]}");
     }
 
-    const updatedSkills = await db.all("SELECT category, tech FROM profile_skills ORDER BY category, tech");
+    const updatedSkills = await db.all("SELECT category, tech FROM curriculo_profile_skills ORDER BY category, tech");
     logInfo("Skills atualizadas", { count: updatedSkills.length });
     res.json({ success: true, message: "Skills atualizadas", skills: updatedSkills });
   })
@@ -298,7 +298,7 @@ router.get(
   "/profile/skills",
   asyncHandler(async (_req, res) => {
     const db = await getDb();
-    const skills = await db.all("SELECT category, tech FROM profile_skills ORDER BY category, tech");
+    const skills = await db.all("SELECT category, tech FROM curriculo_profile_skills ORDER BY category, tech");
     const grouped: Record<string, string[]> = {};
     for (const row of skills) {
       if (!grouped[row.category]) grouped[row.category] = [];
@@ -329,18 +329,18 @@ router.post(
 
     // Limpar tabelas
     await db.exec("BEGIN TRANSACTION");
-    await db.run("DELETE FROM profile_personal");
-    await db.run("DELETE FROM profile_experiences");
-    await db.run("DELETE FROM profile_education");
-    await db.run("DELETE FROM profile_certifications");
-    await db.run("DELETE FROM profile_languages");
-    await db.run("DELETE FROM profile_specializations");
-    await db.run("DELETE FROM profile_skills");
+    await db.run("DELETE FROM curriculo_profile_personal");
+    await db.run("DELETE FROM curriculo_profile_experiences");
+    await db.run("DELETE FROM curriculo_profile_education");
+    await db.run("DELETE FROM curriculo_profile_certifications");
+    await db.run("DELETE FROM curriculo_profile_languages");
+    await db.run("DELETE FROM curriculo_profile_specializations");
+    await db.run("DELETE FROM curriculo_profile_skills");
 
     // personalInfo
     const pi = profileData.personalInfo || {};
     await db.run(
-      `INSERT INTO profile_personal (id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary) VALUES (1,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO curriculo_profile_personal (id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary) VALUES (1,?,?,?,?,?,?,?,?,?,?)`,
       pi.name, pi.email, pi.phone, pi.hasWhatsApp !== false ? 1 : 0,
       pi.linkedin, pi.github, pi.portfolio, pi.location, pi.title, pi.summary
     );
@@ -351,7 +351,7 @@ router.post(
       for (let i = 0; i < profileData.experiences.length; i++) {
         const exp = profileData.experiences[i];
         await db.run(
-          `INSERT INTO profile_experiences (id, company, position, start_date, end_date, location, description, keywords_json, achievements_json, technologies_json, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO curriculo_profile_experiences (id, company, position, start_date, end_date, location, description, keywords_json, achievements_json, technologies_json, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
           exp.id || `exp_${i}`, exp.company, exp.position, exp.startDate, exp.endDate,
           exp.location, exp.description, JSON.stringify(exp.keywords || []),
           JSON.stringify(exp.achievements || []), JSON.stringify(exp.technologies || []), i
@@ -366,7 +366,7 @@ router.post(
       for (let i = 0; i < profileData.education.length; i++) {
         const edu = profileData.education[i];
         await db.run(
-          `INSERT INTO profile_education (id, institution, degree, start_date, end_date, location, gpa, description, sort_order) VALUES (?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO curriculo_profile_education (id, institution, degree, start_date, end_date, location, gpa, description, sort_order) VALUES (?,?,?,?,?,?,?,?,?)`,
           edu.id || `edu_${i}`, edu.institution, edu.degree, edu.startDate, edu.endDate,
           edu.location, edu.gpa, edu.description, i
         );
@@ -380,7 +380,7 @@ router.post(
       for (let i = 0; i < profileData.certifications.length; i++) {
         const cert = profileData.certifications[i];
         await db.run(
-          `INSERT INTO profile_certifications (id, name, issuer, date, credential_id, url, sort_order) VALUES (?,?,?,?,?,?,?)`,
+          `INSERT INTO curriculo_profile_certifications (id, name, issuer, date, credential_id, url, sort_order) VALUES (?,?,?,?,?,?,?)`,
           cert.id || `cert_${i}`, cert.name, cert.issuer, cert.date,
           cert.credentialId || "", cert.url || "", i
         );
@@ -394,7 +394,7 @@ router.post(
       for (let i = 0; i < profileData.languages.length; i++) {
         const lang = profileData.languages[i];
         await db.run(
-          `INSERT INTO profile_languages (language, level, sort_order) VALUES (?,?,?)`,
+          `INSERT INTO curriculo_profile_languages (language, level, sort_order) VALUES (?,?,?)`,
           lang.language, lang.level, i
         );
         langCount++;
@@ -406,7 +406,7 @@ router.post(
     if (Array.isArray(profileData.specializations)) {
       for (let i = 0; i < profileData.specializations.length; i++) {
         await db.run(
-          `INSERT INTO profile_specializations (text, sort_order) VALUES (?,?)`,
+          `INSERT INTO curriculo_profile_specializations (text, sort_order) VALUES (?,?)`,
           profileData.specializations[i], i
         );
         specCount++;
@@ -418,7 +418,7 @@ router.post(
     if (profileData.skills) {
       for (const [category, techs] of Object.entries(profileData.skills)) {
         for (const tech of techs as string[]) {
-          await db.run("INSERT OR IGNORE INTO profile_skills (category, tech) VALUES (?,?)", category, tech);
+          await db.run("INSERT OR IGNORE INTO curriculo_profile_skills (category, tech) VALUES (?,?)", category, tech);
           skillCount++;
         }
       }

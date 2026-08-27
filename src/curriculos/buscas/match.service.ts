@@ -10,7 +10,7 @@ async function loadProfileSkills() {
   if (cachedProfileSkills) return cachedProfileSkills;
   
   const db = await getDb();
-  const rows = await db.all('SELECT category, tech FROM profile_skills');
+  const rows = await db.all('SELECT category, tech FROM curriculo_profile_skills');
   
   cachedProfileSkills = rows.map(r => r.tech);
   return cachedProfileSkills;

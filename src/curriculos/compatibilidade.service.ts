@@ -10,7 +10,7 @@ interface SkillCategoryMap {
 const loadSkillCategoryMap = async (): Promise<SkillCategoryMap> => {
   try {
     const db = await getDb();
-    const rows = await db.all('SELECT category, tech FROM profile_skills');
+    const rows = await db.all('SELECT category, tech FROM curriculo_profile_skills');
     const map: SkillCategoryMap = {};
     for (const row of rows) {
       map[row.tech.toLowerCase()] = row.category;
@@ -72,7 +72,7 @@ export const getCompatibilidade = async (vagaId: number) => {
 
   const vaga = await db.get(
     `SELECT id, title, company, seniority, skills_json, requirements_json, raw_description 
-     FROM vagas WHERE id = ?`,
+     FROM curriculo_vagas WHERE id = ?`,
     vagaId
   );
 
@@ -90,7 +90,7 @@ export const getCompatibilidade = async (vagaId: number) => {
   }
 
   // Load profile skills from DB + category map from JSON
-  const profileRows = await db.all("SELECT category, tech FROM profile_skills");
+  const profileRows = await db.all("SELECT category, tech FROM curriculo_profile_skills");
   const profileTechs = profileRows.map((r) => r.tech.toLowerCase());
   const categoryMap = await loadSkillCategoryMap();
 
@@ -269,7 +269,7 @@ function detectCategory(skill: string, context: string): string {
 export const listarVagasComCompatibilidade = async () => {
   const db = await getDb();
   const vagas = await db.all(
-    `SELECT id, title, company, seniority, created_at FROM vagas ORDER BY created_at DESC`
+    `SELECT id, title, company, seniority, created_at FROM curriculo_vagas ORDER BY created_at DESC`
   );
 
   const resultados = [];

@@ -24,13 +24,13 @@ const carregarDadosCandidato = async () => {
     const { getDb } = await import("../../core/database.js");
     const db = await getDb();
     
-    const personal = await db.get('SELECT * FROM profile_personal WHERE id = 1');
-    const expRows = await db.all('SELECT * FROM profile_experiences ORDER BY sort_order');
-    const eduRows = await db.all('SELECT * FROM profile_education ORDER BY sort_order');
-    const certRows = await db.all('SELECT * FROM profile_certifications ORDER BY sort_order');
-    const langRows = await db.all('SELECT * FROM profile_languages ORDER BY sort_order');
-    const specRows = await db.all('SELECT * FROM profile_specializations ORDER BY sort_order');
-    const skillsRows = await db.all('SELECT category, tech FROM profile_skills');
+    const personal = await db.get('SELECT * FROM curriculo_profile_personal WHERE id = 1');
+    const expRows = await db.all('SELECT * FROM curriculo_profile_experiences ORDER BY sort_order');
+    const eduRows = await db.all('SELECT * FROM curriculo_profile_education ORDER BY sort_order');
+    const certRows = await db.all('SELECT * FROM curriculo_profile_certifications ORDER BY sort_order');
+    const langRows = await db.all('SELECT * FROM curriculo_profile_languages ORDER BY sort_order');
+    const specRows = await db.all('SELECT * FROM curriculo_profile_specializations ORDER BY sort_order');
+    const skillsRows = await db.all('SELECT category, tech FROM curriculo_profile_skills');
     
     const skills: Record<string, string[]> = {};
     for (const row of skillsRows) {

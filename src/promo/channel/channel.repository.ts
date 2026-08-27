@@ -3,23 +3,23 @@ import { Channel } from './channel.types.js';
 
 export const findAll = async (): Promise<Channel[]> => {
   const db = await getDb();
-  return db.all('SELECT * FROM channels ORDER BY created_at DESC');
+  return db.all('SELECT * FROM promo_channels ORDER BY created_at DESC');
 };
 
 export const findById = async (id: number): Promise<Channel | undefined> => {
   const db = await getDb();
-  return db.get('SELECT * FROM channels WHERE id = ?', id);
+  return db.get('SELECT * FROM promo_channels WHERE id = ?', id);
 };
 
 export const findByUsername = async (username: string): Promise<Channel | undefined> => {
   const db = await getDb();
-  return db.get('SELECT * FROM channels WHERE username = ?', username);
+  return db.get('SELECT * FROM promo_channels WHERE username = ?', username);
 };
 
 export const create = async (channel: Omit<Channel, 'id' | 'createdAt'>): Promise<number> => {
   const db = await getDb();
   const result = await db.run(
-    'INSERT INTO channels (username, name, is_active) VALUES (?, ?, ?)',
+    'INSERT INTO promo_channels (username, name, is_active) VALUES (?, ?, ?)',
     channel.username,
     channel.name || null,
     channel.isActive ? 1 : 0
@@ -30,7 +30,7 @@ export const create = async (channel: Omit<Channel, 'id' | 'createdAt'>): Promis
 export const update = async (id: number, channel: Partial<Channel>): Promise<void> => {
   const db = await getDb();
   await db.run(
-    `UPDATE channels 
+    `UPDATE promo_channels 
      SET username = COALESCE(?, username),
          name = COALESCE(?, name),
          is_active = COALESCE(?, is_active)
@@ -44,13 +44,13 @@ export const update = async (id: number, channel: Partial<Channel>): Promise<voi
 
 export const remove = async (id: number): Promise<void> => {
   const db = await getDb();
-  await db.run('DELETE FROM channels WHERE id = ?', id);
+  await db.run('DELETE FROM promo_channels WHERE id = ?', id);
 };
 
 export const toggle = async (id: number): Promise<void> => {
   const db = await getDb();
   await db.run(
-    'UPDATE channels SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?',
+    'UPDATE promo_channels SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?',
     id
   );
 };

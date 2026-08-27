@@ -12,16 +12,16 @@ function isExpoPushToken(token: string): boolean {
 // Register or reactivate a device token
 export async function registerToken(token: string, platform: string): Promise<void> {
   const db = await getDb();
-  const existing = await db.get('SELECT id, is_active FROM device_tokens WHERE token = ?', token);
+  const existing = await db.get('SELECT id, is_active FROM promo_device_tokens WHERE token = ?', token);
 
   if (existing) {
     await db.run(
-      'UPDATE device_tokens SET is_active = 1, platform = ?, last_used_at = datetime("now") WHERE token = ?',
+      'UPDATE promo_device_tokens SET is_active = 1, platform = ?, last_used_at = datetime("now") WHERE token = ?',
       platform, token
     );
   } else {
     await db.run(
-      'INSERT INTO device_tokens (token, platform, is_active) VALUES (?, ?, 1)',
+      'INSERT INTO promo_device_tokens (token, platform, is_active) VALUES (?, ?, 1)',
       token, platform
     );
   }
@@ -30,13 +30,13 @@ export async function registerToken(token: string, platform: string): Promise<vo
 // Deactivate a device token
 export async function unregisterToken(token: string): Promise<void> {
   const db = await getDb();
-  await db.run('UPDATE device_tokens SET is_active = 0 WHERE token = ?', token);
+  await db.run('UPDATE promo_device_tokens SET is_active = 0 WHERE token = ?', token);
 }
 
 // Get all active tokens
 export async function getActiveTokens(): Promise<string[]> {
   const db = await getDb();
-  const rows = await db.all('SELECT token FROM device_tokens WHERE is_active = 1');
+  const rows = await db.all('SELECT token FROM promo_device_tokens WHERE is_active = 1');
   return (rows as any[]).map((r) => r.token);
 }
 
@@ -103,7 +103,7 @@ export async function sendTestPush(token: string): Promise<boolean> {
 // Get token count
 export async function getTokenCount(): Promise<{ total: number; active: number }> {
   const db = await getDb();
-  const totalRow = await db.get('SELECT COUNT(*) as c FROM device_tokens');
-  const activeRow = await db.get('SELECT COUNT(*) as c FROM device_tokens WHERE is_active = 1');
+  const totalRow = await db.get('SELECT COUNT(*) as c FROM promo_device_tokens');
+  const activeRow = await db.get('SELECT COUNT(*) as c FROM promo_device_tokens WHERE is_active = 1');
   return { total: (totalRow as any)?.c || 0, active: (activeRow as any)?.c || 0 };
 }
