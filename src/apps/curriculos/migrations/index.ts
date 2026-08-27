@@ -159,4 +159,15 @@ export const curriculoMigrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_pending_applications_status ON curriculo_pending_applications(status);
     `,
   },
+  {
+    id: "curriculo_008_source_settings",
+    up: `
+      CREATE TABLE IF NOT EXISTS curriculo_source_settings (
+        source TEXT PRIMARY KEY,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        credentials_json TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `,
+  },
 ];

@@ -1,6 +1,7 @@
 import { httpGet } from "../shared/http.js";
 import { logInfo, logError } from "../shared/utils/logger.js";
 import config from "../config/index.js";
+import { getEffectiveCredentials, isSourceEnabled } from "./sourceCredentials.service.js";
 
 export interface Feed {
   name: string;
@@ -24,10 +25,13 @@ export interface VagaFeed {
 
 // ── Fontes de vagas ──
 
-const ADZUNA_APP_ID = process.env.ADZUNA_APP_ID;
-const ADZUNA_APP_KEY = process.env.ADZUNA_APP_KEY;
 const ADZUNA_COUNTRY = process.env.ADZUNA_COUNTRY || "br";
 
+// Todas as fontes ficam sempre registradas — se uma exige credenciais (hoje
+// só a Adzuna) e elas não estiverem configuradas (nem salvas pelo app, nem
+// via env), ela simplesmente não entra nos resultados da busca (ver
+// buscarVagas). Isso permite ligar uma fonte na hora, sem redeploy, assim
+// que o usuário salva a credencial pela tela de configurações.
 const FEEDS: Record<string, Feed> = {
   jobicy: {
     name: "Jobicy",
@@ -55,17 +59,13 @@ const FEEDS: Record<string, Feed> = {
     parse: parseTheMuse,
   },
   // Única fonte com cobertura real de vagas no Brasil (as demais são
-  // internacionais/remoto). Só entra na busca se ADZUNA_APP_ID/APP_KEY
-  // estiverem configurados (conta grátis em developer.adzuna.com).
-  ...(ADZUNA_APP_ID && ADZUNA_APP_KEY
-    ? {
-        adzuna: {
-          name: "Adzuna",
-          url: `https://api.adzuna.com/v1/api/jobs/${ADZUNA_COUNTRY}/search/1`,
-          parse: parseAdzuna,
-        },
-      }
-    : {}),
+  // internacionais/remoto). Exige App ID/Key (conta grátis em
+  // developer.adzuna.com), salvos pela tela de fontes ou via env.
+  adzuna: {
+    name: "Adzuna",
+    url: `https://api.adzuna.com/v1/api/jobs/${ADZUNA_COUNTRY}/search/1`,
+    parse: parseAdzuna,
+  },
 };
 
 // ── Normalização de vaga ──
@@ -209,7 +209,17 @@ export const buscarVagas = async ({
 
   const promises = Object.entries(FEEDS).map(async ([key, feed]) => {
     try {
-      const params = buildParams(key, { query, tags, limit });
+      if (!(await isSourceEnabled(key))) {
+        logInfo(`Feed ${feed.name} desabilitado, pulando`);
+        return [];
+      }
+
+      const params = await buildParams(key, { query, tags, limit });
+      if (params === null) {
+        logInfo(`Feed ${feed.name} sem credenciais configuradas, pulando`);
+        return [];
+      }
+
       const result = await httpGet(feed.url, params);
 
       if (!result.ok) {
@@ -245,7 +255,12 @@ export const buscarVagaFonte = async (fonte: string, params: any = {}): Promise<
       `Fonte desconhecida: ${fonte}. Disponíveis: ${Object.keys(FEEDS).join(", ")}`,
     );
 
-  const result = await httpGet(feed.url, buildParams(fonte, params));
+  const requestParams = await buildParams(fonte, params);
+  if (requestParams === null) {
+    throw new Error(`Fonte ${fonte} sem credenciais configuradas`);
+  }
+
+  const result = await httpGet(feed.url, requestParams);
   if (!result.ok) throw new Error(result.error);
 
   return feed.parse(result.data);
@@ -263,7 +278,16 @@ export const getFontes = () =>
 
 // ── Helpers ──
 
-function buildParams(fonte: string, { query, tags, limit }: { query: string; tags: string[]; limit: number }) {
+/**
+ * Monta os query params de cada fonte. Retorna `null` quando a fonte exige
+ * credenciais e elas não estão configuradas (nem salvas pelo app, nem via
+ * env) — nesse caso o chamador deve pular a fonte em vez de bater na API
+ * sem app_id/app_key.
+ */
+async function buildParams(
+  fonte: string,
+  { query, tags, limit }: { query: string; tags: string[]; limit: number },
+): Promise<Record<string, any> | null> {
   switch (fonte) {
     case "jobicy":
       return {
@@ -284,14 +308,17 @@ function buildParams(fonte: string, { query, tags, limit }: { query: string; tag
         page: 0,
         ...(query ? { q: query } : {}),
       };
-    case "adzuna":
+    case "adzuna": {
+      const credenciais = await getEffectiveCredentials("adzuna");
+      if (!credenciais.appId || !credenciais.appKey) return null;
       return {
-        app_id: ADZUNA_APP_ID,
-        app_key: ADZUNA_APP_KEY,
+        app_id: credenciais.appId,
+        app_key: credenciais.appKey,
         results_per_page: limit,
         what: query || tags.join(" ") || undefined,
         content_type: "application/json",
       };
+    }
     default:
       return {};
   }

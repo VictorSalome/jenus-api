@@ -117,51 +117,6 @@ export const emailConfig: EmailConfig = {
   },
 };
 
-export interface FontConfig {
-  family: string;
-  size: number;
-}
-
-export interface PdfConfig {
-  margins: { top: number; bottom: number; left: number; right: number };
-  fonts: { title: FontConfig; subtitle: FontConfig; body: FontConfig; small: FontConfig };
-  spacing: { betweenSections: number; betweenItems: number; betweenLines: number };
-  maxFileSize: number;
-}
-
-export const pdfConfig: PdfConfig = {
-  margins: {
-    top: parseInt(process.env.PDF_MARGIN_TOP || "72", 10),
-    bottom: parseInt(process.env.PDF_MARGIN_BOTTOM || "72", 10),
-    left: parseInt(process.env.PDF_MARGIN_LEFT || "72", 10),
-    right: parseInt(process.env.PDF_MARGIN_RIGHT || "72", 10),
-  },
-  fonts: {
-    title: {
-      family: process.env.PDF_TITLE_FONT || "Helvetica-Bold",
-      size: parseInt(process.env.PDF_TITLE_SIZE || "14", 10),
-    },
-    subtitle: {
-      family: process.env.PDF_SUBTITLE_FONT || "Helvetica-Bold",
-      size: parseInt(process.env.PDF_SUBTITLE_SIZE || "12", 10),
-    },
-    body: {
-      family: process.env.PDF_BODY_FONT || "Helvetica",
-      size: parseInt(process.env.PDF_BODY_SIZE || "11", 10),
-    },
-    small: {
-      family: process.env.PDF_SMALL_FONT || "Helvetica",
-      size: parseInt(process.env.PDF_SMALL_SIZE || "10", 10),
-    },
-  },
-  spacing: {
-    betweenSections: parseInt(process.env.PDF_SECTION_SPACING || "20", 10),
-    betweenItems: parseInt(process.env.PDF_ITEM_SPACING || "12", 10),
-    betweenLines: parseInt(process.env.PDF_LINE_SPACING || "6", 10),
-  },
-  maxFileSize: parseInt(process.env.PDF_MAX_FILE_SIZE || "5242880", 10),
-};
-
 export interface PathConfig {
   root: string;
   temp: string;
@@ -249,51 +204,6 @@ export const extractionConfig: ExtractionConfig = {
     diferenciais: ["diferenciais", "desejável", "plus", "seria um plus", "diferencial"],
     responsabilidades: ["responsabilidades", "atribuições", "atividades", "funções"],
     beneficios: ["benefícios", "oferecemos", "vantagens", "vale", "plano"],
-  },
-};
-
-export interface CurriculoConfig {
-  relevance: {
-    weights: { skills: number; experience: number; education: number; certifications: number };
-    minScore: number;
-  };
-  summary: {
-    maxLength: number;
-    includeKeywords: boolean;
-    templates: { junior: string; pleno: string; senior: string };
-  };
-  limits: {
-    maxExperiences: number;
-    maxEducation: number;
-    maxCertifications: number;
-    maxSkillsPerCategory: number;
-  };
-}
-
-export const curriculoConfig: CurriculoConfig = {
-  relevance: {
-    weights: {
-      skills: parseFloat(process.env.RELEVANCE_SKILLS_WEIGHT || "0.4"),
-      experience: parseFloat(process.env.RELEVANCE_EXPERIENCE_WEIGHT || "0.3"),
-      education: parseFloat(process.env.RELEVANCE_EDUCATION_WEIGHT || "0.2"),
-      certifications: parseFloat(process.env.RELEVANCE_CERTIFICATIONS_WEIGHT || "0.1"),
-    },
-    minScore: parseFloat(process.env.RELEVANCE_MIN_SCORE || "0.3"),
-  },
-  summary: {
-    maxLength: parseInt(process.env.SUMMARY_MAX_LENGTH || "300", 10),
-    includeKeywords: process.env.SUMMARY_INCLUDE_KEYWORDS !== "false",
-    templates: {
-      junior: "Profissional {area} com {experiencia} de experiência, especializado em {tecnologias}. {destaque}",
-      pleno: "Profissional {area} com experiência de {experiencia}, especializado em {tecnologias}. {destaque}",
-      senior: "{area} sênior com {experiencia} de experiência, especializado em {tecnologias}. {destaque}",
-    },
-  },
-  limits: {
-    maxExperiences: parseInt(process.env.CURRICULO_MAX_EXPERIENCES || "5", 10),
-    maxEducation: parseInt(process.env.CURRICULO_MAX_EDUCATION || "3", 10),
-    maxCertifications: parseInt(process.env.CURRICULO_MAX_CERTIFICATIONS || "8", 10),
-    maxSkillsPerCategory: parseInt(process.env.CURRICULO_MAX_SKILLS_PER_CATEGORY || "10", 10),
   },
 };
 
@@ -386,11 +296,9 @@ export default {
   rateLimit: rateLimitConfig,
   log: logConfig,
   email: emailConfig,
-  pdf: pdfConfig,
   paths: pathConfig,
   validation: validationConfig,
   extraction: extractionConfig,
-  curriculo: curriculoConfig,
   security: securityConfig,
   monitoring: monitoringConfig,
   dev: devConfig,

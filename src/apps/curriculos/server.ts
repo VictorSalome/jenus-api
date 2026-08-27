@@ -18,6 +18,7 @@ import testeRoutes from './teste/teste.routes.js';
 import smtpRoutes from './shared/smtp/smtp.routes.js';
 import buscasRoutes from './buscas/buscas.routes.js';
 import pendingRoutes from './buscas/pending.routes.js';
+import sourcesRoutes from './buscas/sources.routes.js';
 import scraperRoutes from './scraper/scraper.routes.js';
 import monitorRoutes from './monitor/monitor.routes.js';
 import perfilRoutes from './perfil/perfil.routes.js';
@@ -85,7 +86,12 @@ app.use('/', analisarRoutes);
 app.use('/', perfilRoutes);
 app.use('/', buscasRoutes);
 app.use('/', pendingRoutes);
-app.use('/', scraperRoutes);
+app.use('/', sourcesRoutes);
+// Prefixo próprio: as rotas de scraper.routes.ts (busca "crua" por
+// tecnologia/remoto, sem persistir) usam /vagas, o que colidia com
+// compatibilidade.routes.ts (listagem das vagas cadastradas com
+// compatibilidade calculada, é o que o app realmente consome).
+app.use('/scraper', scraperRoutes);
 app.use('/', monitorRoutes);
 app.use('/', compatibilidadeRoutes);
 app.use('/', emailTestRoutes);

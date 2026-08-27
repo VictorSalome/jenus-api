@@ -126,6 +126,7 @@ export const executarBusca = async ({
  */
 export const getStatus = () => ({
   rodando: !!tarefaAtiva,
+  config: configAtual,
   ultimaExecucao,
   historico: historico.slice(-10),
 });
