@@ -60,7 +60,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     if (result.success && result.tempPassword) {
       // Enviar email com senha temporária
       try {
-        const { criarTransporter } = await import('../../curriculos/shared/email/email.service.js');
+        const { criarTransporter } = await import('../email/mailer.js');
         const transporter = criarTransporter();
         await transporter.sendMail({
           from: process.env.EMAIL_FROM || process.env.SMTP_USER,

@@ -15,6 +15,7 @@ import authApp from "./apps/auth/index.js";
 import promoApp from "./apps/promo-monitor/index.js";
 import curriculosApp, { pdfPreviewRouter } from "./apps/curriculo-monitor/index.js";
 import { requireAuth } from "./shared/auth/auth.middleware.js";
+import { defaultLimiter, authLimiter } from "./shared/rate-limit/presets.js";
 
 const app = express();
 
@@ -27,9 +28,10 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(defaultLimiter);
 
 // ── Apps ──
-app.use("/api/auth", authApp);
+app.use("/api/auth", authLimiter, authApp);
 app.use("/api", promoApp);
 app.use("/api/curriculo", pdfPreviewRouter);
 app.use("/api/curriculo", requireAuth, curriculosApp);

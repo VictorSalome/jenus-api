@@ -20,6 +20,9 @@ const envSchema = z.object({
   MIN_TIME_BETWEEN_MESSAGES: z.string().default('30').transform(Number),
   URGENT_ENABLED: z.string().default('true').transform((v) => v === 'true'),
   DATABASE_PATH: z.string().default('./data/promo-monitor.db'),
+  CORS_ORIGINS: z.string().optional(),
+  RATE_LIMIT_WINDOW_MS: z.string().default('60000').transform(Number),
+  RATE_LIMIT_MAX: z.string().default('300').transform(Number),
 });
 
 const parsed = envSchema.safeParse(process.env);
