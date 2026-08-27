@@ -12,9 +12,9 @@ import { initDb } from "./core/database.js";
 import * as logger from "./core/logger.js";
 
 import authApp from "./apps/auth/index.js";
-import promoApp from "./apps/promo-monitor/index.js";
-import curriculosApp, { pdfPreviewRouter } from "./apps/curriculo-monitor/index.js";
-import { requireAuth } from "./shared/auth/auth.middleware.js";
+import promoModule from "./apps/promo/index.js";
+import curriculosModule from "./apps/curriculos/index.js";
+import { registerApp } from "./shared/http/app-registry.js";
 import { defaultLimiter, authLimiter } from "./shared/rate-limit/presets.js";
 
 const app = express();
@@ -32,9 +32,8 @@ app.use(defaultLimiter);
 
 // ── Apps ──
 app.use("/api/auth", authLimiter, authApp);
-app.use("/api", promoApp);
-app.use("/api/curriculo", pdfPreviewRouter);
-app.use("/api/curriculo", requireAuth, curriculosApp);
+registerApp(app, promoModule);
+registerApp(app, curriculosModule);
 
 app.get("/api/health", async (_req, res) => {
   try {

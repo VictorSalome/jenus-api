@@ -5,10 +5,10 @@ import * as logger from './logger.js';
 import fs from 'fs';
 import path from 'path';
 import { runMigrations } from './migrations/runner.js';
-import { curriculoMigrations } from '../curriculos/migrations/index.js';
-import { seedCurriculoProfileFromJson } from '../curriculos/migrations/seed.js';
-import { promoMigrations } from '../promo/migrations/index.js';
-import { seedPromoDatabase } from '../promo/migrations/seed.js';
+import { curriculoMigrations } from '../apps/curriculos/migrations/index.js';
+import { seedCurriculoProfileFromJson } from '../apps/curriculos/migrations/seed.js';
+import { promoMigrations } from '../apps/promo/migrations/index.js';
+import { seedPromoDatabase } from '../apps/promo/migrations/seed.js';
 
 const dbDir = path.dirname(config.DATABASE_PATH);
 if (!fs.existsSync(dbDir)) {
