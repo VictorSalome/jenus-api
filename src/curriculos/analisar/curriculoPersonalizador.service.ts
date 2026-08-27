@@ -448,7 +448,7 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     } : { name: "Candidato", email: "", phone: "", linkedin: "", github: "", portfolio: "", location: "", title: "", summary: "" };
     
     // Ler experiências do banco
-    const expRows = await db.all('SELECT * FROM profile_experiences ORDER BY sort_order');
+    const expRows = await db.all("SELECT * FROM profile_experiences ORDER BY start_date DESC");
     const experiences = expRows.map((e: any) => ({
       id: e.id, company: e.company, position: e.position,
       startDate: e.start_date, endDate: e.end_date, location: e.location,
