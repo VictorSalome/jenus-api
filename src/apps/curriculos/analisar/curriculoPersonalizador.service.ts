@@ -693,10 +693,14 @@ const filtrarExperienciasRelevantes = (experiences: any[], dadosVaga: Record<str
     return { ...exp, pontuacao };
   });
 
-  // Ordenar por pontuação e retornar as mais relevantes
+  // Seleciona as experiências mais relevantes pela pontuação, mas a ordem de
+  // EXIBIÇÃO no currículo/email precisa ser cronológica (mais recente primeiro)
+  // — senão uma experiência antiga com stack mais aderente pode aparecer antes
+  // de uma mais recente, o que é sempre errado num currículo.
   return experienciasComPontuacao
     .sort((a, b) => b.pontuacao - a.pontuacao)
     .slice(0, 4) // Máximo 4 experiências mais relevantes
+    .sort((a, b) => (a.startDate < b.startDate ? 1 : a.startDate > b.startDate ? -1 : 0))
     .map(({ pontuacao, ...exp }) => exp);
 };
 
