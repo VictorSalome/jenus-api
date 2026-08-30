@@ -1,5 +1,5 @@
 import { extrairDadosVaga } from "./vagaExtractor.service.js";
-import { parseVaga } from "./vagaParser.js";
+import { parseVaga, detectarExigenciaPretensao } from "./vagaParser.js";
 import { personalizarCurriculo } from "./curriculoPersonalizador.service.js";
 import { gerarPdfCurriculo } from "../shared/pdf/pdfGenerator.service.js";
 import { getDb } from "../../../core/database.js";
@@ -217,6 +217,7 @@ export const analisarVagaController = asyncHandler(async (req, res) => {
       contactEmail: vagaParseada.contactEmail,
       categorizedSkills: vagaParseada.categorizedSkills,
       rawDescription: vagaParseada.rawDescription,
+      exigePretensaoSalarial: vagaParseada.exigePretensaoSalarial,
     },
     match: {
       percent: matchPercent,
@@ -360,6 +361,7 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
     },
     previewUrl: `/api/curriculo/temp/${nomeArquivo}`,
     curriculoTexto: gerarTextoCurriculo(curriculoPersonalizado, dadosVaga),
+    exigePretensaoSalarial: typeof textoParaAnalise === 'string' ? detectarExigenciaPretensao(textoParaAnalise) : false,
     requestId,
   };
 

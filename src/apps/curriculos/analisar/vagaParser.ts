@@ -254,6 +254,8 @@ export function detectarExigenciaPretensao(texto: string): boolean {
     /informar pretensao/i,
     /informe sua pretensao/i,
     /enviar pretensao/i,
+    /enviar.*com pretensao/i,
+    /com pretensao/i,
     /expectativa salarial/i,
     /qual a expectativa/i,
     /pretensao salarial no corpo/i,
