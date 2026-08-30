@@ -91,17 +91,18 @@ router.patch(
     const existing = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
     if (existing) {
       await db.run(`
-        UPDATE curriculo_profile_personal SET name=?, email=?, phone=?, has_whatsapp=?, linkedin=?, github=?, portfolio=?, location=?, title=?, summary=?, updated_at=CURRENT_TIMESTAMP
+        UPDATE curriculo_profile_personal SET name=?, email=?, phone=?, has_whatsapp=?, linkedin=?, github=?, portfolio=?, location=?, title=?, summary=?, salary_pretension=?, updated_at=CURRENT_TIMESTAMP
         WHERE id=1
       `, data.name ?? existing.name, data.email ?? existing.email, data.phone ?? existing.phone,
          data.hasWhatsApp !== undefined ? (data.hasWhatsApp ? 1 : 0) : (existing.has_whatsapp ?? 1),
          data.linkedin ?? existing.linkedin, data.github ?? existing.github, data.portfolio ?? existing.portfolio,
-         data.location ?? existing.location, data.title ?? existing.title, data.summary ?? existing.summary);
+         data.location ?? existing.location, data.title ?? existing.title, data.summary ?? existing.summary,
+         data.salaryPretension ?? existing.salary_pretension);
     } else {
       await db.run(`
-        INSERT INTO curriculo_profile_personal (id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary)
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, data.name, data.email, data.phone, data.hasWhatsApp ? 1 : 0, data.linkedin, data.github, data.portfolio, data.location, data.title, data.summary);
+        INSERT INTO curriculo_profile_personal (id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary, salary_pretension)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, data.name, data.email, data.phone, data.hasWhatsApp ? 1 : 0, data.linkedin, data.github, data.portfolio, data.location, data.title, data.summary, data.salaryPretension);
     }
 
     const updated = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");

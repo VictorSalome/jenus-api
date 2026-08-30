@@ -31,6 +31,7 @@ interface PersonalInfo {
   phone?: string;
   linkedin?: string;
   location?: string;
+  salaryPretension?: string;
 }
 
 interface Experience {
@@ -449,7 +450,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
   }
 
   // Ler dados pessoais do banco
-  let personalInfo = { name: "Candidato", email: process.env.SMTP_USER || "", phone: "", hasWhatsApp: true, linkedin: "", github: "", portfolio: "", title: "" };
+  let personalInfo = { name: "Candidato", email: process.env.SMTP_USER || "", phone: "", hasWhatsApp: true, linkedin: "", github: "", portfolio: "", title: "", salaryPretension: "" };
   try {
     const db = await getDb();
     const personal = await db.get('SELECT * FROM curriculo_profile_personal WHERE id = 1');
@@ -463,6 +464,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
         github: personal.github || "",
         portfolio: personal.portfolio || "",
         title: personal.title || "",
+        salaryPretension: personal.salary_pretension || "",
       };
     }
   } catch {}
@@ -482,6 +484,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
         linkedin: personalInfo.linkedin,
         github: personalInfo.github,
         portfolio: personalInfo.portfolio,
+        salaryPretension: personalInfo.salaryPretension,
       },
       vagaId: vagaId || null,
     });

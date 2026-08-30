@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { asyncHandler } from "../shared/middleware/errorHandler.js";
+import { requireAuth } from "../../../shared/auth/auth.middleware.js";
 import { listarPendentes, aprovarEEnviar, rejeitar } from "./pendingApplications.service.js";
 
 const router = Router();
@@ -38,6 +39,7 @@ router.get(
  */
 router.post(
   "/pending-applications/:id/aprovar",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
@@ -57,6 +59,7 @@ router.post(
  */
 router.post(
   "/pending-applications/:id/rejeitar",
+  requireAuth,
   asyncHandler(async (req, res) => {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {

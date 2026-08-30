@@ -170,4 +170,11 @@ export const curriculoMigrations: Migration[] = [
       );
     `,
   },
+  {
+    id: "curriculo_009_salary_pretension",
+    up: `
+      ALTER TABLE curriculo_profile_personal ADD COLUMN salary_pretension TEXT;
+    `,
+  },
 ];
+

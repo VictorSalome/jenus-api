@@ -325,6 +325,14 @@ const gerarPontosRelevantes = (dadosVaga, candidato) => {
     );
   }
 
+  // Pretensão salarial do candidato (se preenchida no perfil)
+  const pretensaoSalarial = candidato.salaryPretension || candidato.salary_pretension || "";
+  if (pretensaoSalarial && pretensaoSalarial.trim()) {
+    pontos.push(
+      `Pretensão salarial: <strong>${escapeHtml(pretensaoSalarial)}</strong>`,
+    );
+  }
+
   return pontos
     .map(
       (ponto) => `<tr>
@@ -531,8 +539,11 @@ export const getEnviosCount = async () => {
 export const getEnviosHistory = async (limit = 50) => {
   const db = await getDb();
   const envios = await db.all(
-    `SELECT id, vaga_id, filename, email_destino, vaga_titulo, status, created_at
-     FROM curriculo_envios ORDER BY created_at DESC LIMIT ?`,
+    `SELECT e.id, e.vaga_id, e.filename, e.email_destino, e.vaga_titulo, e.status, e.created_at,
+            COALESCE(v.company, '') as company
+     FROM curriculo_envios e
+     LEFT JOIN curriculo_vagas v ON e.vaga_id = v.id
+     ORDER BY e.created_at DESC LIMIT ?`,
     limit
   );
   return envios;

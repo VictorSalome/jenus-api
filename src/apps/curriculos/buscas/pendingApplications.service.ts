@@ -72,6 +72,7 @@ const carregarPersonalInfo = async () => {
     github: "",
     portfolio: "",
     title: "",
+    salaryPretension: "",
   };
   const personal = await db.get(
     "SELECT * FROM curriculo_profile_personal WHERE id = 1",
@@ -86,6 +87,7 @@ const carregarPersonalInfo = async () => {
       github: personal.github || "",
       portfolio: personal.portfolio || "",
       title: personal.title || "",
+      salaryPretension: personal.salary_pretension || "",
     };
   }
   return personalInfo;
