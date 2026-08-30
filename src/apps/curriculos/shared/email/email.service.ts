@@ -45,6 +45,7 @@ export const enviarCurriculo = async (
         address: process.env.EMAIL_FROM || process.env.SMTP_USER,
       },
       to: emailDestino,
+      replyTo: "victorsalome41@hotmail.com",
       subject: assunto,
       html: corpoEmail,
       attachments: [
