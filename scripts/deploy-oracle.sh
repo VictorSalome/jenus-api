@@ -74,12 +74,23 @@ ssh -i "$SSH_KEY" \
     npm install
   "
 
-# 2. Copiar o dist/ compilado localmente para o VM
+# 2. Copiar o dist/ compilado localmente para o VM.
+# Segurança: não apagar o dist/ atual antes de garantir que o novo chegou.
+# Se o scp falhar (rede/VM) ou o mv quebrar no meio, o dist/ antigo continua
+# no lugar e o PM2 não fica apontando para um arquivo inexistente.
 echo '📦 Copiando dist/ local para o VM...'
-scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r dist "$ORACLE_USER@$ORACLE_HOST:$REMOTE_DIR/dist_new"
+if ! scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r dist "$ORACLE_USER@$ORACLE_HOST:$REMOTE_DIR/dist_new"; then
+  echo '❌ Falha ao copiar dist/ — deploy abortado (dist/ antigo preservado).'
+  exit 1
+fi
 ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$ORACLE_USER@$ORACLE_HOST" "
   set -e
   cd '$REMOTE_DIR'
+  if [ ! -f dist_new/index.js ]; then
+    echo '❌ dist_new/index.js ausente — abortando para não apagar o dist/ atual.'
+    rm -rf dist_new
+    exit 1
+  fi
   rm -rf dist
   mv dist_new dist
   echo '✅ dist/ atualizado no VM'

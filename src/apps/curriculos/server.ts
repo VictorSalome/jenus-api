@@ -31,6 +31,14 @@ await initializeSmtpRuntimeConfig();
 
 autoStartScheduler();
 
+// O nginx injeta X-Forwarded-For/Proto. Sem `trust proxy` aqui o
+// express-rate-limit deste app lança ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+// (o `app.set("trust proxy", 1)` do index.ts raiz NÃO é herdado por este
+// Express Application aninhado). Respeita a env TRUST_PROXY do deploy.
+if (config.server.trustProxy) {
+  app.set("trust proxy", 1);
+}
+
 app.use(requestIdMiddleware);
 
 app.use(timeoutMiddleware(30000));
