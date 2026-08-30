@@ -3,7 +3,10 @@ import { z } from "zod";
 const envSchema = z.object({
   API_ID: z.string().optional(),
   API_HASH: z.string().optional(),
-  DISCORD_WEBHOOK_URL: z.string().url().optional(),
+  DISCORD_WEBHOOK_URL: z.preprocess(
+    (val) => (val === '' ? undefined : val),
+    z.string().url().optional(),
+  ),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_BOT_GROUP_ID: z.string().optional(),
   CHECK_INTERVAL_SECONDS: z.string().default("30").transform(Number),
