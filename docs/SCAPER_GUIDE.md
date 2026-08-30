@@ -143,8 +143,8 @@ EMAIL_FROM=seuemail@gmail.com
 
 1. **Configure o SMTP** - Edite `.env` com credenciais
 2. **Configure o candidato** - Edite `candidate-profile.json`
-3. **Instale dependências**: `pnpm install`
-4. **Build**: `pnpm run build`
-5. **Inicie**: `pnpm start`
+3. **Instale dependências**: `npm install`
+4. **Build**: `npm run build`
+5. **Inicie**: `npm start`
 
 Acesse `http://localhost:3001/envia-curriculo` para a interface web.

@@ -8,11 +8,12 @@
     "build": "rm -rf dist && npx tsc; mkdir -p data temp",
     "start": "node dist/index.js",
     "start:pm2": "pm2 start scripts/pm2.config.cjs",
-    "stop:pm2": "pm2 stop promo-monitor",
-    "restart:pm2": "pm2 reload promo-monitor",
-    "logs:pm2": "pm2 logs promo-monitor",
+    "stop:pm2": "pm2 stop jenus-api",
+    "restart:pm2": "pm2 reload jenus-api",
+    "logs:pm2": "pm2 logs jenus-api",
     "deploy": "bash scripts/deploy-oracle.sh",
-    "deploy:oracle": "bash scripts/deploy-oracle.sh"
+    "deploy:oracle": "bash scripts/deploy-oracle.sh",
+    "sync-env": "bash scripts/sync-env.sh"
   },
   "dependencies": {
     "axios": "^1.19.0",

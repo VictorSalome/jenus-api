@@ -55,7 +55,7 @@ if [ ! -f .env ]; then
   echo "✅ .env criado. EDITE agora e preencha os valores reais:"
   echo "   - DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<ID>/<TOKEN>"
   echo "   - JWT_ACCESS_SECRET / JWT_REFRESH_SECRET / ADMIN_PASSWORD_HASH / SESSION_SECRET"
-  echo "   Depois rode: pm2 restart promo-monitor"
+  echo "   Depois rode: pm2 restart jenus-api"
 else
   echo "ℹ️  .env já existe — não sobrescrevendo. Confira se DISCORD_WEBHOOK_URL está correto."
 fi
@@ -65,11 +65,11 @@ mkdir -p data
 
 # 7. Iniciar com PM2 (via config central)
 echo "🚀 Iniciando com PM2..."
-pm2 start scripts/pm2.config.cjs || pm2 restart promo-monitor
+pm2 start dist/index.js --name "jenus-api" || pm2 restart jenus-api
 pm2 save
 pm2 startup systemd --non-interactive || true
 
 echo ""
 echo "✅ Setup concluído!"
 echo "🌐 API: http://136.248.109.21:3001"
-echo "📋 Próximo passo obrigatório: editar $REMOTE_DIR/.env com os valores reais e rodar 'pm2 restart promo-monitor'"
+echo "📋 Próximo passo obrigatório: editar $REMOTE_DIR/.env com os valores reais e rodar 'pm2 restart jenus-api'"

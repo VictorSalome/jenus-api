@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'promo-monitor',
+      name: 'jenus-api',
       script: './dist/index.js',
 
       instances: 1,

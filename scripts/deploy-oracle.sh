@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Deploy de ATUALIZAÇÃO para Oracle Cloud (usado por `pnpm deploy`).
+# Deploy de ATUALIZAÇÃO para Oracle Cloud (usado por `npm run deploy`).
 # O setup INICIAL da VM é feito uma única vez por scripts/setup-oracle.sh.
 # Este script NÃO altera o .env da VM — ele faz git pull + build + pm2 reload.
 # O .env (com DISCORD_WEBHOOK_URL, JWT_*, etc.) deve estar presente na VM.
@@ -15,7 +15,7 @@ ORACLE_HOST="136.248.109.21"
 ORACLE_USER="ubuntu"
 SSH_KEY="$HOME/.ssh/oracle.key"
 REMOTE_DIR="/home/ubuntu/jenus-api"
-PM2_APP_NAME="promo-monitor"
+PM2_APP_NAME="jenus-api"
 
 echo "🚀 Deploy Oracle Cloud..."
 echo ""

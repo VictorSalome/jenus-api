@@ -11,29 +11,49 @@
 ## Scripts de deploy (2 únicos)
 
 - `scripts/setup-oracle.sh` — **setup inicial** da VM (1ª vez): instala OS/Node/PM2, clona o repo em `/home/ubuntu/jenus-api`, builda e gera o `.env` a partir de `.env.example`. **Não escreve segredos** — você edita o `.env` depois.
-- `scripts/deploy-oracle.sh` — **atualização** (usado por `pnpm deploy`): `git pull` + `build` + `pm2 reload`. Não altera o `.env`.
+- `scripts/deploy-oracle.sh` — **atualização** (usado por `npm run deploy`): `git pull` + `build` + `pm2 reload`. Não altera o `.env`.
 
 > Os antigos `deploy.sh`, `deploy-manual.sh` e `oracle-deploy.sh` foram removidos (escreviam `.env` com webhook placeholder e segredos hardcoded).
 
 ## Deploy Manual (Oracle)
 
 ```bash
-pnpm deploy          # = bash scripts/deploy-oracle.sh
+npm run deploy          # = bash scripts/deploy-oracle.sh
 ```
 
 O script:
-1. Faz `pnpm build` local
+1. Faz `npm run build` local
 2. Commit + push para `main`
-3. No Oracle: `git pull && npm install && npm run build && pm2 restart promo-monitor`
+3. No Oracle: `git pull && npm install && npm run build && pm2 restart jenus-api`
 
 > ⚠️ O projeto usa **pnpm** localmente (pnpm-lock.yaml). O script remoto ainda usa `npm install` — se o servidor não tiver pnpm, instale com `npm install -g pnpm` na VM. O `npm install` funciona por ler package.json, mas a consistência de lockfile exige pnpm.
+
+## Atualizar Variáveis (.env)
+
+O `.env` é **gitignored** — não vai para o servidor via git. Para atualizar:
+
+```bash
+npm run sync-env         # = bash scripts/sync-env.sh
+```
+
+O script:
+1. Mostra o diff entre `.env` local e `.env` do servidor
+2. Confirma com você antes de aplicar
+3. Copia o `.env` via `scp`
+4. Reinicia o PM2 com `--update-env`
+
+Opções:
+```bash
+npm run sync-env --dry-run     # só mostra diff, sem alterar
+npm run sync-env --no-restart  # copia sem reiniciar (reinicie manual: pm2 reload jenus-api)
+```
 
 ## PM2
 
 ```bash
-pnpm start:pm2    # pm2 start scripts/pm2.config.js
-pnpm restart:pm2  # pm2 restart
-pnpm logs:pm2     # pm2 logs promo-monitor
+npm run start:pm2    # pm2 start scripts/pm2.config.js
+npm run restart:pm2  # pm2 restart
+npm run logs:pm2     # pm2 logs jenus-api
 ```
 
 Config em `scripts/pm2.config.js`: 1 instância, autorestart, NODE_ENV=production, logs em `./logs/`.
@@ -48,15 +68,14 @@ ssh -i ~/.ssh/oracle.key ubuntu@136.248.109.21
 
 # 2. Instalar dependências
 sudo apt install -y nodejs git
-curl -fsSL https://get.pnpm.io/install.sh | sh -
 sudo npm install -g pm2
 
 # 3. Clonar e rodar (ou usar scripts/setup-oracle.sh)
 git clone https://github.com/VictorSalome/enviaPromo.git /home/ubuntu/jenus-api
 cd /home/ubuntu/jenus-api
 cp .env.example .env        # edite com ADMIN_USERNAME, ADMIN_PASSWORD_HASH e JWT secrets
-pnpm install --prod
-pnpm build
+npm install --prod
+npm run build
 pm2 start scripts/pm2.config.cjs
 ```
 
