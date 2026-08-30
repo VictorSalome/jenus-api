@@ -161,36 +161,27 @@ router.post("/auto-apply", async (req, res) => {
 });
 
 router.post("/approve-all-pending", requireAuth, asyncHandler(async (req, res) => {
-  const startTime = Date.now();
-
   logger.info("Iniciando aprovação e envio de todos os pendentes", "Curriculo");
 
-  try {
-    const pendentes = await listarPendentes("pending");
-    const resultados: { id: number; status: string; error?: string }[] = [];
+  res.status(202).json({
+    success: true,
+    message: "Processando envios em segundo plano",
+  });
 
-    for (const p of pendentes) {
-      try {
+  listarPendentes("pending").then(async (pendentes) => {
+    const resultados = await Promise.allSettled(
+      pendentes.map(async (p) => {
         await aprovarEEnviar(p.id);
-        resultados.push({ id: p.id, status: "sent" });
-      } catch (err: any) {
-        resultados.push({ id: p.id, status: "error", error: err.message });
-      }
-    }
+        return { id: p.id, status: "sent" as const };
+      })
+    );
 
-    const sent = resultados.filter((r) => r.status === "sent").length;
-    const errors = resultados.filter((r) => r.status === "error").length;
-
+    const sent = resultados.filter((r) => r.status === "fulfilled").length;
+    const errors = resultados.filter((r) => r.status === "rejected").length;
     logger.info(`Aprovação concluída: ${sent} enviados, ${errors} erros`, "Curriculo");
-    res.json({
-      success: true,
-      message: `${sent} candidaturas aprovadas e enviadas${errors > 0 ? `, ${errors} falharam` : ""}`,
-      resultados,
-    });
-  } catch (err: any) {
-    logger.error(`Erro ao aprovar e enviar todos os pendentes: ${err.message}`, "Curriculo");
-    res.status(500).json({ success: false, error: err.message });
-  }
+  }).catch((err) => {
+    logger.error(`Erro ao aprovar e enviar todos: ${err.message}`, "Curriculo");
+  });
 }));
 
 export default router;
