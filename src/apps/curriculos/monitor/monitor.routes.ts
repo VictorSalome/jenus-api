@@ -17,6 +17,7 @@ const router = Router();
  * Retorna estatísticas de uso e monitoramento
  */
 router.get("/monitor", async (req, res) => {
+  const startTime = Date.now();
   try {
     const stats = await getStats();
     const totalEnviados = await getEnviosCount();
@@ -45,13 +46,21 @@ router.get("/monitor", async (req, res) => {
       } catch {}
     }
 
-    // Serviços (status controller inline para evitar dependência circular)
+    // Serviços — verificação real, não hardcoded
+    let filesystemStatus = "online";
+    try {
+      await fs.access(config.paths.temp);
+    } catch {
+      filesystemStatus = "error";
+    }
+    const smtpConfigured = !!process.env.SMTP_HOST && !!process.env.SMTP_USER;
     const services: Record<string, string> = {
       vagaExtractor: "online",
       curriculoPersonalizador: "online",
-      pdfGenerator: "online",
-      emailService: !!process.env.SMTP_HOST ? "online" : "offline",
+      pdfGenerator: filesystemStatus === "online" ? "online" : "error",
+      emailService: smtpConfigured ? "online" : "offline",
     };
+    const hasOffline = Object.values(services).some((s) => s !== "online");
 
     res.json({
       success: true,
@@ -78,13 +87,15 @@ router.get("/monitor", async (req, res) => {
         return hDate >= weekAgo;
       }).length,
       // Campos de status (para compatibilidade com o front)
-      status: "success",
-      message: "Sistema de Currículo Automatizado funcionando",
+      status: hasOffline ? "degraded" : "success",
+      message: hasOffline
+        ? "Sistema funcionando com limitações"
+        : "Sistema de Currículo Automatizado funcionando",
       timestamp: new Date().toISOString(),
       version: "1.0.0",
       environment: config.server.env,
       uptime: `${Math.floor(process.uptime())}s`,
-      responseTime: "0ms",
+      responseTime: `${Date.now() - startTime}ms`,
       services,
     });
   } catch (err: any) {
