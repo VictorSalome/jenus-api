@@ -20,6 +20,10 @@ import { defaultLimiter, authLimiter } from "./shared/rate-limit/presets.js";
 
 const app = express();
 
+// O nginx injeta X-Forwarded-For/Proto; confiar no primeiro hop do proxy
+// para o express-rate-limit e req.ip refletirem o IP real do cliente.
+app.set("trust proxy", 1);
+
 app.use(
   cors({
     origin: true,
