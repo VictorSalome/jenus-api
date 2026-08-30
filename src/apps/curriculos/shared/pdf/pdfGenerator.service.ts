@@ -18,6 +18,22 @@ const CORES = {
   linha: "#1a1a1a",
 };
 
+/**
+ * Remove caracteres que podem causar `URI malformed` no `pdfkit` (emojis, etc.)
+ * Mantém caracteres acentuados comuns do português.
+ */
+const sanitizeTextForPdf = (text: string = ""): string => {
+  if (!text) return "";
+  return (
+    text
+      // Remove emojis e caracteres fora do BMP (Supplementary Multilingual Plane)
+      .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "")
+      // Remove outros caracteres de controle/invisíveis problemáticos
+      .replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\uD800-\uDFFF\uFFFE\uFFFF]/g, "")
+      .trim()
+  );
+};
+
 const ESTILOS = {
   nomeCompleto: { font: "Helvetica-Bold", size: 18 },
   titulo: { font: "Helvetica-Bold", size: 14 },
@@ -45,6 +61,13 @@ export const gerarPdfCurriculo = async (curriculo, dadosVaga) => {
   try {
     logInfo("Iniciando geração do PDF do currículo");
 
+    if (dadosVaga && dadosVaga.titulo) {
+      dadosVaga.titulo = sanitizeTextForPdf(dadosVaga.titulo);
+    }
+    if (dadosVaga && dadosVaga.empresa) {
+      dadosVaga.empresa = sanitizeTextForPdf(dadosVaga.empresa);
+    }
+
     // Criar diretório temp se não existir
     const tempDir = config.paths.temp;
     await fs.mkdir(tempDir, { recursive: true });
@@ -58,7 +81,7 @@ export const gerarPdfCurriculo = async (curriculo, dadosVaga) => {
     const nomeArquivo = `curriculo_${nomeLimpo}_${Date.now()}.pdf`;
     const caminhoArquivo = path.join(tempDir, nomeArquivo);
 
-    // Criar documento PDF
+    // Criar documento PDF com informações saneadas
     const doc = new PDFDocument({
       size: "A4",
       margins: {
@@ -68,9 +91,9 @@ export const gerarPdfCurriculo = async (curriculo, dadosVaga) => {
         right: 50,
       },
       info: {
-        Title: `Currículo - ${curriculo.personalInfo.name}`,
-        Author: curriculo.personalInfo.name,
-        Subject: `Candidatura para: ${dadosVaga.titulo}`,
+        Title: sanitizeTextForPdf(`Currículo - ${curriculo.personalInfo.name}`),
+        Author: sanitizeTextForPdf(curriculo.personalInfo.name),
+        Subject: sanitizeTextForPdf(`Candidatura para: ${dadosVaga.titulo}`),
         Creator: "Sistema de Currículo Automatizado",
       },
       bufferPages: true,
