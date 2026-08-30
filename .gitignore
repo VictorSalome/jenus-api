@@ -46,3 +46,4 @@ coverage/
 
 # Server access
 SERVER-ACCESS.md
+client_secret_*.json
