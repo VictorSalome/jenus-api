@@ -27,12 +27,15 @@ router.get("/monitor", async (req, res) => {
     try {
       const dbHistory = await getEnviosHistory(100);
       history = dbHistory.map((e: any) => ({
+        id: e.id,
         timestamp: e.created_at,
         title: e.vaga_titulo || "Vaga",
         company: e.company || "",
         email: e.email_destino || "",
         arquivo: e.filename || "",
         status: e.status === "SENT" ? "enviado" : e.status?.toLowerCase() || "desconhecido",
+        messageId: e.message_id || "",
+        gmailThreadId: e.gmail_thread_id || "",
         score: 0,
         query: "",
       }));

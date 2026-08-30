@@ -14,6 +14,7 @@ import * as logger from "./core/logger.js";
 import authApp from "./apps/auth/index.js";
 import promoModule from "./apps/promo/index.js";
 import curriculosModule from "./apps/curriculos/index.js";
+import gmailModule from "./apps/gmail/index.js";
 import { registerApp } from "./shared/http/app-registry.js";
 import { defaultLimiter, authLimiter } from "./shared/rate-limit/presets.js";
 
@@ -34,6 +35,7 @@ app.use(defaultLimiter);
 app.use("/api/auth", authLimiter, authApp);
 registerApp(app, promoModule);
 registerApp(app, curriculosModule);
+registerApp(app, gmailModule);
 
 app.get("/api/health", async (_req, res) => {
   try {

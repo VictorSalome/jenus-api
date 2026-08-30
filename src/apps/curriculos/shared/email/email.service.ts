@@ -14,6 +14,22 @@ import {
 export { getSmtpRuntimeConfig, criarTransporter };
 
 /**
+ * Retorna o email Gmail conectado (para usar como replyTo), ou null se não houver.
+ * Fallback do chamador: EMAIL_FROM / SMTP_USER.
+ */
+export const obterEmailGmailConectado = async (): Promise<string | null> => {
+  try {
+    const db = await getDb();
+    const row = await db.get<{ email: string | null }>(
+      "SELECT email FROM gmail_tokens WHERE email IS NOT NULL ORDER BY updated_at DESC LIMIT 1",
+    );
+    return row?.email || null;
+  } catch {
+    return null;
+  }
+};
+
+/**
  * Envia currículo por e-mail
  * @param {string} emailDestino - E-mail de destino
  * @param {string} caminhoArquivoPdf - Caminho do arquivo PDF
@@ -45,7 +61,7 @@ export const enviarCurriculo = async (
         address: process.env.EMAIL_FROM || process.env.SMTP_USER,
       },
       to: emailDestino,
-      replyTo: "victorsalome41@hotmail.com",
+      replyTo: (await obterEmailGmailConectado()) || process.env.EMAIL_FROM || process.env.SMTP_USER,
       subject: assunto,
       html: corpoEmail,
       attachments: [
@@ -504,9 +520,10 @@ export const enviarCurriculoComRegistro = async ({
   try {
     resultadoEmail = await enviarCurriculo(emailDestino, caminhoArquivoPdf, dadosVaga, candidato, salaryPretension, Boolean(salaryPretensionNegotiable));
     
-    // 3. Sucesso → UPDATE status = SENT
+    // 3. Sucesso → UPDATE status = SENT + message_id (para correlacionar respostas no Gmail)
     await db.run(
-      "UPDATE curriculo_envios SET status = 'SENT' WHERE id = ?",
+      "UPDATE curriculo_envios SET status = 'SENT', message_id = ? WHERE id = ?",
+      resultadoEmail.messageId || null,
       envioId
     );
     logInfo("Envio marcado como SENT", { envioId, messageId: resultadoEmail.messageId });
@@ -553,6 +570,7 @@ export const getEnviosHistory = async (limit = 50) => {
   const envios = await db.all(
     `SELECT e.id, e.vaga_id, e.filename, e.email_destino, e.vaga_titulo, e.status, e.created_at,
             e.salary_pretension, e.salary_pretension_negotiable,
+            e.message_id, e.gmail_thread_id,
             COALESCE(v.company, '') as company
      FROM curriculo_envios e
      LEFT JOIN curriculo_vagas v ON e.vaga_id = v.id
