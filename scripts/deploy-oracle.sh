@@ -1,6 +1,10 @@
 #!/bin/bash
 
-# Deploy manual para Oracle Cloud
+# Deploy de ATUALIZAÇÃO para Oracle Cloud (usado por `pnpm deploy`).
+# O setup INICIAL da VM é feito uma única vez por scripts/setup-oracle.sh.
+# Este script NÃO altera o .env da VM — ele faz git pull + build + pm2 reload.
+# O .env (com DISCORD_WEBHOOK_URL, JWT_*, etc.) deve estar presente na VM.
+#
 # Uso:
 #   npm run deploy
 #   npm run deploy:oracle

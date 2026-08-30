@@ -59,27 +59,31 @@ Na VM, execute:
 git clone https://github.com/VictorSalome/enviaPromo.git
 cd enviaPromo
 
-# Executa script de instalação
-chmod +x scripts/oracle-deploy.sh
-./scripts/oracle-deploy.sh
+# Executa script de instalação inicial
+chmod +x scripts/setup-oracle.sh
+./scripts/setup-oracle.sh
 ```
+
+> O `setup-oracle.sh` clona para `/home/ubuntu/jenus-api`, builda e gera o `.env`
+> a partir de `.env.example`. Ele **não escreve segredos** — edite o `.env` após rodar.
 
 ### 6. Configurar .env
 ```bash
-cd /opt/promo-monitor
+cd /home/ubuntu/jenus-api
 cp .env.example .env
 nano .env
 ```
 
-Preencha:
+Preencha os valores reais (não deixe placeholders):
 ```
 NODE_ENV=production
 PORT=3001
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD_HASH=...
-SESSION_SECRET=chave-secreta-32-caracteres
-WHATSAPP_PHONE=5511987319331
-CALLMEBOT_APIKEY=2359872
+ADMIN_PASSWORD_HASH=...        # gere com bcrypt
+JWT_ACCESS_SECRET=...          # segredo forte (>=16 chars)
+JWT_REFRESH_SECRET=...         # segredo forte (>=16 chars)
+SESSION_SECRET=...             # segredo forte (>=32 chars)
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<ID>/<TOKEN>
 CHECK_INTERVAL_SECONDS=30
 MIN_TIME_BETWEEN_MESSAGES=30
 URGENT_ENABLED=true
@@ -131,7 +135,7 @@ pm2 restart promo-monitor
 ## 🔄 Atualizar Aplicação
 
 ```bash
-cd /opt/promo-monitor
+cd /home/ubuntu/jenus-api
 git pull
 npm install
 npm run build
@@ -202,7 +206,7 @@ sudo kill -9 PID
 
 ### Erro: Permissão negada no SQLite
 ```bash
-sudo chown -R ubuntu:ubuntu /opt/promo-monitor/data
+sudo chown -R ubuntu:ubuntu /home/ubuntu/jenus-api/data
 ```
 
 ### Erro: Node.js não encontrado

@@ -3,10 +3,17 @@
 ## Infraestrutura
 
 - **Host Oracle Cloud**: `136.248.109.21` (user `ubuntu`, SSH key `~/.ssh/oracle.key`)
-- **Diretório remoto**: `/home/ubuntu/enviaPromo`
+- **Diretório remoto**: `/home/ubuntu/jenus-api`
 - **PM2**: processo `promo-monitor` rodando `dist/index.js`
-- **GitHub**: `VictorSalome/enviaPromo`, branch `master` (GitHub Actions faz deploy em push)
+- **GitHub**: `VictorSalome/enviaPromo`, branch `main` (GitHub Actions faz deploy em push)
 - **Railway**: `railway.toml` com `startCommand: node dist/index.js`
+
+## Scripts de deploy (2 únicos)
+
+- `scripts/setup-oracle.sh` — **setup inicial** da VM (1ª vez): instala OS/Node/PM2, clona o repo em `/home/ubuntu/jenus-api`, builda e gera o `.env` a partir de `.env.example`. **Não escreve segredos** — você edita o `.env` depois.
+- `scripts/deploy-oracle.sh` — **atualização** (usado por `pnpm deploy`): `git pull` + `build` + `pm2 reload`. Não altera o `.env`.
+
+> Os antigos `deploy.sh`, `deploy-manual.sh` e `oracle-deploy.sh` foram removidos (escreviam `.env` com webhook placeholder e segredos hardcoded).
 
 ## Deploy Manual (Oracle)
 
@@ -16,7 +23,7 @@ pnpm deploy          # = bash scripts/deploy-oracle.sh
 
 O script:
 1. Faz `pnpm build` local
-2. Commit + push para `master`
+2. Commit + push para `main`
 3. No Oracle: `git pull && npm install && npm run build && pm2 restart promo-monitor`
 
 > ⚠️ O projeto usa **pnpm** localmente (pnpm-lock.yaml). O script remoto ainda usa `npm install` — se o servidor não tiver pnpm, instale com `npm install -g pnpm` na VM. O `npm install` funciona por ler package.json, mas a consistência de lockfile exige pnpm.
@@ -44,13 +51,13 @@ sudo apt install -y nodejs git
 curl -fsSL https://get.pnpm.io/install.sh | sh -
 sudo npm install -g pm2
 
-# 3. Clonar e rodar
-git clone https://github.com/VictorSalome/enviaPromo.git /home/ubuntu/enviaPromo
-cd /home/ubuntu/enviaPromo
+# 3. Clonar e rodar (ou usar scripts/setup-oracle.sh)
+git clone https://github.com/VictorSalome/enviaPromo.git /home/ubuntu/jenus-api
+cd /home/ubuntu/jenus-api
 cp .env.example .env        # edite com ADMIN_USERNAME, ADMIN_PASSWORD_HASH e JWT secrets
 pnpm install --prod
 pnpm build
-pm2 start scripts/pm2.config.js
+pm2 start scripts/pm2.config.cjs
 ```
 
 ## Variáveis de Ambiente (produção)

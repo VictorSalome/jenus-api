@@ -25,13 +25,22 @@ Se pedir senha e não aceitar em branco:
 
 ---
 
-## Passo 3: Executar o Deploy (Comando Único)
+## Passo 3: Executar o Deploy (Setup Inicial)
 
-**Cole exatamente este comando e pressione Enter:**
+O setup inicial roda **DENTRO** da VM. Primeiro acesse via SSH e depois rode:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/VictorSalome/enviaPromo/master/scripts/deploy.sh | bash
+ssh -i ~/.ssh/oracle.key ubuntu@136.248.109.21
+# dentro da VM:
+cd ~/enviaPromo
+chmod +x scripts/setup-oracle.sh
+./scripts/setup-oracle.sh
 ```
+
+O script clona para `/home/ubuntu/jenus-api`, builda e gera o `.env` a partir de
+`.env.example`. **Edite o `.env` em seguida** para preencher os valores reais
+(`DISCORD_WEBHOOK_URL`, `JWT_*`, `ADMIN_PASSWORD_HASH`, etc.) e rode
+`pm2 restart promo-monitor`.
 
 ---
 
@@ -107,7 +116,7 @@ sudo swapon /swapfile
 # 4. Baixar projeto
 cd ~
 git clone https://github.com/VictorSalome/enviaPromo.git
-cd enviaPromo
+cd /home/ubuntu/jenus-api
 
 # 5. Instalar
 npm install
@@ -115,20 +124,9 @@ npm install
 # 6. Build
 npm run build
 
-# 7. Configurar
- cat > .env << 'EOF'
-NODE_ENV=production
-PORT=3001
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD_HASH=$2a$10$yXf3vK0vlJKnRD3sWMiVyOeUYdyV4zceeLgxf.Qc5TRE0C3Q5hJrK
-SESSION_SECRET=chave-oracle-cloud-32-chars
-WHATSAPP_PHONE=5511987319331
-CALLMEBOT_APIKEY=2359872
-CHECK_INTERVAL_SECONDS=30
-MIN_TIME_BETWEEN_MESSAGES=30
-URGENT_ENABLED=true
-DATABASE_PATH=./data/promo-monitor.db
-EOF
+# 7. Configurar .env a partir do template (sem segredos hardcoded)
+cp .env.example .env
+nano .env   # preencha DISCORD_WEBHOOK_URL, JWT_*, ADMIN_PASSWORD_HASH, etc.
 
 # 8. Dados
 mkdir -p data
@@ -137,7 +135,7 @@ mkdir -p data
 sudo npm install -g pm2
 
 # 10. Iniciar
-pm2 start dist/index.js --name "promo-monitor"
+pm2 start scripts/pm2.config.cjs
 pm2 save
 ```
 

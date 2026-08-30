@@ -1,84 +1,75 @@
 #!/bin/bash
-# Script de deploy para Oracle Cloud - VM.Standard.E2.1.Micro
-# Com swap para compensar 1GB RAM
+# Script de SETUP INICIAL da VM Oracle Cloud (1ª execução).
+# Uso (DENTRO da VM via SSH):
+#   ssh -i ~/.ssh/oracle.key ubuntu@136.248.109.21
+#   bash scripts/setup-oracle.sh
+#
+# Este script NÃO escreve segredos nem placeholders. Ele instala o ambiente,
+# clona o repositório, builda e gera o `.env` a partir de `.env.example`.
+# Você PRECISA editar o `.env` depois para preencher os valores reais
+# (DISCORD_WEBHOOK_URL, JWT_*, ADMIN_PASSWORD_HASH, etc).
 
 set -e
 
-IP="136.248.109.21"
+REMOTE_DIR="/home/ubuntu/jenus-api"
+REPO_URL="https://github.com/VictorSalome/enviaPromo.git"
+BRANCH="main"
 
-echo "🚀 Deploy Promo Monitor no Oracle Cloud"
-echo "IP: $IP"
-echo ""
+echo "🚀 Setup inicial do Promo Monitor na Oracle VM ($REMOTE_DIR)"
 
-# Verifica se está rodando na VM
-if [ "$(hostname -I | grep $IP)" = "" ]; then
-  echo "❌ Execute este script DENTRO da VM via SSH!"
-  echo "Comando: ssh -i sua-chave.key ubuntu@$IP"
-  exit 1
-fi
-
-echo "📦 Atualizando sistema..."
+# 1. SO + Node 20 + PM2
+echo "📦 Instalando dependências do sistema..."
 sudo apt update -qq
-
-echo "📦 Instalando Node.js..."
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs git
-
-echo "💾 Configurando swap (2GB para compensar RAM)..."
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-sudo bash -c 'echo "/swapfile none swap sw 0 0" >> /etc/fstab'
-free -h
-
-echo "📥 Clonando repositório..."
-cd ~/
-git clone https://github.com/VictorSalome/enviaPromo.git
-cd enviaPromo
-
-echo "📦 Instalando dependências..."
-npm install
-
-echo "🔨 Build..."
-npm run build
-
-echo "🌐 Instalando PM2..."
 sudo npm install -g pm2
 
-echo "📝 Configurando .env..."
-cat > .env << 'EOF'
-NODE_ENV=production
-PORT=3001
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD_HASH=$2a$10$yXf3vK0vlJKnRD3sWMiVyOeUYdyV4zceeLgxf.Qc5TRE0C3Q5hJrK
-SESSION_SECRET=chave-oracle-cloud-promo-monitor-32-chars
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1515734935909171263/nV1DfgLt3U7vmg7tyb8nIJqtIGzxv_oF5yrdWb4zVUslS_RMyUMEW1xv7LVy5zXr5qU5
-CHECK_INTERVAL_SECONDS=30
-MIN_TIME_BETWEEN_MESSAGES=30
-URGENT_ENABLED=true
-DATABASE_PATH=./data/promo-monitor.db
-EOF
+# 2. Swap (compensar RAM da VM)
+echo "💾 Configurando swap (2GB)..."
+if [ ! -f /swapfile ]; then
+  sudo fallocate -l 2G /swapfile
+  sudo chmod 600 /swapfile
+  sudo mkswap /swapfile
+  sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+fi
 
-echo "📁 Criando diretório de dados..."
+# 3. Clonar repositório
+echo "📥 Clonando repositório em $REMOTE_DIR..."
+if [ -d "$REMOTE_DIR" ]; then
+  echo "⚠️  $REMOTE_DIR já existe — pulando clone."
+else
+  git clone -b "$BRANCH" "$REPO_URL" "$REMOTE_DIR"
+fi
+cd "$REMOTE_DIR"
+
+# 4. Instalar + build
+echo "📦 Instalando dependências e build..."
+npm install
+npm run build
+
+# 5. Gerar .env a partir do template (SEM segredos hardcoded)
+echo "📝 Gerando .env a partir de .env.example..."
+if [ ! -f .env ]; then
+  cp .env.example .env
+  echo "✅ .env criado. EDITE agora e preencha os valores reais:"
+  echo "   - DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<ID>/<TOKEN>"
+  echo "   - JWT_ACCESS_SECRET / JWT_REFRESH_SECRET / ADMIN_PASSWORD_HASH / SESSION_SECRET"
+  echo "   Depois rode: pm2 restart promo-monitor"
+else
+  echo "ℹ️  .env já existe — não sobrescrevendo. Confira se DISCORD_WEBHOOK_URL está correto."
+fi
+
+# 6. Dados
 mkdir -p data
 
-echo "🚀 Iniciando aplicação..."
-pm2 start dist/index.js --name "promo-monitor"
+# 7. Iniciar com PM2 (via config central)
+echo "🚀 Iniciando com PM2..."
+pm2 start scripts/pm2.config.cjs || pm2 restart promo-monitor
 pm2 save
-pm2 startup systemd --non-interactive
-
-echo "✅ DEPLOY CONCLUÍDO!"
-echo ""
-echo "📊 Status:"
-pm2 status
+pm2 startup systemd --non-interactive || true
 
 echo ""
-echo "🌐 Acesse: http://$IP:3001"
-echo "👤 Login: admin / admin123"
-echo ""
-echo "📋 Comandos úteis:"
-echo "  pm2 logs promo-monitor  - Ver logs"
-echo "  pm2 restart promo-monitor  - Reiniciar"
-echo "  pm2 stop promo-monitor  - Parar"
-echo ""
+echo "✅ Setup concluído!"
+echo "🌐 API: http://136.248.109.21:3001"
+echo "📋 Próximo passo obrigatório: editar $REMOTE_DIR/.env com os valores reais e rodar 'pm2 restart promo-monitor'"
