@@ -176,5 +176,13 @@ export const curriculoMigrations: Migration[] = [
       ALTER TABLE curriculo_profile_personal ADD COLUMN salary_pretension TEXT;
     `,
   },
+  {
+    id: "curriculo_010_salary_per_candidatura",
+    up: `
+      ALTER TABLE curriculo_envios ADD COLUMN salary_pretension TEXT;
+      ALTER TABLE curriculo_envios ADD COLUMN salary_pretension_negotiable INTEGER DEFAULT 0;
+      ALTER TABLE curriculo_envios ADD COLUMN curriculo_snapshot TEXT;
+    `,
+  },
 ];
 

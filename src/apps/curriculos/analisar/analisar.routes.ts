@@ -10,6 +10,7 @@ import {
   statusController,
   analisarVagaController,
 } from "./analisar.controller.js";
+import { getDb } from "../../../core/database.js";
 
 const router = express.Router();
 
@@ -117,6 +118,53 @@ pdfPreviewRouter.get('/temp/:filename', requirePdfPreviewToken, async (req: any,
       });
     }
   });
+});
+
+// Rota para regerar PDF a partir de um envio
+router.post("/envios/:id/regerar-pdf", requireAuth, async (req: any, res: any) => {
+  try {
+    const envioId = req.params.id;
+    const db = await getDb();
+    const envio = await db.get("SELECT * FROM curriculo_envios WHERE id = ?", envioId);
+    
+    if (!envio) {
+      return res.status(404).json({ success: false, error: { message: "Envio não encontrado" } });
+    }
+
+    const user = req.user;
+    const isAdmin = user.role === "admin";
+    if (!isAdmin && envio.email_destino !== user.email) {
+      return res.status(403).json({ success: false, error: { message: "Acesso negado" } });
+    }
+
+    if (!envio.curriculo_snapshot) {
+      return res.status(400).json({ success: false, error: { message: "Snapshot do currículo não disponível para este envio" } });
+    }
+
+    const snapshot = JSON.parse(envio.curriculo_snapshot);
+    const vaga = await db.get("SELECT * FROM curriculo_vagas WHERE id = ?", envio.vaga_id);
+    
+    const dadosVaga = {
+      titulo: envio.vaga_titulo,
+      empresa: vaga?.company || "",
+      areaAtuacao: vaga?.skills_json ? JSON.parse(vaga.skills_json)[0] || "" : "",
+      stackTecnologica: vaga?.skills_json ? JSON.parse(vaga.skills_json) : [],
+      emailContato: envio.email_destino
+    };
+
+    const { gerarPdfCurriculo } = await import("../shared/pdf/pdfGenerator.service.js");
+    const caminhoPdf = await gerarPdfCurriculo(snapshot, dadosVaga);
+    const filename = path.basename(caminhoPdf);
+
+    return res.json({
+      success: true,
+      previewUrl: `/api/curriculo/temp/${filename}`,
+      filename,
+    });
+  } catch (error) {
+    console.error("Erro ao regerar PDF:", error);
+    return res.status(500).json({ success: false, error: { message: error.message || "Erro interno" } });
+  }
 });
 
 // Rota para gerar token temporário

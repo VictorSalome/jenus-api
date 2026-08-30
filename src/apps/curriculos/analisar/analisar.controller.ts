@@ -472,10 +472,27 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
   // Enviar email com registro atômico PENDING → SENT/FAILED
   let resultadoEmail;
   try {
+    let empresa = "";
+    let stackTecnologica: string[] = [];
+    let areaAtuacao = "";
+    if (vagaId) {
+      const vagaRow = await db.get("SELECT company, skills_json FROM curriculo_vagas WHERE id = ?", vagaId);
+      if (vagaRow) {
+        empresa = vagaRow.company || "";
+        try { stackTecnologica = vagaRow.skills_json ? JSON.parse(vagaRow.skills_json) : []; } catch { stackTecnologica = []; }
+        if (stackTecnologica.length > 0) areaAtuacao = stackTecnologica[0];
+      }
+    }
     resultadoEmail = await enviarCurriculoComRegistro({
       emailDestino,
       caminhoArquivoPdf,
-      dadosVaga: { titulo: vagaTitulo, emailContato: emailDestino },
+      dadosVaga: {
+        titulo: vagaTitulo,
+        empresa,
+        areaAtuacao,
+        stackTecnologica,
+        emailContato: emailDestino,
+      },
       candidato: {
         name: personalInfo.name,
         email: personalInfo.email,
@@ -484,9 +501,13 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
         linkedin: personalInfo.linkedin,
         github: personalInfo.github,
         portfolio: personalInfo.portfolio,
+        title: personalInfo.title,
         salaryPretension: personalInfo.salaryPretension,
       },
       vagaId: vagaId || null,
+      curriculoSnapshot: null,
+      salaryPretension: personalInfo.salaryPretension,
+      salaryPretensionNegotiable: 0,
     });
   } catch (emailError) {
     logError("Erro no envio de e-mail", emailError);

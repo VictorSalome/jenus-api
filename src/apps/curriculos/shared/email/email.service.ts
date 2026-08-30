@@ -26,6 +26,8 @@ export const enviarCurriculo = async (
   caminhoArquivoPdf,
   dadosVaga,
   candidato,
+  pretensaoSalarial = null,
+  pretensaoNegociavel = false,
 ) => {
   try {
     logInfo("Iniciando envio de e-mail", { destino: emailDestino });
@@ -33,7 +35,7 @@ export const enviarCurriculo = async (
 
     const nomeArquivo = path.basename(caminhoArquivoPdf);
     const assunto = gerarAssunto(dadosVaga, candidato);
-    const corpoEmail = gerarCorpoEmail(dadosVaga, candidato);
+    const corpoEmail = gerarCorpoEmail(dadosVaga, candidato, pretensaoSalarial, pretensaoNegociavel);
     const sendTimeoutMs = parseInt(process.env.EMAIL_SEND_TIMEOUT_MS) || 20000;
 
     const mailOptions = {
@@ -174,7 +176,7 @@ const CORES = {
  * @param {Object} candidato - Dados do candidato
  * @returns {string} Corpo do e-mail em HTML
  */
-const gerarCorpoEmail = (dadosVaga, candidato) => {
+const gerarCorpoEmail = (dadosVaga, candidato, pretensaoSalarial = null, pretensaoNegociavel = false) => {
   const nomeVaga = escapeHtml(dadosVaga.titulo || "a vaga anunciada");
   const nomeCandidato = escapeHtml(candidato.name || "Candidato");
   const cargoCandidato = escapeHtml(candidato.title || "");
@@ -217,6 +219,16 @@ const gerarCorpoEmail = (dadosVaga, candidato) => {
     .join("\n");
 
   const pontosHtml = gerarPontosRelevantes(dadosVaga, candidato);
+  const activePretensao = pretensaoSalarial !== null ? pretensaoSalarial : (candidato.salaryPretension || candidato.salary_pretension || "");
+  const pretensaoSalarialHtml = activePretensao ? `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">
+  <tr>
+    <td style="padding:14px 16px;background-color:${CORES.fundo};border:1px solid ${CORES.borda};border-radius:6px;">
+      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:${CORES.textoSecundario};">Pretensão salarial</p>
+      <p style="margin:4px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:${CORES.texto};">${pretensaoNegociavel ? "A negociar" : activePretensao}</p>
+    </td>
+  </tr>
+</table>` : "";
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -244,6 +256,7 @@ const gerarCorpoEmail = (dadosVaga, candidato) => {
               <p style="margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:${CORES.texto};">
                 Venho apresentar minha candidatura para a posição de <strong>${nomeVaga}</strong> em ${empresa}. Após analisar os requisitos da vaga, acredito que meu perfil está alinhado com o que buscam:
               </p>
+              ${pretensaoSalarialHtml}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">
                 ${pontosHtml}
               </table>
@@ -322,14 +335,6 @@ const gerarPontosRelevantes = (dadosVaga, candidato) => {
       "Perfil profissional alinhado com os requisitos da vaga",
       "Experiência prática e conhecimento técnico atualizado",
       "Motivação para contribuir com o crescimento da empresa",
-    );
-  }
-
-  // Pretensão salarial do candidato (se preenchida no perfil)
-  const pretensaoSalarial = candidato.salaryPretension || candidato.salary_pretension || "";
-  if (pretensaoSalarial && pretensaoSalarial.trim()) {
-    pontos.push(
-      `Pretensão salarial: <strong>${escapeHtml(pretensaoSalarial)}</strong>`,
     );
   }
 
@@ -461,6 +466,9 @@ export const enviarCurriculoComRegistro = async ({
   dadosVaga,
   candidato,
   vagaId = null,
+  curriculoSnapshot = null,
+  salaryPretension = null,
+  salaryPretensionNegotiable = 0,
 }) => {
   const db = await getDb();
   
@@ -469,12 +477,15 @@ export const enviarCurriculoComRegistro = async ({
   try {
     await db.exec("BEGIN TRANSACTION");
     const result = await db.run(
-      `INSERT INTO curriculo_envios (vaga_id, filename, email_destino, vaga_titulo, status)
-       VALUES (?, ?, ?, ?, 'PENDING')`,
+      `INSERT INTO curriculo_envios (vaga_id, filename, email_destino, vaga_titulo, status, salary_pretension, salary_pretension_negotiable, curriculo_snapshot)
+       VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?)`,
       vagaId,
       path.basename(caminhoArquivoPdf),
       emailDestino,
-      dadosVaga.titulo || "Vaga não identificada"
+      dadosVaga.titulo || "Vaga não identificada",
+      salaryPretension,
+      salaryPretensionNegotiable ? 1 : 0,
+      curriculoSnapshot,
     );
     envioId = result.lastID;
     await db.exec("COMMIT");
@@ -490,7 +501,7 @@ export const enviarCurriculoComRegistro = async ({
   let erroEnvio = null;
   
   try {
-    resultadoEmail = await enviarCurriculo(emailDestino, caminhoArquivoPdf, dadosVaga, candidato);
+    resultadoEmail = await enviarCurriculo(emailDestino, caminhoArquivoPdf, dadosVaga, candidato, salaryPretension, Boolean(salaryPretensionNegotiable));
     
     // 3. Sucesso → UPDATE status = SENT
     await db.run(
@@ -540,6 +551,7 @@ export const getEnviosHistory = async (limit = 50) => {
   const db = await getDb();
   const envios = await db.all(
     `SELECT e.id, e.vaga_id, e.filename, e.email_destino, e.vaga_titulo, e.status, e.created_at,
+            e.salary_pretension, e.salary_pretension_negotiable,
             COALESCE(v.company, '') as company
      FROM curriculo_envios e
      LEFT JOIN curriculo_vagas v ON e.vaga_id = v.id

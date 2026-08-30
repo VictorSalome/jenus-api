@@ -242,6 +242,40 @@ function categorizeSkills(skills: string[]): Record<string, string[]> {
   return categorized;
 }
 
+export function detectarExigenciaPretensao(texto: string): boolean {
+  if (!texto || typeof texto !== 'string') return false;
+  const normalized = normalizeText(texto);
+  const positivePatterns = [
+    /pretensao salarial/i,
+    /pretensao em salario/i,
+    /pretensao de salario/i,
+    /quanto pretende/i,
+    /qual sua pretensao/i,
+    /informar pretensao/i,
+    /informe sua pretensao/i,
+    /enviar pretensao/i,
+    /expectativa salarial/i,
+    /qual a expectativa/i,
+    /pretensao salarial no corpo/i,
+    /pretensao salarial no email/i,
+  ];
+  const negativePatterns = [
+    /sem pretensao/i,
+    /nao e necessario pretensao/i,
+    /nao precisa informar pretensao/i,
+  ];
+
+  for (const neg of negativePatterns) {
+    if (neg.test(normalized)) return false;
+  }
+
+  for (const pos of positivePatterns) {
+    if (pos.test(normalized)) return true;
+  }
+
+  return false;
+}
+
 export interface ParsedVaga {
   title: string | null;
   company: string | null;
@@ -256,6 +290,7 @@ export interface ParsedVaga {
   contactEmail: string | null;
   categorizedSkills: Record<string, string[]>;
   rawDescription: string;
+  exigePretensaoSalarial: boolean;
 }
 
 /**
@@ -281,6 +316,7 @@ export function parseVaga(texto: string): ParsedVaga | null {
   const benefits = extractBenefits(texto);
   const contactEmail = extractContactEmail(texto);
   const categorizedSkills = categorizeSkills(skills);
+  const exigePretensaoSalarial = detectarExigenciaPretensao(texto);
   
   return {
     title: title || null,
@@ -295,6 +331,7 @@ export function parseVaga(texto: string): ParsedVaga | null {
     benefits,
     contactEmail,
     categorizedSkills,
-    rawDescription
+    rawDescription,
+    exigePretensaoSalarial
   };
 }
