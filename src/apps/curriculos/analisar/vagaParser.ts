@@ -213,8 +213,12 @@ function extractBenefits(text: string): string[] | null {
 
 function extractContactEmail(text: string): string | null {
   const patterns = [
-    /(?:envie|mande|encaminhe|curr[ií]culo\s*para|contato)[:\s]*([\w.+-]+@[\w-]+\.[\w.-]+)/i,
-    /email[\s:]*([\w.+-]+@[\w-]+\.[\w.-]+)/i
+    // Padrões contextuais (palavras-chave antes do email)
+    /(?:envie|mande|encaminhe|curr[ií]culo\s*para|CV\s*para|contato|envio)[:\s]*([\w.+-]+@[\w-]+\.[\w.-]+)/i,
+    /email[\s:]*([\w.+-]+@[\w-]+\.[\w.-]+)/i,
+    // Fallback genérico: captura qualquer email @dominio.com no texto
+    // (colocado por último para não sobrepor os contextuais mais precisos)
+    /([\w.+-]+@[\w-]+\.[\w.-]+)/i,
   ];
   for (const p of patterns) {
     const m = text.match(p);
