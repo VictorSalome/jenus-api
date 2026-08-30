@@ -187,6 +187,18 @@ const startServer = async (): Promise<void> => {
   try {
     await initDb();
 
+    // Auto-resume do monitor de promoções se estava ativo antes do restart.
+    const { loadMonitorState } = await import("./apps/promo/monitor/monitor.state.js");
+    await loadMonitorState();
+    const { getMonitorStatus } = await import("./apps/promo/monitor/monitor.state.js");
+    if (getMonitorStatus().running) {
+      const { startMonitor } = await import("./apps/promo/monitor/monitor.service.js");
+      logger.info("Auto-resumindo monitor de promoções...", "Monitor");
+      startMonitor().catch((err) =>
+        logger.error(`Falha no auto-resume do monitor: ${err}`, "Monitor"),
+      );
+    }
+
     app.listen(config.PORT, () => {
       logger.info(`🚀 Jenus API rodando na porta ${config.PORT}`, "Server");
       logger.info(`📊 Ambiente: ${config.NODE_ENV}`, "Server");

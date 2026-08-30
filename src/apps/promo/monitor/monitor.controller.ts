@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
-import { startMonitor, stopMonitor, getMonitorStatus } from './monitor.service.js';
+import { startMonitor, stopMonitor } from './monitor.service.js';
 import { startTelegramMonitor } from './monitor.telegram.js';
-import { getConnectionStatus } from './monitor.state.js';
+import { getConnectionStatus, getTelemetry } from './monitor.state.js';
 import { sendTelegramMessage } from '../telegram-bot/bot.service.js';
 import { sendDiscordPromo } from '../discord/discord.service.js';
 
 export const getStatus = async (_req: Request, res: Response): Promise<void> => {
-  const status = getMonitorStatus();
+  const status = getTelemetry();
   res.json({ success: true, data: status });
 };
 
@@ -56,7 +56,7 @@ export const testFullFlow = async (_req: Request, res: Response): Promise<void> 
 
   // 2. Testar Discord (enviar promoção simulada)
   try {
-    const dcSent = await sendDiscordPromo({
+    const dcResult = await sendDiscordPromo({
       product: 'Smart TV LG 43" 4K UHD',
       price: 1999.00,
       originalPrice: 2999.00,
@@ -68,7 +68,9 @@ export const testFullFlow = async (_req: Request, res: Response): Promise<void> 
       imageUrl: null,
       imageBuffer: null,
     });
-    results.discord = dcSent ? 'Embed de promoção enviado ao Discord' : 'Falha ao enviar';
+    results.discord = dcResult.ok
+      ? 'Embed de promoção enviado ao Discord'
+      : `Falha: ${dcResult.error || 'envio'}`;
   } catch (err: any) {
     results.discord = `Erro: ${err.message}`;
   }

@@ -1,6 +1,7 @@
 import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions/StringSession.js";
 import { NewMessage } from "telegram/events/index.js";
+import * as logger from "../../../core/logger.js";
 
 import {
   getConfig,
@@ -13,7 +14,16 @@ import {
 } from "../filter/filter.repository.js";
 import { isDuplicate, addSentMessage } from "../dedup/dedup.repository.js";
 import { discordQueue } from "../discord/discord.service.js";
-import { getMonitorStatus, setRunningState, setTelegramConnected } from "./monitor.state.js";
+import {
+  getMonitorStatus,
+  setRunningState,
+  setTelegramConnected,
+  setLastCheckAt,
+  setLastError,
+  setConsecutiveErrors,
+  setCurrentIntervalMs,
+  addMessagesProcessed,
+} from "./monitor.state.js";
 
 let client: TelegramClient | null = null;
 let isProcessing = false;
@@ -40,7 +50,7 @@ const MAX_INTERVAL = 300000; // 5 minutos máximo
 
 export async function startTelegramMonitor(): Promise<void> {
   if (isProcessing) {
-    console.log("[Monitor] Já está processando");
+    logger.info("Já está processando", "Monitor");
     return;
   }
 
@@ -54,13 +64,13 @@ export async function startTelegramMonitor(): Promise<void> {
 
     const tgConfig = await getConfig();
     if (!tgConfig || !tgConfig.apiId || !tgConfig.apiHash) {
-      console.log("[Monitor] Configuração do Telegram não encontrada");
+      logger.info("[Monitor] Configuração do Telegram não encontrada");
       return;
     }
 
     // Verificar se está conectado
     if (!tgConfig.isConnected || !tgConfig.sessionString) {
-      console.log("[Monitor] Telegram não autenticado. Aguardando autenticação...");
+      logger.info("[Monitor] Telegram não autenticado. Aguardando autenticação...");
       scheduleNextCheck();
       return;
     }
@@ -72,7 +82,7 @@ export async function startTelegramMonitor(): Promise<void> {
     });
 
     if (activeChannels.length === 0) {
-      console.log("[Monitor] Nenhum canal ativo");
+      logger.info("[Monitor] Nenhum canal ativo");
       scheduleNextCheck();
       return;
     }
@@ -86,7 +96,7 @@ export async function startTelegramMonitor(): Promise<void> {
     }
 
     if (!client || !client.connected) {
-      console.log("[Monitor] Cliente desconectado. Recriando conexão...");
+      logger.info("[Monitor] Cliente desconectado. Recriando conexão...");
       setTelegramConnected(false);
       if (client) {
         try { await client.destroy(); } catch (e) {}
@@ -95,7 +105,7 @@ export async function startTelegramMonitor(): Promise<void> {
       await createClient(tgConfig);
     }
 
-    console.log(
+    logger.info(
       `[Monitor] Verificando ${activeChannels.length} canais (Modo: ${noFilterMode ? "SEM FILTRO" : "FILTRADO"})`,
     );
 
@@ -114,9 +124,9 @@ export async function startTelegramMonitor(): Promise<void> {
         batch.map(async (ch) => {
           const count = await processChannel(ch.username, noFilterMode, filters);
           if (count > 0) {
-            console.log(`[Monitor] Canal ${ch.username}: ${count} mensagens enviadas`);
+            logger.info(`[Monitor] Canal ${ch.username}: ${count} mensagens enviadas`);
           } else {
-            console.log(`[Monitor] Canal ${ch.username}: sem mensagens novas`);
+            logger.info(`[Monitor] Canal ${ch.username}: sem mensagens novas`);
           }
           return count;
         })
@@ -130,28 +140,35 @@ export async function startTelegramMonitor(): Promise<void> {
     if (messagesFound > 0) {
       currentCheckInterval = Math.max(MIN_INTERVAL, currentCheckInterval * 0.8);
       consecutiveErrors = 0;
+      addMessagesProcessed(messagesFound);
     } else {
       currentCheckInterval = Math.min(MAX_INTERVAL, currentCheckInterval * 1.1);
     }
 
-    console.log(
+    setCurrentIntervalMs(currentCheckInterval);
+
+    logger.info(
       `[Monitor] Próxima verificação em ${(currentCheckInterval / 1000).toFixed(0)}s`,
     );
   } catch (err: any) {
-    console.error("[Monitor] Erro:", err);
+    logger.error("[Monitor] Erro:", err);
     consecutiveErrors++;
+    setLastError(err?.message || String(err));
+    setConsecutiveErrors(consecutiveErrors);
 
     // Tratamento inteligente de FloodWait (baseado na skill Telegram)
     if (err.code === 420 || err.errorMessage?.includes("FLOOD")) {
       const waitTime = err.seconds || 60;
-      console.log(`[Monitor] FloodWait detectado. Aguardando ${waitTime}s...`);
+      logger.info(`[Monitor] FloodWait detectado. Aguardando ${waitTime}s...`);
       currentCheckInterval = Math.max(waitTime * 1000, 120000);
     } else if (consecutiveErrors >= 3) {
-      console.log("[Monitor] Muitos erros consecutivos. Reconectando...");
+      logger.info("[Monitor] Muitos erros consecutivos. Reconectando...");
       await reconnectClient();
       consecutiveErrors = 0;
     }
   } finally {
+    setLastCheckAt(new Date().toISOString());
+    setCurrentIntervalMs(currentCheckInterval);
     isProcessing = false;
     scheduleNextCheck();
   }
@@ -244,7 +261,7 @@ function setupRealtimeHandler(): void {
       const activeChannels = await getActiveChannelUsernames();
       if (!activeChannels.has(channelUsername)) return;
 
-      console.log(`[Monitor][Tempo Real] Nova mensagem em ${channelUsername}`);
+      logger.info(`[Monitor][Tempo Real] Nova mensagem em ${channelUsername}`);
 
       const activeFiltersCount = await getActiveFiltersCount();
       const noFilterMode = activeFiltersCount === 0;
@@ -252,11 +269,11 @@ function setupRealtimeHandler(): void {
 
       await processMessage(message, channelUsername, filters, noFilterMode);
     } catch (err: any) {
-      console.error(`[Monitor][Tempo Real] Erro: ${err?.message || err}`);
+      logger.error(`[Monitor][Tempo Real] Erro: ${err?.message || err}`);
     }
   }, new NewMessage({}));
 
-  console.log("[Monitor] Handler de tempo real registrado");
+  logger.info("Handler de tempo real registrado", "Monitor");
 }
 
 function scheduleNextCheck(): void {
@@ -285,24 +302,24 @@ async function processChannel(
     });
 
     if (messages.length === 0) {
-      console.log(`[Monitor] Canal ${channelUsername}: getMessages retornou 0 mensagens`);
+      logger.info(`[Monitor] Canal ${channelUsername}: getMessages retornou 0 mensagens`);
       return 0;
     }
 
     // Filtrar apenas mensagens novas (ID > último rastreado)
     const messageIds = messages.map(m => m.id);
     const newMessages = lastId === 0 ? [] : messages.filter(m => (m.id || 0) > lastId);
-    console.log(`[Monitor] Canal ${channelUsername}: ${messages.length} msgs obtidas (IDs: ${Math.min(...messageIds)}-${Math.max(...messageIds)}), lastId=${lastId}, novas=${newMessages.length}`);
+    logger.info(`[Monitor] Canal ${channelUsername}: ${messages.length} msgs obtidas (IDs: ${Math.min(...messageIds)}-${Math.max(...messageIds)}), lastId=${lastId}, novas=${newMessages.length}`);
     if (newMessages.length === 0 && lastId === 0) {
       // Primeira execução: só rastrear o último ID sem enviar nada
       const maxId = Math.max(...messages.map(m => m.id || 0));
       lastMessageIds.set(channelUsername, maxId);
-      console.log(`[Monitor] Canal ${channelUsername}: rastreado último ID ${maxId}`);
+      logger.info(`[Monitor] Canal ${channelUsername}: rastreado último ID ${maxId}`);
       return 0;
     }
 
     if (newMessages.length === 0) {
-      console.log(`[Monitor] Canal ${channelUsername}: sem mensagens novas (último ID: ${lastId})`);
+      logger.info(`[Monitor] Canal ${channelUsername}: sem mensagens novas (último ID: ${lastId})`);
       return 0;
     }
 
@@ -327,12 +344,12 @@ async function processChannel(
 
     return sentCount;
   } catch (err: any) {
-    console.error(
+    logger.error(
       `[Monitor] Erro ao processar canal ${channelUsername}: ${err?.message || err}`,
     );
     // Se o cliente desconectou, marcar para reconexão no próximo ciclo
     if (err?.message === "Not connected" || err?.code === "TIMEOUT") {
-      console.log("[Monitor] Cliente desconectado durante processamento. Reconectando...");
+      logger.info("[Monitor] Cliente desconectado durante processamento. Reconectando...");
       setTelegramConnected(false);
       if (client) {
         try { await client.destroy(); } catch (e) {}
@@ -408,7 +425,7 @@ async function processMessage(
 
     return false;
   } catch (err) {
-    console.error("[Monitor] Erro ao processar mensagem:", err);
+    logger.error("[Monitor] Erro ao processar mensagem:", err);
     return false;
   }
 }
@@ -435,7 +452,7 @@ async function sendPromoMessage(
     // Verificar duplicata com janela maior (24 horas)
     const dup = await isDuplicate(link, product, price || undefined, 1440);
     if (dup) {
-      console.log("[Monitor] Duplicata ignorada:", product);
+      logger.info("[Monitor] Duplicata ignorada:", product);
       return false;
     }
 
@@ -467,7 +484,7 @@ async function sendPromoMessage(
         priority: urgent ? 'high' : 'normal',
       });
     } catch (e) {
-      console.error('[Push] Erro ao enviar push de promo:', e);
+      logger.error('[Push] Erro ao enviar push de promo:', e);
     }
 
     // Price alert matching
@@ -508,7 +525,7 @@ async function sendPromoMessage(
         }
       }
     } catch (e) {
-      console.error('[Push] Erro ao verificar price alerts:', e);
+      logger.error('[Push] Erro ao verificar price alerts:', e);
     }
 
     await addSentMessage({
@@ -521,10 +538,10 @@ async function sendPromoMessage(
       matchedFilters: [filterName],
     });
 
-    console.log("[Monitor] Promoção enviada:", product);
+    logger.info("[Monitor] Promoção enviada:", product);
     return true;
   } catch (err) {
-    console.error("[Monitor] Erro ao enviar mensagem:", err);
+    logger.error("[Monitor] Erro ao enviar mensagem:", err);
     return false;
   }
 }
@@ -553,7 +570,7 @@ async function extractImageUrl(
     } catch (err: any) {
       // Imagem é opcional — loga só em debug
       if (err?.message !== "Not connected") {
-        console.log(`[Monitor] Erro ao baixar imagem: ${err?.message || err}`);
+        logger.info(`[Monitor] Erro ao baixar imagem: ${err?.message || err}`);
       }
     }
   }
@@ -694,5 +711,5 @@ export async function stopTelegramMonitor(): Promise<void> {
   setTelegramConnected(false);
   lastMessageIds.clear();
   setRunningState(false);
-  console.log("[Monitor] Monitor parado");
+  logger.info("Monitor parado", "Monitor");
 }

@@ -114,4 +114,23 @@ export const promoMigrations: Migration[] = [
       ALTER TABLE device_tokens RENAME TO promo_device_tokens;
     `,
   },
+  {
+    id: "promo_003_monitor_state",
+    up: `
+      CREATE TABLE IF NOT EXISTS promo_monitor_state (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        is_running INTEGER DEFAULT 0,
+        telegram_connected INTEGER DEFAULT 0,
+        last_check_at TIMESTAMP,
+        last_error TEXT,
+        consecutive_errors INTEGER DEFAULT 0,
+        current_interval_ms INTEGER DEFAULT 120000,
+        messages_processed INTEGER DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO promo_monitor_state (id, is_running) VALUES (1, 0)
+        ON CONFLICT(id) DO NOTHING;
+    `,
+  },
 ];

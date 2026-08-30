@@ -79,10 +79,10 @@ function buildTitle(discountData: { percent: number; badge: string }): string {
 async function sendWebhook(
   payload: object,
   imageBuffer?: { data: Buffer; ext: string } | null,
-): Promise<boolean> {
+): Promise<{ ok: boolean; error?: string }> {
   if (!WEBHOOK_URL) {
     logger.warn("DISCORD_WEBHOOK_URL não configurado, pulando envio", "Discord");
-    return false;
+    return { ok: false, error: "DISCORD_WEBHOOK_URL não configurado" };
   }
 
   try {
@@ -119,19 +119,23 @@ async function sendWebhook(
 
     if (res.ok) {
       logger.info("Mensagem enviada ao Discord!", "Discord");
-      return true;
+      return { ok: true };
     }
 
     const text = await res.text().catch(() => "");
-    logger.error(`Discord webhook retornou ${res.status}: ${text}`, "Discord");
-    return false;
+    const error = `Discord webhook retornou ${res.status}: ${text}`;
+    logger.error(error, "Discord");
+    return { ok: false, error };
   } catch (err) {
-    logger.error(`Erro ao enviar para Discord: ${err}`, "Discord");
-    return false;
+    const error = `Erro ao enviar para Discord: ${err}`;
+    logger.error(error, "Discord");
+    return { ok: false, error };
   }
 }
 
-export const sendDiscordPromo = async (data: PromoData): Promise<boolean> => {
+export const sendDiscordPromo = async (
+  data: PromoData,
+): Promise<{ ok: boolean; error?: string }> => {
   const priceStr = data.price ? formatBRL(data.price) : "Preço não informado";
   const discountData = getDiscountData(data.originalPrice, data.price, data.discount);
   const thumbnail = getStoreThumbnail(data.store);
@@ -205,7 +209,7 @@ export const sendTestMessage = async (): Promise<boolean> => {
     footer: { text: "Promo Monitor 🚀" },
   };
 
-  return sendWebhook({ embeds: [embed], username: "Promo Monitor 🚀" });
+  return sendWebhook({ embeds: [embed], username: "Promo Monitor 🚀" }).then((r) => r.ok);
 };
 
 export const sendMonitorStarted = async (): Promise<boolean> => {
@@ -218,7 +222,7 @@ export const sendMonitorStarted = async (): Promise<boolean> => {
     footer: { text: "Promo Monitor 🚀" },
   };
 
-  return sendWebhook({ embeds: [embed], username: "Promo Monitor 🚀" });
+  return sendWebhook({ embeds: [embed], username: "Promo Monitor 🚀" }).then((r) => r.ok);
 };
 
 // ========== FILA DE ENVIO COM RATE LIMIT ==========

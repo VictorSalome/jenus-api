@@ -1,34 +1,35 @@
 import { startTelegramMonitor, stopTelegramMonitor } from './monitor.telegram.js';
 import { getMonitorStatus, setRunningState } from './monitor.state.js';
 import { sendMonitorStarted } from '../discord/discord.service.js';
+import * as logger from '../../../core/logger.js';
 
 export const startMonitor = async (): Promise<void> => {
   if (getMonitorStatus().running) {
-    console.log('[Monitor] Monitor já está rodando');
+    logger.info('Monitor já está rodando', 'Monitor');
     return;
   }
-  
+
   setRunningState(true);
-  console.log('[Monitor] Iniciando monitoramento real do Telegram...');
-  
+  logger.info('Iniciando monitoramento real do Telegram...', 'Monitor');
+
   // Notificar no Discord que o monitor foi iniciado
   sendMonitorStarted().then((sent) => {
-    if (sent) console.log('[Monitor] Notificação enviada ao Discord');
+    if (sent) logger.info('Notificação enviada ao Discord', 'Monitor');
   });
-  
+
   // Iniciar imediatamente
   await startTelegramMonitor();
-  
+
   // Agendar verificações periódicas usando scheduleNextCheck do monitor.telegram
   // Não usar setInterval para evitar duplicidade com o scheduleNextCheck interno
 };
 
 export const stopMonitor = async (): Promise<void> => {
   if (!getMonitorStatus().running) {
-    console.log('[Monitor] Monitor já está parado');
+    logger.info('Monitor já está parado', 'Monitor');
     return;
   }
-  
+
   setRunningState(false);
 
   // Push: notificar que o monitor parou
@@ -42,7 +43,7 @@ export const stopMonitor = async (): Promise<void> => {
   } catch {}
 
   await stopTelegramMonitor();
-  console.log('[Monitor] Monitor parado com sucesso');
+  logger.info('Monitor parado com sucesso', 'Monitor');
 };
 
 export { getMonitorStatus };
