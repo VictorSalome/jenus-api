@@ -4,7 +4,6 @@ import { registrarEnvio, registrarErro } from "../monitor/stats.service.js";
 import { getEnviosCount, getEnviosHistory } from "../shared/email/email.service.js";
 import { listarPendentes, aprovarEEnviar } from "../buscas/pendingApplications.service.js";
 import { requireAuth } from "../../../shared/auth/auth.middleware.js";
-import { asyncHandler } from "../shared/middleware/errorHandler.js";
 import * as logger from "../../../core/logger.js";
 import config from "../config/index.js";
 import fs from "fs/promises";
@@ -160,7 +159,7 @@ router.post("/auto-apply", async (req, res) => {
   }
 });
 
-router.post("/approve-all-pending", requireAuth, asyncHandler(async (req, res) => {
+router.post("/approve-all-pending", requireAuth, async (req, res) => {
   logger.info("Iniciando aprovação e envio de todos os pendentes", "Curriculo");
 
   res.status(202).json({
@@ -168,20 +167,24 @@ router.post("/approve-all-pending", requireAuth, asyncHandler(async (req, res) =
     message: "Processando envios em segundo plano",
   });
 
-  listarPendentes("pending").then(async (pendentes) => {
-    const resultados = await Promise.allSettled(
-      pendentes.map(async (p) => {
-        await aprovarEEnviar(p.id);
-        return { id: p.id, status: "sent" as const };
-      })
-    );
+  // Fire-and-forget isolado — não usar asyncHandler aqui pois a resposta já foi enviada.
+  // Qualquer rejeição é capturada internamente.
+  listarPendentes("pending")
+    .then(async (pendentes) => {
+      const resultados = await Promise.allSettled(
+        pendentes.map(async (p) => {
+          await aprovarEEnviar(p.id);
+          return { id: p.id, status: "sent" as const };
+        })
+      );
 
-    const sent = resultados.filter((r) => r.status === "fulfilled").length;
-    const errors = resultados.filter((r) => r.status === "rejected").length;
-    logger.info(`Aprovação concluída: ${sent} enviados, ${errors} erros`, "Curriculo");
-  }).catch((err) => {
-    logger.error(`Erro ao aprovar e enviar todos: ${err.message}`, "Curriculo");
-  });
-}));
+      const sent = resultados.filter((r) => r.status === "fulfilled").length;
+      const errors = resultados.filter((r) => r.status === "rejected").length;
+      logger.info(`Aprovação concluída: ${sent} enviados, ${errors} erros`, "Curriculo");
+    })
+    .catch((err) => {
+      logger.error(`Erro ao aprovar e enviar todos: ${err.message}`, "Curriculo");
+    });
+});
 
 export default router;
