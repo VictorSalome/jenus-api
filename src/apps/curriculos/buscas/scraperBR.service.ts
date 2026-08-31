@@ -112,7 +112,7 @@ async function buscarFeedsbASICAS(query, tags, limit) {
     // Jobicy - já configurado
     {
       url: "https://jobicy.com/api/v2/remote-jobs",
-      params: { count: Math.floor(limit / 2), tags: tags.join(",") },
+      params: { count: Math.floor(limit / 2), tags: tags.slice(0, 4).join(",") },
       parser: (data) => (data?.jobs || []).map(j => ({
         source: "jobicy",
         externalId: `jobicy-${j.id}`,

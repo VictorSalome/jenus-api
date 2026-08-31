@@ -292,7 +292,9 @@ async function buildParams(
     case "jobicy":
       return {
         count: limit,
-        tag: tags.length ? tags.join(",") : undefined,
+        // Jobicy rejeita listas longas de tags (400 com 24 tags do scheduler).
+        // Envia no máximo 4 tags — suficiente para refinar a busca sem quebrar.
+        tag: tags.length ? tags.slice(0, 4).join(",") : undefined,
       };
     case "arbeitnow":
       return {};
