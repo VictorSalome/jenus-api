@@ -91,8 +91,13 @@ ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$ORACLE_USER@$ORACLE_HOST" "
     rm -rf dist_new
     exit 1
   fi
-  rm -rf dist
+  # Troca atômica: dist/ nunca fica ausente entre o rm e o mv (evita
+  # ERR_MODULE_NOT_FOUND + crash-loop do PM2 caso ele reinicie no meio
+  # da troca — incidente já observado em produção).
+  rm -rf dist_old
+  mv dist dist_old
   mv dist_new dist
+  rm -rf dist_old
   echo '✅ dist/ atualizado no VM'
 "
 
