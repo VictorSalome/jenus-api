@@ -133,4 +133,15 @@ export const promoMigrations: Migration[] = [
         ON CONFLICT(id) DO NOTHING;
     `,
   },
+  {
+    id: "promo_004_telegram_bot_config",
+    up: `
+      CREATE TABLE IF NOT EXISTS promo_telegram_bot_config (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        bot_token TEXT,
+        group_id TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `,
+  },
 ];

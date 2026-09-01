@@ -1,9 +1,7 @@
 import fetch from "node-fetch";
 import { promoConfig } from "../config.js";
 import * as logger from "../../../core/logger.js";
-
-const RAW_BOT_TOKEN = promoConfig.TELEGRAM_BOT_TOKEN;
-const GROUP_ID = promoConfig.TELEGRAM_BOT_GROUP_ID;
+import * as botConfigRepo from "../telegram-bot-config/telegram-bot-config.repository.js";
 
 /**
  * Strip Outlook SafeLinks wrapper if present.
@@ -32,9 +30,25 @@ function sanitizeBotToken(token: string | undefined): string | undefined {
   return token;
 }
 
-const BOT_TOKEN = sanitizeBotToken(RAW_BOT_TOKEN);
+/**
+ * Credenciais do bot: prioriza a config salva pelo app (permite trocar o
+ * token sem redeploy, importante se o token vazar/for comprometido) e cai
+ * pro .env só quando nunca foi configurado nada pelo app.
+ */
+async function getBotCredentials(): Promise<{ token: string | undefined; groupId: string | undefined }> {
+  const saved = await botConfigRepo.getConfig();
+  if (saved) {
+    return { token: sanitizeBotToken(saved.botToken), groupId: saved.groupId };
+  }
+  return {
+    token: sanitizeBotToken(promoConfig.TELEGRAM_BOT_TOKEN),
+    groupId: promoConfig.TELEGRAM_BOT_GROUP_ID,
+  };
+}
 
 export async function sendTelegramMessage(text: string): Promise<boolean> {
+  const { token: BOT_TOKEN, groupId: GROUP_ID } = await getBotCredentials();
+
   if (!BOT_TOKEN || !GROUP_ID) {
     logger.warn("TELEGRAM_BOT_TOKEN ou TELEGRAM_BOT_GROUP_ID não configurados", "Bot");
     return false;

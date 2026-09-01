@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { AppModule } from "../../shared/http/app-registry.js";
 import telegramConfigRoutes from "./telegram-config/telegram-config.routes.js";
+import telegramBotConfigRoutes from "./telegram-bot-config/telegram-bot-config.routes.js";
 import channelRoutes from "./channel/channel.routes.js";
 import filterRoutes from "./filter/filter.routes.js";
 import monitorRoutes from "./monitor/monitor.routes.js";
@@ -15,6 +16,7 @@ import pushRoutes from "./push/push.routes.js";
 const router = Router();
 
 router.use("/telegram-config", telegramConfigRoutes);
+router.use("/telegram-bot-config", telegramBotConfigRoutes);
 router.use("/channels", channelRoutes);
 router.use("/filters", filterRoutes);
 router.use("/monitor", monitorRoutes);
