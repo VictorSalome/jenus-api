@@ -53,8 +53,8 @@ export const seedPromoDatabase = async (
     logger.info('Inserindo categorias e filtros padrão...', 'Database');
 
     const categories = [
-      { name: '📱 Celulares', color: '#3b82f6', icon: '📱' },
-      { name: '🎮 Hardware', color: '#ef4444', icon: '🎮' }
+      { name: 'Celulares', color: '#3b82f6', icon: 'smartphone' },
+      { name: 'Hardware', color: '#ef4444', icon: 'cpu' }
     ];
 
     const celularesResult = await database.run(
