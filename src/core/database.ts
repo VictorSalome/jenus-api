@@ -10,6 +10,7 @@ import { seedCurriculoProfileFromJson } from '../apps/curriculos/migrations/seed
 import { promoMigrations } from '../apps/promo/migrations/index.js';
 import { gmailMigrations } from '../apps/gmail/migrations/index.js';
 import { financasMigrations } from '../apps/financas/migrations/index.js';
+import { authMigrations } from '../shared/auth/migrations.js';
 import { seedPromoDatabase } from '../apps/promo/migrations/seed.js';
 
 const dbDir = path.dirname(config.DATABASE_PATH);
@@ -34,7 +35,7 @@ export const getDb = async (): Promise<Database<sqlite3.Database, sqlite3.Statem
 export const initDb = async (): Promise<Database<sqlite3.Database, sqlite3.Statement>> => {
   const database = await getDb();
 
-  await runMigrations(database, [...curriculoMigrations, ...promoMigrations, ...gmailMigrations, ...financasMigrations]);
+  await runMigrations(database, [...curriculoMigrations, ...promoMigrations, ...gmailMigrations, ...financasMigrations, ...authMigrations]);
 
   await seedPromoDatabase(database);
   await seedCurriculoProfileFromJson(database);

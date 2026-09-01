@@ -15,6 +15,7 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response } from 'express';
 import crypto from 'crypto';
+import { getDb } from '../../core/database.js';
 
 // Configurações
 const ACCESS_TOKEN_SECRET = process.env.JWT_ACCESS_SECRET || 'your-access-token-secret-change-me';
@@ -22,13 +23,9 @@ const REFRESH_TOKEN_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-tok
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
 
-// Armazenamento em memória (use Redis em produção)
-const refreshTokensStore = new Map<string, { 
-  token: string; 
-  userId: string; 
-  expiresAt: Date; 
-  isRevoked: boolean 
-}>();
+// Persistido no SQLite (tabela auth_refresh_tokens) — antes era um Map em
+// memória, e qualquer restart do processo (deploy, crash, pm2 reload)
+// derrubava todas as sessões ativas mesmo com "lembrar-me" marcado.
 
 interface JwtPayload {
   userId: string;
@@ -59,27 +56,28 @@ export function generateAccessToken(user: User): string {
 /**
  * Gera refresh token (7 dias) com fingerprint único
  */
-export function generateRefreshToken(userId: string, fingerprint: string = ''): string {
+export async function generateRefreshToken(userId: string, fingerprint: string = ''): Promise<string> {
   const tokenId = crypto.randomBytes(16).toString('hex');
   const payload = {
     userId,
     tokenId,
     fingerprint,
   };
-  
+
   const token = jwt.sign(payload, REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
-  
+
   // Armazena o refresh token
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
-  
-  refreshTokensStore.set(tokenId, {
-    token,
+
+  const db = await getDb();
+  await db.run(
+    'INSERT INTO auth_refresh_tokens (token_id, user_id, expires_at, is_revoked) VALUES (?, ?, ?, 0)',
+    tokenId,
     userId,
-    expiresAt,
-    isRevoked: false,
-  });
-  
+    expiresAt.toISOString(),
+  );
+
   return token;
 }
 
@@ -108,26 +106,24 @@ export function verifyRefreshToken(token: string): JwtPayload | null {
 /**
  * Revoga refresh token (logout)
  */
-export function revokeRefreshToken(tokenId: string): boolean {
-  const stored = refreshTokensStore.get(tokenId);
-  if (stored) {
-    stored.isRevoked = true;
-    refreshTokensStore.set(tokenId, stored);
-    return true;
-  }
-  return false;
+export async function revokeRefreshToken(tokenId: string): Promise<boolean> {
+  const db = await getDb();
+  const result = await db.run(
+    'UPDATE auth_refresh_tokens SET is_revoked = 1 WHERE token_id = ?',
+    tokenId,
+  );
+  return (result.changes ?? 0) > 0;
 }
 
 /**
- * Limpa refresh tokens expirados
+ * Limpa refresh tokens expirados/revogados
  */
-export function cleanupExpiredTokens(): void {
-  const now = new Date();
-  for (const [tokenId, stored] of refreshTokensStore.entries()) {
-    if (stored.expiresAt < now || stored.isRevoked) {
-      refreshTokensStore.delete(tokenId);
-    }
-  }
+export async function cleanupExpiredTokens(): Promise<void> {
+  const db = await getDb();
+  await db.run(
+    "DELETE FROM auth_refresh_tokens WHERE expires_at < ? OR is_revoked = 1",
+    new Date().toISOString(),
+  );
 }
 
 // requireAuth/optionalAuth foram consolidados em auth.middleware.ts para evitar
@@ -153,23 +149,27 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
   
   // Extrai tokenId do payload
   const tokenId = (decoded as any).tokenId;
-  const stored = refreshTokensStore.get(tokenId);
-  
-  if (!stored || stored.isRevoked) {
+  const db = await getDb();
+  const stored = await db.get(
+    'SELECT * FROM auth_refresh_tokens WHERE token_id = ?',
+    tokenId,
+  );
+
+  if (!stored || stored.is_revoked) {
     res.status(401).json({ success: false, message: 'Refresh token revogado' });
     return;
   }
-  
+
   // Gera novos tokens
   const user = {
     id: (decoded as any).userId,
     email: (decoded as any).email,
     role: (decoded as any).role,
   };
-  
+
   const newAccessToken = generateAccessToken(user);
-  const newRefreshToken = generateRefreshToken(user.id, (decoded as any).fingerprint);
-  
+  const newRefreshToken = await generateRefreshToken(user.id, (decoded as any).fingerprint);
+
   res.json({
     success: true,
     accessToken: newAccessToken,
@@ -179,4 +179,4 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
 };
 
 // Exporta para uso em controladores
-export { ACCESS_TOKEN_SECRET, REFRESH_TOKEN_SECRET, refreshTokensStore };
+export { ACCESS_TOKEN_SECRET, REFRESH_TOKEN_SECRET };

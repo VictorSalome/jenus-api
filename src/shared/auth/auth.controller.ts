@@ -16,7 +16,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     if (result.success) {
       const user = { id: username, email: username, role: 'admin' };
       const accessToken = generateAccessToken(user);
-      const refreshToken = generateRefreshToken(user.id);
+      const refreshToken = await generateRefreshToken(user.id);
 
       res.json({
         success: true,
