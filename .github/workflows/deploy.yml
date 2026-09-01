@@ -17,38 +17,77 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
+      - name: 🟢 Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 📦 Install deps
+        run: npm install
+
+      # A VM Oracle só tem ~956MB de RAM — rodar `npx tsc` lá estoura a
+      # memória (OOM), apagando dist/ sem conseguir reconstruí-lo (já
+      # aconteceu em produção mais de uma vez). O runner do GitHub Actions
+      # tem RAM de sobra, então o build acontece aqui e só o dist/ pronto
+      # é copiado pra VM — nunca compilamos na VM.
+      - name: 🔨 Build (no runner, não na VM)
+        run: npm run build
+
       - name: 🔑 Setup SSH
         run: |
           mkdir -p ~/.ssh
-
           echo "${{ secrets.ORACLE_SSH_KEY }}" > ~/.ssh/oracle.key
           chmod 600 ~/.ssh/oracle.key
-
           ssh-keyscan -H "${{ secrets.ORACLE_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: 🚀 Deploy to Oracle
+      - name: 📥 Sync source + deps on VM
         run: |
-          echo "🚀 Iniciando deploy..."
-
           ssh -i ~/.ssh/oracle.key \
             "${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }}" \
             "
               set -e
-
               cd '${{ secrets.DEPLOY_PATH }}'
-
               echo '📥 Sincronizando código...'
               git fetch origin main
               git reset --hard origin/main
-
               echo '📦 Instalando dependências...'
               npm install
+            "
 
-              echo '🔨 Executando build...'
-              npm run build
+      - name: 📤 Copy built dist/ to VM (troca atômica)
+        run: |
+          echo '📦 Copiando dist/ para a VM...'
+          scp -i ~/.ssh/oracle.key -o StrictHostKeyChecking=no -r dist \
+            "${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }}:${{ secrets.DEPLOY_PATH }}/dist_new"
 
+          ssh -i ~/.ssh/oracle.key -o StrictHostKeyChecking=no \
+            "${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }}" \
+            "
+              set -e
+              cd '${{ secrets.DEPLOY_PATH }}'
+              if [ ! -f dist_new/index.js ]; then
+                echo '❌ dist_new/index.js ausente — abortando para não apagar o dist/ atual.'
+                rm -rf dist_new
+                exit 1
+              fi
+              # Troca atômica: dist/ nunca fica ausente entre o rm e o mv
+              # (evita o PM2 crash-loopar com ERR_MODULE_NOT_FOUND caso
+              # reinicie no meio da troca).
+              rm -rf dist_old
+              if [ -d dist ]; then mv dist dist_old; fi
+              mv dist_new dist
+              rm -rf dist_old
+              echo '✅ dist/ atualizado na VM'
+            "
+
+      - name: ♻️ Reload PM2
+        run: |
+          ssh -i ~/.ssh/oracle.key -o StrictHostKeyChecking=no \
+            "${{ secrets.ORACLE_USER }}@${{ secrets.ORACLE_HOST }}" \
+            "
+              set -e
+              cd '${{ secrets.DEPLOY_PATH }}'
               echo '🔎 Verificando PM2...'
-
               if pm2 describe '${{ secrets.PM2_APP_NAME }}' >/dev/null 2>&1; then
                 echo '♻️ Processo encontrado. Recarregando PM2...'
                 pm2 reload '${{ secrets.PM2_APP_NAME }}' --update-env
@@ -56,13 +95,10 @@ jobs:
                 echo '🚀 Processo não encontrado. Iniciando PM2...'
                 pm2 start scripts/pm2.config.cjs
               fi
-
               echo '💾 Salvando configuração do PM2...'
               pm2 save
-
               echo '📊 Status do PM2...'
               pm2 status
-
               echo '✅ Deploy concluído!'
             "
 
