@@ -9,7 +9,7 @@ const envSchema = z.object({
   ),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_BOT_GROUP_ID: z.string().optional(),
-  CHECK_INTERVAL_SECONDS: z.string().default("30").transform(Number),
+  CHECK_INTERVAL_SECONDS: z.string().default("120").transform(Number),
   MIN_TIME_BETWEEN_MESSAGES: z.string().default("30").transform(Number),
   URGENT_ENABLED: z.string().default("true").transform((v) => v === "true"),
 });

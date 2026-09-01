@@ -7,6 +7,7 @@ import {
   getConfig,
   updateSession,
 } from "../telegram-config/telegram-config.repository.js";
+import { promoConfig } from "../config.js";
 import { findAll } from "../channel/channel.repository.js";
 import {
   findAllFilters,
@@ -44,9 +45,10 @@ const RETRY_CONFIG = {
 };
 
 // Delay adaptativo baseado na atividade
-let currentCheckInterval = 120000; // Começa com 2 minutos
-const MIN_INTERVAL = 60000; // 1 minuto mínimo
-const MAX_INTERVAL = 300000; // 5 minutos máximo
+const BASE_INTERVAL_MS = promoConfig.CHECK_INTERVAL_SECONDS * 1000;
+let currentCheckInterval = BASE_INTERVAL_MS;
+const MIN_INTERVAL = Math.max(30_000, Math.floor(BASE_INTERVAL_MS / 2));
+const MAX_INTERVAL = Math.min(300_000, BASE_INTERVAL_MS * 2);
 
 export async function startTelegramMonitor(): Promise<void> {
   if (isProcessing) {

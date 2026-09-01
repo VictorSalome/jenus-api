@@ -244,7 +244,7 @@ export interface MonitoringConfig {
 
 export const monitoringConfig: MonitoringConfig = {
   healthCheck: {
-    enabled: process.env.HEALTH_CHECK_ENABLED !== "false",
+    enabled: false,
     endpoint: process.env.HEALTH_CHECK_ENDPOINT || "/health",
     interval: parseInt(process.env.HEALTH_CHECK_INTERVAL || "30000", 10),
   },
