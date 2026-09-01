@@ -144,4 +144,14 @@ export const promoMigrations: Migration[] = [
       );
     `,
   },
+  {
+    id: "promo_005_discord_webhook_config",
+    up: `
+      CREATE TABLE IF NOT EXISTS promo_discord_webhook_config (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        webhook_url TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `,
+  },
 ];

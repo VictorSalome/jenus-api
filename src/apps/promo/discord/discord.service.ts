@@ -1,6 +1,7 @@
 import fetch from "node-fetch";
 import { promoConfig } from "../config.js";
 import * as logger from "../../../core/logger.js";
+import * as discordWebhookConfigRepo from "../discord-webhook-config/discord-webhook-config.repository.js";
 
 interface PromoData {
   product: string;
@@ -15,8 +16,17 @@ interface PromoData {
   imageBuffer?: { data: Buffer; ext: string } | null;
 }
 
-const WEBHOOK_URL = promoConfig.DISCORD_WEBHOOK_URL;
 const TIMEOUT = 5000;
+
+/**
+ * Prioriza a URL salva pelo app (permite trocar o webhook sem redeploy —
+ * importante se vazar/for comprometido) e cai pro .env só quando nunca foi
+ * configurado nada pelo app. Resolvida a cada envio, não no module-load.
+ */
+async function getWebhookUrl(): Promise<string | undefined> {
+  const saved = await discordWebhookConfigRepo.getConfig();
+  return saved?.webhookUrl || promoConfig.DISCORD_WEBHOOK_URL;
+}
 
 const STORE_THUMBNAILS: Record<string, string> = {
   amazon: "https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg",
@@ -80,9 +90,10 @@ async function sendWebhook(
   payload: object,
   imageBuffer?: { data: Buffer; ext: string } | null,
 ): Promise<{ ok: boolean; error?: string }> {
+  const WEBHOOK_URL = await getWebhookUrl();
   if (!WEBHOOK_URL) {
-    logger.warn("DISCORD_WEBHOOK_URL não configurado, pulando envio", "Discord");
-    return { ok: false, error: "DISCORD_WEBHOOK_URL não configurado" };
+    logger.warn("Nenhum webhook do Discord configurado (nem no app, nem no .env), pulando envio", "Discord");
+    return { ok: false, error: "Webhook do Discord não configurado" };
   }
 
   try {
