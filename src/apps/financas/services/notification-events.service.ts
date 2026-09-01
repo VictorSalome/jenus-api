@@ -41,8 +41,9 @@ export const processRawNotification = async (
   const parsed = parseNotification(raw);
   if (!parsed) {
     await db.run(
-      "UPDATE fin_notification_events SET status = 'ignored' WHERE id = ?",
+      "UPDATE fin_notification_events SET status = 'ignored' WHERE id = ? AND user_id = ?",
       eventId,
+      userId,
     );
     const event = await db.get(
       "SELECT * FROM fin_notification_events WHERE id = ?",
@@ -61,12 +62,13 @@ export const processRawNotification = async (
   await db.run(
     `UPDATE fin_notification_events
         SET app_label = ?, parsed_json = ?, fingerprint = ?, status = ?
-      WHERE id = ?`,
+      WHERE id = ? AND user_id = ?`,
     parsed.parser.appLabel,
     JSON.stringify(parsed.data),
     fingerprint,
     duplicate ? "duplicate" : "parsed",
     eventId,
+    userId,
   );
 
   let parsedTransaction: any = null;
@@ -149,7 +151,11 @@ export const importEvent = async (userId: string, id: number) => {
     notificationEventId: id,
   });
 
-  await db.run("UPDATE fin_notification_events SET status = 'imported' WHERE id = ?", id);
+  await db.run(
+    "UPDATE fin_notification_events SET status = 'imported' WHERE id = ? AND user_id = ?",
+    id,
+    userId,
+  );
   return created;
 };
 
@@ -158,6 +164,10 @@ export const ignoreEvent = async (userId: string, id: number) => {
   const db = await getDb();
   const event = await getEvent(userId, id);
   if (!event) return null;
-  await db.run("UPDATE fin_notification_events SET status = 'ignored' WHERE id = ?", id);
-  return db.get("SELECT * FROM fin_notification_events WHERE id = ?", id);
+  await db.run(
+    "UPDATE fin_notification_events SET status = 'ignored' WHERE id = ? AND user_id = ?",
+    id,
+    userId,
+  );
+  return getEvent(userId, id);
 };
