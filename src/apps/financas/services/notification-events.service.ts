@@ -1,6 +1,7 @@
 import { getDb } from "../../../core/database.js";
 import { parseNotification } from "./parsers/registry.js";
 import type { RawNotification } from "./parsers/types.js";
+import { extractAmountCents, extractInstallments, extractMerchant, titleAndText } from "./parsers/utils.js";
 import { buildFingerprint, findDuplicateTransactions } from "./duplicates.service.js";
 import { createTransaction } from "./transactions.service.js";
 import { ensureDefaultAccount } from "./accounts.service.js";
@@ -71,23 +72,10 @@ export const processRawNotification = async (
     userId,
   );
 
-  let parsedTransaction: any = null;
-  if (!duplicate) {
-    const accountId = await ensureDefaultAccount(userId);
-    parsedTransaction = await createTransaction(userId, {
-      accountId,
-      merchantName: parsed.data.merchantName,
-      description: parsed.data.description,
-      amountCents: parsed.data.amountCents,
-      transactionDate: date,
-      installmentsTotal: parsed.data.installmentsTotal ?? 1,
-      source: "NOTIFICATION",
-      notificationEventId: eventId,
-    });
-  }
-
+  // Criação de transação é sempre manual, via importEvent() (botão "Importar" no app) —
+  // eventos reconhecidos ficam como 'parsed'/'duplicate' aguardando decisão do usuário.
   const event = await db.get("SELECT * FROM fin_notification_events WHERE id = ?", eventId);
-  return { event, parsed: parsedTransaction, duplicate, matches };
+  return { event, parsed: null, duplicate, matches };
 };
 
 export const listEvents = async (userId: string, status?: string) => {
@@ -135,6 +123,26 @@ export const importEvent = async (userId: string, id: number) => {
       text: event.text,
     });
     if (attempt) parsed = attempt.data;
+  }
+  if (!parsed) {
+    // Fallback genérico: na importação MANUAL o usuário já revisou e confirmou
+    // o evento, então basta existir um valor "R$ x,xx" no texto — não precisa
+    // de um parser específico de banco (diferente da detecção automática).
+    const text = titleAndText({
+      packageName: event.package_name,
+      appLabel: event.app_label,
+      title: event.title,
+      text: event.text,
+    });
+    const amountCents = extractAmountCents(text);
+    if (amountCents) {
+      parsed = {
+        amountCents,
+        installmentsTotal: extractInstallments(text) ?? undefined,
+        merchantName: extractMerchant(text) || event.app_label || event.title || undefined,
+        description: text.slice(0, 120),
+      };
+    }
   }
   if (!parsed) return null;
 
