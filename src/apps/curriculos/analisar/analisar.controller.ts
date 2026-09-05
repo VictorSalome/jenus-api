@@ -56,8 +56,10 @@ interface Education {
 
 interface Certification {
   name: string;
-  issuer: string;
+  issuer?: string;
   year?: string;
+  type?: 'curso' | 'certificado';
+  description?: string;
 }
 
 interface Language {
@@ -148,7 +150,9 @@ const gerarTextoCurriculo = (curriculo: CurriculoPersonalizado, vaga: DadosVaga)
     linhas.push('📜 CERTIFICAÇÕES');
     linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     curriculo.certifications.forEach((cert) => {
-      linhas.push(`• ${cert.name} — ${cert.issuer} (${cert.year || ''})`);
+      const tipo = cert.type === 'curso' ? 'Curso' : 'Certificado';
+      const sub = cert.description || cert.issuer || '';
+      linhas.push(`• [${tipo}] ${cert.name}${sub ? ' — ' + sub : ''}`);
     });
     linhas.push('');
   }

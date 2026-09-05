@@ -184,5 +184,12 @@ export const curriculoMigrations: Migration[] = [
       ALTER TABLE curriculo_envios ADD COLUMN curriculo_snapshot TEXT;
     `,
   },
+  {
+    id: "curriculo_011_certification_type_description",
+    up: `
+      ALTER TABLE curriculo_profile_certifications ADD COLUMN type TEXT DEFAULT 'certificado';
+      ALTER TABLE curriculo_profile_certifications ADD COLUMN description TEXT;
+    `,
+  },
 ];
 

@@ -54,7 +54,9 @@ router.get(
       })),
       certifications: certifications.map((c) => ({
         id: c.id,
+        type: c.type || 'certificado',
         name: c.name,
+        description: c.description,
         issuer: c.issuer,
         date: c.date,
         credentialId: c.credential_id,
@@ -149,12 +151,14 @@ const SECTIONS = {
   certifications: {
     table: "curriculo_profile_certifications",
     mapRow: (c: any) => ({
-      id: c.id, name: c.name, issuer: c.issuer, date: c.date,
+      id: c.id, type: c.type || 'certificado', name: c.name, description: c.description,
+      issuer: c.issuer, date: c.date,
       credentialId: c.credential_id, url: c.url,
     }),
-    fields: ["id", "name", "issuer", "date", "credential_id", "url", "sort_order"],
+    fields: ["id", "type", "name", "description", "issuer", "date", "credential_id", "url", "sort_order"],
     insertFields: (data: any) => ({
-      id: data.id || genId(), name: data.name, issuer: data.issuer,
+      id: data.id || genId(), type: data.type || 'certificado', name: data.name,
+      description: data.description, issuer: data.issuer,
       date: data.date, credential_id: data.credentialId, url: data.url,
     }),
   },

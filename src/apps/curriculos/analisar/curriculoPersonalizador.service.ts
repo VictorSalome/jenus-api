@@ -475,7 +475,8 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     // Ler certificações do banco
     const certRows = await db.all('SELECT * FROM curriculo_profile_certifications ORDER BY sort_order');
     const certifications = certRows.map((c: any) => ({
-      id: c.id, name: c.name, issuer: c.issuer, date: c.date,
+      id: c.id, type: c.type || 'certificado', name: c.name,
+      description: c.description, issuer: c.issuer, date: c.date,
       credentialId: c.credential_id, url: c.url,
     }));
     
@@ -712,11 +713,14 @@ const filtrarCertificacoesRelevantes = (certifications: any[], dadosVaga: Record
 
   return certifications.filter((cert) => {
     const nomeCert = cert.name.toLowerCase();
-    const emissorCert = cert.issuer.toLowerCase();
+    const emissorCert = (cert.issuer || '').toLowerCase();
+    const descCert = (cert.description || '').toLowerCase();
 
     // Verificar se a certificação está relacionada às tecnologias da vaga
     const temTecnologiaRelevante = stackTecnologica.some((tech: string) =>
-      nomeCert.includes(tech.toLowerCase()),
+      nomeCert.includes(tech.toLowerCase()) ||
+      descCert.includes(tech.toLowerCase()) ||
+      emissorCert.includes(tech.toLowerCase()),
     );
 
     // Verificar se é uma certificação geral de desenvolvimento
@@ -731,7 +735,7 @@ const filtrarCertificacoesRelevantes = (certifications: any[], dadosVaga: Record
       "desenvolvimento",
       "programação",
       "software",
-    ].some((keyword) => nomeCert.includes(keyword));
+    ].some((keyword) => nomeCert.includes(keyword) || descCert.includes(keyword));
 
     return temTecnologiaRelevante || certRelevante;
   });
