@@ -10,35 +10,37 @@ const router = Router();
 router.post(
   "/email-test",
   asyncHandler(async (req, res) => {
-    // Feature flag check
-    if (process.env.ENABLE_EMAIL_TEST !== "true") {
+    // Feature flag check (habilitado por padrão, a menos que definido como false)
+    if (process.env.ENABLE_EMAIL_TEST === "false") {
       return res.status(403).json({
         success: false,
         status: "error",
-        message: "Endpoint de teste de e-mail desabilitado. Configure ENABLE_EMAIL_TEST=true para habilitar.",
+        message: "Endpoint de teste de e-mail desabilitado explicitamente.",
       });
     }
 
-    const { to, subject, body } = req.body;
+    let { to, subject, body } = req.body;
     const errorLogger = (await import("../utils/logger.js")).logError;
 
-    // Validação
-    if (!to || !subject || !body) {
-      throw new Error("Campos obrigatórios: to, subject, body");
+    // Se 'to' não foi fornecido, usa test_email do perfil com fallback para victorsalome41@hotmail.com
+    if (!to) {
+      try {
+        const { getDb } = await import("../../../../core/database.js");
+        const db = await getDb();
+        const personal = await db.get("SELECT test_email FROM curriculo_profile_personal WHERE id = 1");
+        to = personal?.test_email || "victorsalome41@hotmail.com";
+      } catch {
+        to = "victorsalome41@hotmail.com";
+      }
     }
+
+    subject = subject || "Teste de envio de e-mail - Jenus";
+    body = body || "<h1>Teste de e-mail</h1><p>Se você recebeu este e-mail, a configuração de envio está funcionando perfeitamente.</p>";
 
     // Validação básica de e-mail
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(to)) {
       throw new Error("E-mail de destino inválido");
-    }
-
-    if (typeof subject !== "string" || subject.trim().length === 0) {
-      throw new Error("Assunto deve ser uma string não vazia");
-    }
-
-    if (typeof body !== "string" || body.trim().length === 0) {
-      throw new Error("Corpo do e-mail deve ser uma string não vazia");
     }
 
     const { criarTransporter } = await import("../email/email.service.js");

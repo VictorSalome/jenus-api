@@ -191,5 +191,11 @@ export const curriculoMigrations: Migration[] = [
       ALTER TABLE curriculo_profile_certifications ADD COLUMN description TEXT;
     `,
   },
+  {
+    id: "curriculo_012_test_email",
+    up: `
+      ALTER TABLE curriculo_profile_personal ADD COLUMN test_email TEXT DEFAULT 'victorsalome41@hotmail.com';
+    `,
+  },
 ];
 

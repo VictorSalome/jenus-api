@@ -29,7 +29,11 @@ router.get(
     }
 
     const profile = {
-      personalInfo: personal || {},
+      personalInfo: personal ? {
+        ...personal,
+        hasWhatsApp: personal.has_whatsapp === 1,
+        testEmail: personal.test_email || "victorsalome41@hotmail.com",
+      } : { testEmail: "victorsalome41@hotmail.com" },
       experiences: experiences.map((e) => ({
         id: e.id,
         company: e.company,
@@ -78,7 +82,14 @@ router.get(
   asyncHandler(async (_req, res) => {
     const db = await getDb();
     const personal = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
-    res.json({ success: true, personalInfo: { ...(personal || {}), hasWhatsApp: personal?.has_whatsapp === 1 } });
+    res.json({
+      success: true,
+      personalInfo: {
+        ...(personal || {}),
+        hasWhatsApp: personal?.has_whatsapp === 1,
+        testEmail: personal?.test_email || "victorsalome41@hotmail.com",
+      },
+    });
   })
 );
 
@@ -93,23 +104,32 @@ router.patch(
     const existing = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
     if (existing) {
       await db.run(`
-        UPDATE curriculo_profile_personal SET name=?, email=?, phone=?, has_whatsapp=?, linkedin=?, github=?, portfolio=?, location=?, title=?, summary=?, salary_pretension=?, updated_at=CURRENT_TIMESTAMP
+        UPDATE curriculo_profile_personal SET name=?, email=?, test_email=?, phone=?, has_whatsapp=?, linkedin=?, github=?, portfolio=?, location=?, title=?, summary=?, salary_pretension=?, updated_at=CURRENT_TIMESTAMP
         WHERE id=1
-      `, data.name ?? existing.name, data.email ?? existing.email, data.phone ?? existing.phone,
+      `, data.name ?? existing.name, data.email ?? existing.email,
+         data.testEmail ?? existing.test_email ?? "victorsalome41@hotmail.com",
+         data.phone ?? existing.phone,
          data.hasWhatsApp !== undefined ? (data.hasWhatsApp ? 1 : 0) : (existing.has_whatsapp ?? 1),
          data.linkedin ?? existing.linkedin, data.github ?? existing.github, data.portfolio ?? existing.portfolio,
          data.location ?? existing.location, data.title ?? existing.title, data.summary ?? existing.summary,
          data.salaryPretension ?? existing.salary_pretension);
     } else {
       await db.run(`
-        INSERT INTO curriculo_profile_personal (id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary, salary_pretension)
-        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, data.name, data.email, data.phone, data.hasWhatsApp ? 1 : 0, data.linkedin, data.github, data.portfolio, data.location, data.title, data.summary, data.salaryPretension);
+        INSERT INTO curriculo_profile_personal (id, name, email, test_email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary, salary_pretension)
+        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, data.name, data.email, data.testEmail || "victorsalome41@hotmail.com", data.phone, data.hasWhatsApp ? 1 : 0, data.linkedin, data.github, data.portfolio, data.location, data.title, data.summary, data.salaryPretension);
     }
 
     const updated = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
     logInfo("Dados pessoais atualizados");
-    res.json({ success: true, personalInfo: updated });
+    res.json({
+      success: true,
+      personalInfo: {
+        ...(updated || {}),
+        hasWhatsApp: updated?.has_whatsapp === 1,
+        testEmail: updated?.test_email || "victorsalome41@hotmail.com",
+      },
+    });
   })
 );
 

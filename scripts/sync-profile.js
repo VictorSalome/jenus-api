@@ -26,10 +26,15 @@ async function syncProfile() {
   // 1. Personal Info
   if (profileData.personalInfo) {
     const pi = profileData.personalInfo;
+    try {
+      await db.run("ALTER TABLE curriculo_profile_personal ADD COLUMN test_email TEXT DEFAULT 'victorsalome41@hotmail.com'");
+    } catch {
+      // Coluna já existe
+    }
     await db.run('DELETE FROM curriculo_profile_personal');
     await db.run(
-      'INSERT INTO curriculo_profile_personal (id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      pi.name, pi.email, pi.phone, pi.hasWhatsApp !== false ? 1 : 0, pi.linkedin, pi.github, pi.portfolio, pi.location, pi.title, pi.summary
+      'INSERT INTO curriculo_profile_personal (id, name, email, test_email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      pi.name, pi.email, pi.testEmail || 'victorsalome41@hotmail.com', pi.phone, pi.hasWhatsApp !== false ? 1 : 0, pi.linkedin, pi.github, pi.portfolio, pi.location, pi.title, pi.summary
     );
   }
 
