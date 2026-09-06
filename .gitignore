@@ -10,6 +10,10 @@ dist/
 
 # Database
 data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.db-journal
+data/backups/
 *.sqlite
 *.sqlite3
 
