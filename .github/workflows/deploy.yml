@@ -52,6 +52,8 @@ jobs:
               git reset --hard origin/main
               echo '📦 Instalando dependências...'
               npm install
+              echo '🔄 Sincronizando dados do perfil no banco SQLite...'
+              node scripts/sync-profile.js
             "
 
       - name: 📤 Copy built dist/ to VM (troca atômica)

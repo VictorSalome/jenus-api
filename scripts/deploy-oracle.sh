@@ -72,6 +72,8 @@ ssh -i "$SSH_KEY" \
     git reset --hard origin/main
     echo '📦 Instalando dependências...'
     npm install
+    echo '🔄 Sincronizando dados do perfil no banco SQLite...'
+    node scripts/sync-profile.js
   "
 
 # 2. Copiar o dist/ compilado localmente para o VM.
