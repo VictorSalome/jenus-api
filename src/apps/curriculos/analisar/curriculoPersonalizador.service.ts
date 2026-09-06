@@ -58,7 +58,7 @@ const SKILL_ALIASES: Record<string, string[]> = {
   GraphQL: ["graphql", "graph ql"],
   "REST API": ["api rest", "rest api", "restful", "apis robustas"],
   Docker: ["docker", "containerizacao", "container"],
-  "CI/CD": ["ci/cd", "cicd", "integracao continua", "deploy automatizado"],
+  "CI/CD": ["ci/cd", "cicd", "integracao continua", "deploy automatizado", "github actions"],
   AWS: ["aws", "cloud"],
   EC2: ["ec2"],
   S3: ["s3"],
@@ -75,6 +75,15 @@ const SKILL_ALIASES: Record<string, string[]> = {
   SonarQube: ["sonarqube", "qualidade de codigo", "quality gate"],
   "Clean Code": ["clean code", "codigo limpo", "refatoracao"],
   "Code Review": ["code review", "revisao de codigo"],
+  "React Native": ["react native", "mobile", "expo", "ios", "android"],
+  Python: ["python", "fastapi", "django", "flask"],
+  Java: ["java", "spring", "spring boot"],
+  Kubernetes: ["kubernetes", "k8s", "orquestracao"],
+  Microservices: ["microservicos", "microservices", "arquitetura distribuida"],
+  Redis: ["redis", "cache"],
+  Scrum: ["scrum", "agile", "agilidade", "kanban", "sprints"],
+  Git: ["git", "github", "gitlab", "versionamento", "github actions"],
+  SQL: ["sql", "relacional", "queries", "banco de dados"],
 };
 
 interface ContextRule {

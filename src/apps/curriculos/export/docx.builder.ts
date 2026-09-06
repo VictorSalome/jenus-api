@@ -17,20 +17,30 @@ const COR_SECUNDARIA = "555555";
 // ATS (Gupy etc.) esperam datas consistentes MM/YYYY — "out/2024" e
 // "mar-jun/2024" confundem o parser (erro #5 do checklist ATS).
 const MESES_PT: Record<string, string> = {
-  jan: "01", fev: "02", mar: "03", abr: "04", mai: "05", jun: "06",
-  jul: "07", ago: "08", set: "09", out: "10", nov: "11", dez: "12",
+  jan: "01", janeiro: "01",
+  fev: "02", fevereiro: "02",
+  mar: "03", marco: "03", março: "03",
+  abr: "04", abril: "04",
+  mai: "05", maio: "05",
+  jun: "06", junho: "06",
+  jul: "07", julho: "07",
+  ago: "08", agosto: "08",
+  set: "09", setembro: "09",
+  out: "10", outubro: "10",
+  nov: "11", novembro: "11",
+  dez: "12", dezembro: "12",
 };
 
 const monthNum = (sigla: string): string => MESES_PT[sigla.toLowerCase()] ?? sigla;
 
 export function normalizarDatasParaAts(periodo: string): string {
+  if (!periodo) return "";
   return periodo
-    // "mar-jun/2024" → "03/2024 - 06/2024"
-    .replace(/([a-zç]{3})\s*-\s*([a-zç]{3})\s*\/\s*(\d{4})/gi,
+    .replace(/\b(\d{4})-(\d{2})(?:-\d{2})?\b/g, "$2/$1")
+    .replace(/([a-zç]{3,9})\s*-\s*([a-zç]{3,9})\s*(?:\/|\s+de\s+)(\d{4})/gi,
       (_m, a: string, b: string, ano: string) =>
         `${monthNum(a)}/${ano} - ${monthNum(b)}/${ano}`)
-    // "out/2024" → "10/2024"
-    .replace(/([a-zç]{3})\s*\/\s*(\d{4})/gi,
+    .replace(/([a-zç]{3,9})\s*(?:\/|\s+de\s+)(\d{4})/gi,
       (_m, mes: string, ano: string) => `${monthNum(mes)}/${ano}`);
 }
 

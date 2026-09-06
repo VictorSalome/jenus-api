@@ -440,7 +440,9 @@ const adicionarExperiencias = (doc, experiences, estilos, yPosition) => {
 
     yPosition += estilos.espacamento.entreLinhas + 3;
 
-    const periodo = `${formatarData(exp.startDate)} - ${exp.endDate === "present" ? "Atual" : formatarData(exp.endDate)}`;
+    const dataInicio = formatarData(exp.startDate, 'ats');
+    const dataFim = !exp.endDate || exp.endDate === "present" || exp.endDate === "Atual" ? "Atual" : formatarData(exp.endDate, 'ats');
+    const periodo = `${dataInicio} - ${dataFim}`;
     doc
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
@@ -529,7 +531,9 @@ const adicionarFormacao = (doc, education, estilos, yPosition) => {
 
     yPosition += estilos.espacamento.entreLinhas + 2;
 
-    const periodo = `${formatarData(edu.startDate)} - ${formatarData(edu.endDate)}`;
+    const dataInicioEdu = formatarData(edu.startDate, 'ats');
+    const dataFimEdu = edu.endDate ? formatarData(edu.endDate, 'ats') : 'Concluído';
+    const periodo = `${dataInicioEdu} - ${dataFimEdu}`;
     doc
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
@@ -556,11 +560,12 @@ const adicionarCertificacoes = (doc, certifications, estilos, yPosition) => {
   certifications.forEach((cert) => {
     yPosition = verificarNovaPagina(doc, yPosition, 30);
 
+    const dataCert = cert.date ? ` (${formatarData(cert.date, 'ats')})` : '';
     doc
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
       .fillColor(CORES.texto)
-      .text(`• ${cert.name} - ${cert.issuer} (${cert.date})`, {
+      .text(`• ${cert.name} - ${cert.issuer}${dataCert}`, {
         indent: 10,
         y: yPosition,
       });

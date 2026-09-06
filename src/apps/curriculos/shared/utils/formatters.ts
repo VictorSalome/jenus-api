@@ -8,25 +8,45 @@
  * @param {string} formato - Formato desejado ('short', 'long', 'month-year')
  * @returns {string} Data formatada
  */
-export const formatarData = (data: string | Date | null | undefined, formato: 'short' | 'long' | 'month-year' = 'month-year'): string => {
+export const formatarData = (
+  data: string | Date | null | undefined,
+  formato: 'short' | 'long' | 'month-year' | 'ats' = 'ats'
+): string => {
   if (!data) return 'Não informado';
   
   try {
+    if (typeof data === 'string') {
+      const match = data.trim().match(/^(\d{4})-(\d{2})(?:-(\d{2}))?/);
+      if (match) {
+        const [, ano, mes] = match;
+        if (formato === 'ats' || formato === 'short') {
+          return `${mes}/${ano}`;
+        }
+      }
+    }
+
     const date = typeof data === 'string' ? new Date(data) : data;
     
     if (isNaN(date.getTime())) {
-      return String(data); // Retorna o valor original se não for uma data válida
+      return String(data);
     }
     
+    if (formato === 'ats') {
+      const mes = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const ano = date.getUTCFullYear();
+      return `${mes}/${ano}`;
+    }
+
     const options = ({
       'short': { year: 'numeric', month: '2-digit' },
       'long': { year: 'numeric', month: 'long', day: 'numeric' },
-      'month-year': { year: 'numeric', month: 'long' }
-    } as Record<string, Intl.DateTimeFormatOptions>)[formato] || { year: 'numeric', month: 'long' };
+      'month-year': { year: 'numeric', month: 'long' },
+      'ats': { year: 'numeric', month: '2-digit' }
+    } as Record<string, Intl.DateTimeFormatOptions>)[formato] || { year: 'numeric', month: '2-digit' };
     
     return date.toLocaleDateString('pt-BR', options);
   } catch (error) {
-    return String(data); // Retorna o valor original em caso de erro
+    return String(data);
   }
 };
 
