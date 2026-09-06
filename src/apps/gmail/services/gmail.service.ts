@@ -13,6 +13,7 @@ interface Reply {
   bodyText: string;
   date: string;
   internalDate: string;
+  isMe: boolean;
 }
 
 function extractHeader(
@@ -116,9 +117,7 @@ export async function listReplies(
     const headers = payload.headers || [];
     const from = extractHeader(headers, "From");
     const fromEmail = (from.match(/<([^>]+)>/) || [])[1] || from;
-
-    // Ignora o email enviado pela própria conta conectada.
-    if (fromEmail.toLowerCase() === connectedEmail) continue;
+    const isMe = fromEmail.toLowerCase() === connectedEmail;
 
     replies.push({
       id: msg.id!,
@@ -130,6 +129,7 @@ export async function listReplies(
       bodyText: extractBodyText(payload),
       date: extractHeader(headers, "Date"),
       internalDate: detail.data.internalDate || "",
+      isMe,
     });
   }
 
