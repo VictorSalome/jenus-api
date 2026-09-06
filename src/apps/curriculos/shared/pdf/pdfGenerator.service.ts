@@ -451,20 +451,26 @@ const adicionarExperiencias = (doc, experiences, estilos, yPosition) => {
     yPosition += estilos.espacamento.entreLinhas + 4;
 
     if (exp.description) {
-      doc
-        .font(estilos.textoSmall.font)
-        .fontSize(estilos.textoSmall.size)
-        .fillColor(CORES.texto)
-        .text(exp.description, {
-          indent: 10,
-          y: yPosition,
-          width:
-            doc.page.width -
-            doc.page.margins.left -
-            doc.page.margins.right -
-            10,
-        });
-      yPosition = doc.y + 6;
+      // Blindagem: pega apenas o resumo introdutório (máx 220 chars), evitando que textos longos estourem 2 páginas
+      const firstLine = exp.description
+        .split(/\n+/)[0]
+        .replace(/^(Principais responsabilidades|Principais entregas|Atividades).*$/gim, '')
+        .trim();
+      const finalDesc = firstLine.length > 220 ? `${firstLine.slice(0, 217)}...` : firstLine;
+      if (finalDesc) {
+        doc
+          .font(estilos.textoSmall.font)
+          .fontSize(estilos.textoSmall.size)
+          .fillColor(CORES.texto)
+          .text(finalDesc, doc.page.margins.left + 10, yPosition, {
+            width:
+              doc.page.width -
+              doc.page.margins.left -
+              doc.page.margins.right -
+              10,
+          });
+        yPosition = doc.y + 6;
+      }
     }
 
     if (exp.achievements && exp.achievements.length > 0) {
