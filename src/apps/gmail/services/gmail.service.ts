@@ -36,7 +36,16 @@ function extractBodyText(
     }
     if (node.mimeType === "text/html" && node.body?.data && parts.length === 0) {
       const html = Buffer.from(node.body.data, "base64").toString("utf8");
-      parts.push(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+      const formatted = html
+        .replace(/<br\s*[\/]?>/gi, "\n")
+        .replace(/<\/p>/gi, "\n\n")
+        .replace(/<\/div>/gi, "\n")
+        .replace(/<\/tr>/gi, "\n")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/[ \t]+/g, " ")
+        .replace(/\n\s+\n/g, "\n\n")
+        .trim();
+      parts.push(formatted);
       return;
     }
     (node.parts || []).forEach(walk);
