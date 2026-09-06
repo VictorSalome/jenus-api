@@ -276,13 +276,14 @@ const inferirSenioridade = (dadosVaga: Record<string, any> = {}): string => {
 const calcularAnosExperiencia = (experiencias: any[] = []): number => {
   if (!Array.isArray(experiencias) || experiencias.length === 0) return 0;
 
-  let maiorTempo = 0;
   const agora = new Date();
+  let minInicio: Date | null = null;
+  let maxFim: Date | null = null;
 
   experiencias.forEach((exp) => {
     const inicio = new Date(`${exp.startDate || ""}-01`);
     const fim =
-      exp.endDate === "present" ? agora : new Date(`${exp.endDate || ""}-01`);
+      exp.endDate === "present" || !exp.endDate ? agora : new Date(`${exp.endDate || ""}-01`);
 
     if (
       Number.isNaN(inicio.getTime()) ||
@@ -292,14 +293,20 @@ const calcularAnosExperiencia = (experiencias: any[] = []): number => {
       return;
     }
 
-    const diffAnos =
-      (fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
-    if (diffAnos > maiorTempo) {
-      maiorTempo = diffAnos;
+    if (!minInicio || inicio < minInicio) {
+      minInicio = inicio;
+    }
+    if (!maxFim || fim > maxFim) {
+      maxFim = fim;
     }
   });
 
-  return Number(maiorTempo.toFixed(1));
+  if (!minInicio || !maxFim) return 0;
+
+  const diffAnos =
+    (maxFim.getTime() - minInicio.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+
+  return Number(diffAnos.toFixed(1));
 };
 
 const calcularAderenciaSenioridade = (senioridade: string, anosExperiencia: number): number => {

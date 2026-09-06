@@ -304,16 +304,15 @@ const adicionarSecao = (
   doc.font(estilos.texto.font).fontSize(estilos.texto.size).fillColor(CORES.texto);
 
   if (tipo === "paragrafo") {
-    doc.text(conteudo, {
+    doc.text(conteudo, doc.page.margins.left, yPosition, {
       align: "justify",
       lineGap: 4,
-      y: yPosition,
       width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
       indent: 0,
     });
     yPosition = doc.y + estilos.espacamento.entreSecoes;
   } else {
-    doc.text(conteudo, doc.x, yPosition);
+    doc.text(conteudo, doc.page.margins.left, yPosition);
     yPosition += estilos.espacamento.entreSecoes;
   }
 

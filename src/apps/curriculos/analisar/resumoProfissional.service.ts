@@ -151,7 +151,11 @@ const FRASE_GENERICA =
  */
 const gerarTrechoAbertura = (anosExperiencia?: number): string => {
   if (anosExperiencia && anosExperiencia >= 1) {
-    const anos = Math.round(anosExperiencia);
+    const anos = Math.floor(anosExperiencia);
+    const temFracao = anosExperiencia - anos >= 0.4;
+    if (temFracao && anos >= 1) {
+      return `Atuo como desenvolvedor Full Stack há mais de ${anos} anos.`;
+    }
     return `Atuo como desenvolvedor Full Stack há ${anos === 1 ? "1 ano" : `${anos} anos`}.`;
   }
   return "Atuo como desenvolvedor Full Stack.";
