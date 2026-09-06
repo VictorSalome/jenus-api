@@ -435,7 +435,7 @@ const adicionarExperiencias = (doc, experiences, estilos, yPosition) => {
       .font(estilos.texto.font)
       .fontSize(estilos.texto.size)
       .fillColor(CORES.texto)
-      .text(`${exp.position} - ${exp.company}`, doc.x, yPosition);
+      .text(`${exp.position} - ${exp.company}`, doc.page.margins.left, yPosition);
 
     yPosition += estilos.espacamento.entreLinhas + 3;
 
@@ -446,7 +446,7 @@ const adicionarExperiencias = (doc, experiences, estilos, yPosition) => {
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
       .fillColor(CORES.textoSecundario)
-      .text(`${periodo} | ${exp.location}`, doc.x, yPosition);
+      .text(`${periodo} | ${exp.location}`, doc.page.margins.left, yPosition);
 
     yPosition += estilos.espacamento.entreLinhas + 4;
 
@@ -532,7 +532,7 @@ const adicionarFormacao = (doc, education, estilos, yPosition) => {
       .font(estilos.texto.font)
       .fontSize(estilos.texto.size)
       .fillColor(CORES.texto)
-      .text(edu.degree, doc.x, yPosition);
+      .text(edu.degree, doc.page.margins.left, yPosition);
 
     yPosition += estilos.espacamento.entreLinhas + 2;
 
@@ -543,7 +543,7 @@ const adicionarFormacao = (doc, education, estilos, yPosition) => {
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
       .fillColor(CORES.textoSecundario)
-      .text(`${edu.institution} | ${periodo}`, doc.x, yPosition);
+      .text(`${edu.institution} | ${periodo}`, doc.page.margins.left, yPosition);
 
     yPosition += estilos.espacamento.entreLinhas + 2;
 
@@ -570,9 +570,9 @@ const adicionarCertificacoes = (doc, certifications, estilos, yPosition) => {
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
       .fillColor(CORES.texto)
-      .text(`• ${cert.name} - ${cert.issuer}${dataCert}`, {
+      .text(`• ${cert.name} - ${cert.issuer}${dataCert}`, doc.page.margins.left, yPosition, {
         indent: 10,
-        y: yPosition,
+        width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 10,
       });
     yPosition = doc.y + estilos.espacamento.entreLinhas / 2;
   });
@@ -594,9 +594,9 @@ const adicionarIdiomas = (doc, languages, estilos, yPosition) => {
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
       .fillColor(CORES.texto)
-      .text(`• ${lang.language}: ${lang.level}`, {
+      .text(`• ${lang.language}: ${lang.level}`, doc.page.margins.left, yPosition, {
         indent: 10,
-        y: yPosition,
+        width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 10,
       });
     yPosition = doc.y + estilos.espacamento.entreLinhas / 2;
   });
