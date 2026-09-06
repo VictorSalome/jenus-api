@@ -486,6 +486,17 @@ export const enviarCurriculoComRegistro = async ({
   curriculoSnapshot = null,
   salaryPretension = null,
   salaryPretensionNegotiable = 0,
+  score = 0,
+}: {
+  emailDestino: string;
+  caminhoArquivoPdf: string;
+  dadosVaga: any;
+  candidato: any;
+  vagaId?: number | null;
+  curriculoSnapshot?: string | null;
+  salaryPretension?: string | null;
+  salaryPretensionNegotiable?: number | boolean;
+  score?: number;
 }) => {
   const db = await getDb();
   
@@ -494,8 +505,8 @@ export const enviarCurriculoComRegistro = async ({
   try {
     await db.exec("BEGIN TRANSACTION");
     const result = await db.run(
-      `INSERT INTO curriculo_envios (vaga_id, filename, email_destino, vaga_titulo, status, salary_pretension, salary_pretension_negotiable, curriculo_snapshot)
-       VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?)`,
+      `INSERT INTO curriculo_envios (vaga_id, filename, email_destino, vaga_titulo, status, salary_pretension, salary_pretension_negotiable, curriculo_snapshot, score)
+       VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?)`,
       vagaId,
       path.basename(caminhoArquivoPdf),
       emailDestino,
@@ -503,6 +514,7 @@ export const enviarCurriculoComRegistro = async ({
       salaryPretension,
       salaryPretensionNegotiable ? 1 : 0,
       curriculoSnapshot,
+      score || 0,
     );
     envioId = result.lastID;
     await db.exec("COMMIT");
@@ -571,7 +583,9 @@ export const getEnviosHistory = async (limit = 50) => {
     `SELECT e.id, e.vaga_id, e.filename, e.email_destino, e.vaga_titulo, e.status, e.created_at,
             e.salary_pretension, e.salary_pretension_negotiable,
             e.message_id, e.gmail_thread_id,
-            COALESCE(v.company, '') as company
+            e.score,
+            COALESCE(v.company, '') as company,
+            v.skills_json
      FROM curriculo_envios e
      LEFT JOIN curriculo_vagas v ON e.vaga_id = v.id
      ORDER BY e.created_at DESC LIMIT ?`,

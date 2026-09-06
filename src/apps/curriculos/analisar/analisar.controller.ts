@@ -395,7 +395,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
     process.env.RENDER === "true" ||
     Boolean(process.env.RENDER_EXTERNAL_HOSTNAME);
 
-  const { nomeArquivo, emailDestino, vagaTitulo, vagaId } = req.body;
+  const { nomeArquivo, emailDestino, vagaTitulo, vagaId, score } = req.body;
 
   if (!nomeArquivo) {
     throw new ValidationError("Nome do arquivo é obrigatório", [
@@ -518,6 +518,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
       curriculoSnapshot: null,
       salaryPretension: personalInfo.salaryPretension,
       salaryPretensionNegotiable: 0,
+      score: typeof score === 'number' ? score : (parseInt(score, 10) || 0),
     });
   } catch (emailError) {
     logError("Erro no envio de e-mail", emailError);

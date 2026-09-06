@@ -197,5 +197,11 @@ export const curriculoMigrations: Migration[] = [
       ALTER TABLE curriculo_profile_personal ADD COLUMN test_email TEXT DEFAULT 'victorsalome41@hotmail.com';
     `,
   },
+  {
+    id: "curriculo_013_envio_score",
+    up: `
+      ALTER TABLE curriculo_envios ADD COLUMN score INTEGER DEFAULT 0;
+    `,
+  },
 ];
 

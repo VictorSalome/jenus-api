@@ -25,20 +25,44 @@ router.get("/monitor", async (req, res) => {
     // Histórico do banco (fonte canônica), fallback para JSON legado
     let history: any[] = [];
     try {
-      const dbHistory = await getEnviosHistory(100);
-      history = dbHistory.map((e: any) => ({
-        id: e.id,
-        timestamp: e.created_at,
-        title: e.vaga_titulo || "Vaga",
-        company: e.company || "",
-        email: e.email_destino || "",
-        arquivo: e.filename || "",
-        status: e.status === "SENT" ? "enviado" : e.status?.toLowerCase() || "desconhecido",
-        messageId: e.message_id || "",
-        gmailThreadId: e.gmail_thread_id || "",
-        score: 0,
-        query: "",
-      }));
+      const { getDb } = await import("../../../core/database.js");
+      const db = await getDb();
+      const [dbHistory, profileSkills] = await Promise.all([
+        getEnviosHistory(100),
+        db.all("SELECT tech FROM curriculo_profile_skills"),
+      ]);
+      const flatSkills = (profileSkills || []).map((s: any) => s.tech.toLowerCase().trim());
+
+      history = dbHistory.map((e: any) => {
+        let score = (typeof e.score === "number" && e.score > 0) ? e.score : 0;
+        if (!score && e.skills_json) {
+          try {
+            const vSkills: string[] = JSON.parse(e.skills_json).map((s: string) => s.toLowerCase().trim());
+            if (vSkills.length > 0) {
+              const matched = vSkills.filter((s) => flatSkills.includes(s));
+              score = Math.round((matched.length / vSkills.length) * 100);
+            }
+          } catch {}
+        }
+        if (!score && flatSkills.length > 0) {
+          score = 75;
+        }
+
+        return {
+          id: e.id,
+          timestamp: e.created_at,
+          title: e.vaga_titulo || "Vaga",
+          company: e.company || "",
+          email: e.email_destino || "",
+          arquivo: e.filename || "",
+          status: e.status === "SENT" ? "enviado" : e.status?.toLowerCase() || "desconhecido",
+          messageId: e.message_id || "",
+          gmailThreadId: e.gmail_thread_id || "",
+          score,
+          salaryPretension: e.salary_pretension || "",
+          query: "",
+        };
+      });
     } catch {
       // Fallback para JSON legado
       const historyPath = path.join(config.paths.data, "send_history.json");
