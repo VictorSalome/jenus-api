@@ -124,7 +124,20 @@
       "description": ""
     }
   ],
-  "certifications": [],
+  "certifications": [
+    {
+      "id": "cert_fullcycle",
+      "name": "Formação em Desenvolvimento de Software e Arquitetura",
+      "issuer": "Full Cycle - Rocketseat",
+      "date": "2023-01"
+    },
+    {
+      "id": "cert_devclub",
+      "name": "Formação em Desenvolvimento Web",
+      "issuer": "Rocketseat - Dev Club",
+      "date": "2024-01"
+    }
+  ],
   "languages": [
     {
       "language": "Português",

@@ -94,6 +94,18 @@ async function syncProfile() {
     }
   }
 
+  // 7. Certifications
+  if (Array.isArray(profileData.certifications) && profileData.certifications.length > 0) {
+    await db.run('DELETE FROM curriculo_profile_certifications');
+    for (let i = 0; i < profileData.certifications.length; i++) {
+      const cert = profileData.certifications[i];
+      await db.run(
+        'INSERT INTO curriculo_profile_certifications (id, name, issuer, date, sort_order) VALUES (?, ?, ?, ?, ?)',
+        cert.id || `cert_${i}`, cert.name, cert.issuer, cert.date || null, i
+      );
+    }
+  }
+
   console.log('✅ Banco SQLite sincronizado com candidate-profile.json com sucesso!');
 }
 

@@ -35,19 +35,19 @@ const sanitizeTextForPdf = (text: string = ""): string => {
 };
 
 const ESTILOS = {
-  nomeCompleto: { font: "Helvetica-Bold", size: 18 },
-  titulo: { font: "Helvetica-Bold", size: 14 },
-  subtitulo: { font: "Helvetica-Bold", size: 12 },
-  texto: { font: "Helvetica", size: 11 },
-  textoSmall: { font: "Helvetica", size: 10 },
-  contato: { font: "Helvetica", size: 10 },
+  nomeCompleto: { font: "Helvetica-Bold", size: 17 },
+  titulo: { font: "Helvetica-Bold", size: 13 },
+  subtitulo: { font: "Helvetica-Bold", size: 11 },
+  texto: { font: "Helvetica", size: 10 },
+  textoSmall: { font: "Helvetica", size: 9.5 },
+  contato: { font: "Helvetica", size: 9.5 },
   espacamento: {
-    entreSecoes: 28,
-    entreItens: 16,
-    entreLinhas: 10,
-    cabecalho: 25,
+    entreSecoes: 18,
+    entreItens: 10,
+    entreLinhas: 7,
+    cabecalho: 16,
     aposTitulo: 26,
-    sublinhadoOffset: 15,
+    sublinhadoOffset: 14,
   },
 };
 
@@ -85,10 +85,10 @@ export const gerarPdfCurriculo = async (curriculo, dadosVaga) => {
     const doc = new PDFDocument({
       size: "A4",
       margins: {
-        top: 50,
-        bottom: 50,
-        left: 50,
-        right: 50,
+        top: 38,
+        bottom: 38,
+        left: 45,
+        right: 45,
       },
       info: {
         Title: sanitizeTextForPdf(`Currículo - ${curriculo.personalInfo.name}`),
@@ -570,11 +570,11 @@ const adicionarCertificacoes = (doc, certifications, estilos, yPosition) => {
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
       .fillColor(CORES.texto)
-      .text(`• ${cert.name} - ${cert.issuer}${dataCert}`, doc.page.margins.left, yPosition, {
-        indent: 10,
-        width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 10,
+      .text(`• ${cert.name} - ${cert.issuer}${dataCert}`, doc.page.margins.left + 4, yPosition, {
+        width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 4,
+        lineGap: 2,
       });
-    yPosition = doc.y + estilos.espacamento.entreLinhas / 2;
+    yPosition = doc.y + 6;
   });
 
   return yPosition + estilos.espacamento.entreSecoes;
@@ -594,11 +594,11 @@ const adicionarIdiomas = (doc, languages, estilos, yPosition) => {
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
       .fillColor(CORES.texto)
-      .text(`• ${lang.language}: ${lang.level}`, doc.page.margins.left, yPosition, {
-        indent: 10,
-        width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 10,
+      .text(`• ${lang.language}: ${lang.level}`, doc.page.margins.left + 4, yPosition, {
+        width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 4,
+        lineGap: 2,
       });
-    yPosition = doc.y + estilos.espacamento.entreLinhas / 2;
+    yPosition = doc.y + 5;
   });
 
   return yPosition + estilos.espacamento.entreSecoes;
