@@ -468,7 +468,7 @@ const adicionarExperiencias = (doc, experiences, estilos, yPosition) => {
     }
 
     if (exp.achievements && exp.achievements.length > 0) {
-      exp.achievements.slice(0, 4).forEach((achievement) => {
+      exp.achievements.slice(0, 5).forEach((achievement) => {
         doc
           .font(estilos.textoSmall.font)
           .fontSize(estilos.textoSmall.size)

@@ -19,7 +19,7 @@
       "startDate": "2024-11",
       "endDate": "present",
       "location": "São Paulo, SP",
-      "description": "Atuação no desenvolvimento e evolução de aplicações Full Stack Web e Mobile, APIs, integrações de sistemas e automações, participando de todo o ciclo de desenvolvimento, desde o levantamento de requisitos, análise de regras de negócio e definição da solução até o desenvolvimento, testes, implantação e sustentação de aplicações em produção, com foco em escalabilidade, performance, segurança e experiência do usuário.",
+      "description": "Atuação no desenvolvimento de aplicações Full Stack Web e Mobile, APIs RESTful, integrações corporativas e automação de processos.",
       "keywords": [
         "react",
         "next.js",
@@ -35,31 +35,27 @@
         "bitrix24"
       ],
       "achievements": [
-        "Desenvolvimento de aplicações Web em React, Next.js, TypeScript e JavaScript aplicando arquitetura baseada em componentes reutilizáveis, Hooks, Context API, Tailwind CSS e práticas de código limpo e escalável",
-        "Desenvolvimento de aplicações Mobile multiplataforma em React Native para Android e iOS com foco em performance, usabilidade, acessibilidade e experiência do usuário",
-        "Desenvolvimento e manutenção de APIs RESTful e serviços backend com Node.js, Express e TypeScript, com autenticação JWT, validação de dados, autorização e tratamento de erros",
-        "Modelagem e gerenciamento de banco de dados PostgreSQL e SQL, com otimização de consultas e estruturação de relacionamentos para alta consistência e performance",
-        "Construção de integrações entre o ERP Sankhya e o CRM Bitrix24, além de sistemas financeiros, logísticos e contábeis utilizando REST APIs e Webhooks",
-        "Implementação de automações, bots e rotinas orientadas a eventos (Event-Driven Architecture) e esteiras de CI/CD para integração e implantação contínua com Git"
+        "Desenvolvimento de aplicações web responsivas com React, Next.js e TypeScript, aplicando componentização, hooks e Context API.",
+        "Construção de aplicações mobile multiplataforma em React Native (iOS e Android), com foco em performance e usabilidade.",
+        "Desenvolvimento e manutenção de APIs RESTful com Node.js, Express, TypeScript e PostgreSQL, incluindo autenticação JWT e validações.",
+        "Integração de sistemas corporativos entre ERP Sankhya e CRM Bitrix24 via REST APIs e Webhooks, reduzindo inconsistências manuais.",
+        "Implementação de rotinas orientadas a eventos (Event-Driven), bots de automação e esteiras de CI/CD com Git para deploy contínuo."
       ],
       "technologies": [
         "React",
         "Next.js",
         "React Native",
         "TypeScript",
-        "JavaScript",
         "Node.js",
         "Express",
         "PostgreSQL",
-        "SQL",
         "REST API",
         "Webhooks",
         "Event-Driven",
         "CI/CD",
         "Git",
         "Sankhya",
-        "Bitrix24",
-        "Tailwind CSS"
+        "Bitrix24"
       ]
     },
     {
@@ -69,7 +65,7 @@
       "startDate": "2023-03",
       "endDate": "2024-11",
       "location": "São Paulo, SP",
-      "description": "Desenvolvimento de aplicações Full Stack para Web e Mobile, atuando em uma Software House no desenvolvimento de soluções personalizadas para clientes, utilizando tecnologias modernas como React, Next.js, React Native, TypeScript, Node.js e PostgreSQL.",
+      "description": "Desenvolvimento de soluções personalizadas Full Stack para Web e Mobile sob demanda para diversos clientes e segmentos.",
       "keywords": [
         "react",
         "next.js",
@@ -84,12 +80,11 @@
         "figma"
       ],
       "achievements": [
-        "Desenvolvimento de interfaces web com React e Next.js e aplicações mobile com React Native, criando experiências responsivas, reutilizáveis e consistentes entre plataformas",
-        "Implementação de arquiteturas baseadas em componentes reutilizáveis, aplicando boas práticas de componentização e desenvolvimento escalável",
-        "Desenvolvimento backend em Node.js, Express e TypeScript, construindo APIs RESTful, regras de negócio, autenticação e validação de dados",
-        "Modelagem e gerenciamento de dados com PostgreSQL e SQL, integrando as aplicações com Prisma ORM e estruturando relacionamentos com foco em segurança e performance",
-        "Transformação de protótipos do Figma em interfaces funcionais com Tailwind CSS, Responsive Design e abordagem Mobile-First",
-        "Aplicação de boas práticas de Clean Code, reutilização de código e versionamento com Git em colaboração com clientes e equipes multidisciplinares"
+        "Criação de interfaces web com React e Next.js e aplicativos mobile com React Native, garantindo consistência entre plataformas.",
+        "Desenvolvimento de APIs RESTful e serviços backend com Node.js, Express e TypeScript, integrando regras de negócio e autenticação.",
+        "Modelagem e manipulação de banco de dados relacional com PostgreSQL e Prisma ORM, garantindo integridade e consistência dos dados.",
+        "Conversão de protótipos do Figma em layouts responsivos com Tailwind CSS, adotando abordagem Mobile-First e Clean Code.",
+        "Colaboração em equipes multidisciplinares e clientes utilizando Git e metodologias ágeis (Scrum/Kanban) para entregas contínuas."
       ],
       "technologies": [
         "React",
@@ -100,7 +95,6 @@
         "Express",
         "PostgreSQL",
         "Prisma ORM",
-        "SQL",
         "REST API",
         "Tailwind CSS",
         "Figma",
