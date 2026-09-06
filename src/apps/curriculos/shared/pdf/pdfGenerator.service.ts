@@ -46,8 +46,8 @@ const ESTILOS = {
     entreItens: 16,
     entreLinhas: 10,
     cabecalho: 25,
-    aposTitulo: 20,
-    sublinhadoOffset: 14,
+    aposTitulo: 26,
+    sublinhadoOffset: 15,
   },
 };
 
