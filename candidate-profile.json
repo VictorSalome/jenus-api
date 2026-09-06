@@ -1,0 +1,199 @@
+{
+  "personalInfo": {
+    "name": "Victor Salomé",
+    "email": "vsalome41@gmail.com",
+    "phone": "+55 11 94119-0648",
+    "hasWhatsApp": true,
+    "linkedin": "linkedin.com/in/victorsalome",
+    "github": "github.com/VictorSalome",
+    "portfolio": "",
+    "location": "São Paulo, SP",
+    "title": "Desenvolvedor Full Stack (React, Next.js, React Native, Node.js)",
+    "summary": "Desenvolvedor Full Stack especialista no ecossistema JavaScript/TypeScript (React, Next.js, React Native, Node.js, Express, NestJS), atuando no desenvolvimento de sistemas web e mobile escaláveis, APIs RESTful, integrações de ERP/CRM (Sankhya, Bitrix24), automações com arquitetura orientada a eventos e nuvem (AWS, Docker, CI/CD)."
+  },
+  "experiences": [
+    {
+      "id": "exp_medsystems",
+      "company": "Classys by Medsystems",
+      "position": "Desenvolvedor Full Stack",
+      "startDate": "2024-11",
+      "endDate": "present",
+      "location": "São Paulo, SP",
+      "description": "Atuação no desenvolvimento e evolução de aplicações Full Stack Web e Mobile, APIs, integrações de sistemas e automações, participando de todo o ciclo de desenvolvimento, desde o levantamento de requisitos, análise de regras de negócio e definição da solução até o desenvolvimento, testes, implantação e sustentação de aplicações em produção, com foco em escalabilidade, performance, segurança e experiência do usuário.",
+      "keywords": [
+        "react",
+        "next.js",
+        "react native",
+        "typescript",
+        "node.js",
+        "express",
+        "postgresql",
+        "rest api",
+        "webhooks",
+        "ci/cd",
+        "sankhya",
+        "bitrix24"
+      ],
+      "achievements": [
+        "Desenvolvimento de aplicações Web em React, Next.js, TypeScript e JavaScript aplicando arquitetura baseada em componentes reutilizáveis, Hooks, Context API, Tailwind CSS e práticas de código limpo e escalável",
+        "Desenvolvimento de aplicações Mobile multiplataforma em React Native para Android e iOS com foco em performance, usabilidade, acessibilidade e experiência do usuário",
+        "Desenvolvimento e manutenção de APIs RESTful e serviços backend com Node.js, Express e TypeScript, com autenticação JWT, validação de dados, autorização e tratamento de erros",
+        "Modelagem e gerenciamento de banco de dados PostgreSQL e SQL, com otimização de consultas e estruturação de relacionamentos para alta consistência e performance",
+        "Construção de integrações entre o ERP Sankhya e o CRM Bitrix24, além de sistemas financeiros, logísticos e contábeis utilizando REST APIs e Webhooks",
+        "Implementação de automações, bots e rotinas orientadas a eventos (Event-Driven Architecture) e esteiras de CI/CD para integração e implantação contínua com Git"
+      ],
+      "technologies": [
+        "React",
+        "Next.js",
+        "React Native",
+        "TypeScript",
+        "JavaScript",
+        "Node.js",
+        "Express",
+        "PostgreSQL",
+        "SQL",
+        "REST API",
+        "Webhooks",
+        "Event-Driven",
+        "CI/CD",
+        "Git",
+        "Sankhya",
+        "Bitrix24",
+        "Tailwind CSS"
+      ]
+    },
+    {
+      "id": "exp_softwarehouse",
+      "company": "Software House",
+      "position": "Desenvolvedor Full Stack",
+      "startDate": "2023-03",
+      "endDate": "2024-11",
+      "location": "São Paulo, SP",
+      "description": "Desenvolvimento de aplicações Full Stack para Web e Mobile, atuando em uma Software House no desenvolvimento de soluções personalizadas para clientes, utilizando tecnologias modernas como React, Next.js, React Native, TypeScript, Node.js e PostgreSQL.",
+      "keywords": [
+        "react",
+        "next.js",
+        "react native",
+        "typescript",
+        "node.js",
+        "express",
+        "postgresql",
+        "prisma",
+        "rest api",
+        "tailwind",
+        "figma"
+      ],
+      "achievements": [
+        "Desenvolvimento de interfaces web com React e Next.js e aplicações mobile com React Native, criando experiências responsivas, reutilizáveis e consistentes entre plataformas",
+        "Implementação de arquiteturas baseadas em componentes reutilizáveis, aplicando boas práticas de componentização e desenvolvimento escalável",
+        "Desenvolvimento backend em Node.js, Express e TypeScript, construindo APIs RESTful, regras de negócio, autenticação e validação de dados",
+        "Modelagem e gerenciamento de dados com PostgreSQL e SQL, integrando as aplicações com Prisma ORM e estruturando relacionamentos com foco em segurança e performance",
+        "Transformação de protótipos do Figma em interfaces funcionais com Tailwind CSS, Responsive Design e abordagem Mobile-First",
+        "Aplicação de boas práticas de Clean Code, reutilização de código e versionamento com Git em colaboração com clientes e equipes multidisciplinares"
+      ],
+      "technologies": [
+        "React",
+        "Next.js",
+        "React Native",
+        "TypeScript",
+        "Node.js",
+        "Express",
+        "PostgreSQL",
+        "Prisma ORM",
+        "SQL",
+        "REST API",
+        "Tailwind CSS",
+        "Figma",
+        "Git"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "id": "edu2",
+      "institution": "SENAC São Paulo",
+      "degree": "Tecnólogo em Análise e Desenvolvimento de Sistemas",
+      "startDate": "2024-02",
+      "endDate": "present",
+      "location": "São Paulo, SP",
+      "gpa": "",
+      "description": "Formação com foco em engenharia de software, arquitetura de aplicações, banco de dados e gestão de projetos de TI."
+    },
+    {
+      "id": "edu1",
+      "institution": "Universidade Santo Amaro (UNISA)",
+      "degree": "Bacharel em Administração de Empresas",
+      "startDate": "2019-02",
+      "endDate": "2022-12",
+      "location": "São Paulo, SP",
+      "gpa": "",
+      "description": ""
+    }
+  ],
+  "certifications": [],
+  "languages": [
+    {
+      "language": "Português",
+      "level": "Nativo"
+    },
+    {
+      "language": "Inglês",
+      "level": "Técnico / Intermediário"
+    }
+  ],
+  "specializations": [
+    "Desenvolvimento Web & Mobile (React, Next.js, React Native)",
+    "APIs RESTful & Backend (Node.js, Express, NestJS, TypeScript)",
+    "Modelagem & Banco de Dados (PostgreSQL, SQL, Prisma ORM)",
+    "Integração de Sistemas & ERP/CRM (Sankhya, Bitrix24, Webhooks)",
+    "Arquitetura de Software & DevOps (Clean Code, Event-Driven, CI/CD, Git)"
+  ],
+  "skills": {
+    "programming": [
+      "TypeScript",
+      "JavaScript",
+      "SQL",
+      "HTML5",
+      "CSS3"
+    ],
+    "frameworks": [
+      "React",
+      "Next.js",
+      "React Native",
+      "Node.js",
+      "Express",
+      "NestJS",
+      "Tailwind CSS",
+      "Prisma ORM"
+    ],
+    "databases": [
+      "PostgreSQL",
+      "MongoDB",
+      "MySQL"
+    ],
+    "methodologies": [
+      "Clean Code",
+      "SOLID",
+      "Scrum",
+      "Kanban",
+      "Event-Driven Architecture",
+      "Mobile-First"
+    ],
+    "testing": [
+      "Jest",
+      "React Testing Library"
+    ],
+    "devops": [
+      "Docker",
+      "AWS",
+      "CI/CD",
+      "Git",
+      "GitHub Actions"
+    ],
+    "aiAutomation": [
+      "Webhooks",
+      "Automação de processos",
+      "Integração Sankhya/Bitrix24"
+    ]
+  }
+}
