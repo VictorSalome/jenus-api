@@ -45,48 +45,102 @@ function normalizeText(text: string): string {
     .trim();
 }
 
+const TECH_ACRONYMS = new Set([
+  'JS', 'TS', 'PHP', 'SQL', 'AWS', 'GCP', 'API', 'REST', 'RESTFUL',
+  'CSS', 'HTML', 'CI/CD', 'UI/UX', 'QA', 'CRM', 'ERP', 'IA', 'AI',
+  'CLT', 'PJ', 'SRE', 'SENIOR', 'SÊNIOR', 'PLENO', 'JUNIOR', 'JÚNIOR',
+]);
+
+function toTitleCase(str: string): string {
+  const lowercaseWords = new Set(['de', 'da', 'do', 'dos', 'das', 'e', 'em', 'para', 'com', 'a', 'o']);
+  return str
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word, idx) => {
+      const upper = word.toUpperCase();
+      if (upper === 'NODE.JS' || upper === 'NODEJS') return 'Node.js';
+      if (upper === 'REACT.JS' || upper === 'REACTJS') return 'React';
+      if (upper === 'NEXT.JS' || upper === 'NEXTJS') return 'Next.js';
+      if (upper === 'NEST.JS' || upper === 'NESTJS') return 'NestJS';
+      if (upper === 'VUE.JS' || upper === 'VUEJS') return 'Vue.js';
+      if (upper === 'POSTGRESQL' || upper === 'POSTGRES') return 'PostgreSQL';
+      if (TECH_ACRONYMS.has(upper)) return upper;
+      if (idx > 0 && lowercaseWords.has(word)) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+}
+
+function cleanJobTitle(title: string): string {
+  if (!title) return '';
+
+  let cleaned = title
+    // Remove emojis e caracteres fora do BMP
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+    .replace(/[📢💎🔥⚡🚀✨🎯📌📝💼🏢💻⭐🔹🔸▶️*#•]/g, '')
+    // Remove prefixos como "VAGA:", "OPORTUNIDADE:", "JOB:"
+    .replace(/^(?:vaga|oportunidade|job|posi[çc][ãa]o)\s*[:\-–—]\s*/i, '')
+    .trim();
+
+  // Converte caixa alta para Title Case
+  if (cleaned === cleaned.toUpperCase() && cleaned.length > 3) {
+    cleaned = toTitleCase(cleaned);
+  }
+
+  return cleaned;
+}
+
 function extractTitle(text: string): string | null {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
   // 1. Procura padrão explícito: "vaga: ..." ou "📢 vaga ..."
   for (const line of lines) {
-    const cleanLine = line.replace(/[📢💎]/g, '').trim();
+    const cleanLine = line
+      .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+      .replace(/[📢💎🔥⚡🚀✨🎯📌📝💼🏢💻*#]/g, '')
+      .trim();
 
-    if (cleanLine.match(/^vaga\s*[:\-]\s*/i) || cleanLine.match(/^📢\s*vaga/i)) {
-      return cleanLine
-        .replace(/^📢\s*/i, '')
-        .replace(/^vaga\s*[:\-]\s*/i, '')
-        .replace(/📢.*$/, '')
-        .trim();
+    if (cleanLine.match(/^(?:vaga|oportunidade|job|posi[çc][ãa]o)\s*[:\-–—]\s*/i)) {
+      return cleanJobTitle(cleanLine);
     }
   }
 
-  // 2. Fallback: primeira linha curta (< 80 chars) que não seja seção
-  const sectionHeaders = /^(requisitos|requerimentos|responsabilidades|atribuições|qualificações|diferenciais|benefícios|oferecemos|temos:|soft skills|hard skills)/i;
+  // 2. Fallback: primeira linha curta (< 90 chars) que não seja seção
+  const sectionHeaders = /^(requisitos|requerimentos|responsabilidades|atribuições|qualificações|diferenciais|benefícios|oferecemos|temos:|soft skills|hard skills|sobre|quem somos)/i;
   for (const line of lines) {
-    const cleanLine = line.replace(/[📢💎]/g, '').trim();
-    if (cleanLine.length > 0 && cleanLine.length < 80 && !sectionHeaders.test(cleanLine)) {
-      return cleanLine;
+    const cleanLine = line
+      .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+      .replace(/[📢💎🔥⚡🚀✨🎯📌📝💼🏢💻*#]/g, '')
+      .trim();
+    if (cleanLine.length > 2 && cleanLine.length < 90 && !sectionHeaders.test(cleanLine)) {
+      return cleanJobTitle(cleanLine);
     }
   }
 
   return null;
 }
 
-function extractCompany(title: string): string | null {
-  if (!title) return null;
-  
-  const match = title.match(/\s*-\s*([A-Z][A-Z0-9\s&.-]+)$/);
-  if (match) {
-    return match[1].trim();
+function extractCompany(text: string, title: string = ''): string | null {
+  if (title) {
+    const match = title.match(/\s*[-–—]\s*([A-Za-z0-9\s&.-]+)$/);
+    if (match && match[1].trim().length > 1) {
+      return match[1].trim();
+    }
+    const match2 = title.match(/\s*@\s*([A-Za-z0-9\s&.-]+)$/);
+    if (match2 && match2[1].trim().length > 1) {
+      return match2[1].trim();
+    }
   }
-  
-  const match2 = title.match(/\s*@\s*([A-Z][A-Z0-9\s&.-]+)$/);
-  if (match2) {
-    return match2[1].trim();
+
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    const matchEmpresa = line.match(/^(?:empresa|company|cliente|contratante)\s*[:\-–]\s*(.+)$/i);
+    if (matchEmpresa && matchEmpresa[1].trim().length > 1) {
+      return matchEmpresa[1].trim();
+    }
   }
-  
-  return null;
+
+  return 'Confidencial';
 }
 
 function extractSeniority(text: string): string | null {

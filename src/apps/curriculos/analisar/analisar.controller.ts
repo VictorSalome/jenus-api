@@ -198,8 +198,11 @@ export const analisarVagaController = asyncHandler(async (req, res) => {
 
   // Calcular match com perfil do candidato
   const db = await getDb();
-  const perfilSkills = await db.all('SELECT category, tech FROM curriculo_profile_skills');
-  const flatSkills = perfilSkills.map(s => s.tech.toLowerCase());
+  const [perfilSkills, personal] = await Promise.all([
+    db.all('SELECT category, tech FROM curriculo_profile_skills'),
+    db.get('SELECT salary_pretension FROM curriculo_profile_personal LIMIT 1'),
+  ]);
+  const flatSkills = (perfilSkills || []).map(s => s.tech.toLowerCase());
   const vagaSkills = (vagaParseada.skills || []).map(s => s.toLowerCase());
   const matched = vagaSkills.filter(s => flatSkills.includes(s));
   const missing = vagaSkills.filter(s => !flatSkills.includes(s));
@@ -222,6 +225,7 @@ export const analisarVagaController = asyncHandler(async (req, res) => {
       categorizedSkills: vagaParseada.categorizedSkills,
       rawDescription: vagaParseada.rawDescription,
       exigePretensaoSalarial: vagaParseada.exigePretensaoSalarial,
+      defaultSalaryPretension: personal?.salary_pretension || '',
     },
     match: {
       percent: matchPercent,
