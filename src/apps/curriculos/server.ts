@@ -21,6 +21,7 @@ import pendingRoutes from './buscas/pending.routes.js';
 import sourcesRoutes from './buscas/sources.routes.js';
 import scraperRoutes from './scraper/scraper.routes.js';
 import monitorRoutes from './monitor/monitor.routes.js';
+import exportRoutes from './export/export.routes.js';
 import perfilRoutes from './perfil/perfil.routes.js';
 import compatibilidadeRoutes from './compatibilidade.routes.js';
 import emailTestRoutes from './shared/email/emailTest.routes.js';
@@ -105,6 +106,7 @@ app.use('/', compatibilidadeRoutes);
 app.use('/', emailTestRoutes);
 app.use('/', testeRoutes);
 app.use('/', smtpRoutes);
+app.use('/', exportRoutes);
 
 app.use(notFoundHandler);
 
