@@ -204,7 +204,7 @@ export const getCompatibilidade = async (vagaId: number) => {
   else summary = "Baixa compatibilidade";
 
   if (requiredMissing.length > 0) {
-    summary += ` ⚠ ${requiredMissing.length} skill(s) obrigatória(s) ausente(s)`;
+    summary += ` (${requiredMissing.length} skill(s) obrigatória(s) ausente(s))`;
   }
 
   return {
