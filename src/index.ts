@@ -28,9 +28,23 @@ const app = express();
 // para o express-rate-limit e req.ip refletirem o IP real do cliente.
 app.set("trust proxy", 1);
 
+const allowedOrigins = config.CORS_ORIGINS
+  ? config.CORS_ORIGINS.split(',').map((o) => o.trim())
+  : null;
+
 app.use(
   cors({
-    origin: true,
+    origin: (origin, callback) => {
+      // Permite requisições de apps mobile, cURL ou sem header Origin
+      if (!origin) return callback(null, true);
+      if (allowedOrigins && allowedOrigins.length > 0) {
+        if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+          return callback(null, true);
+        }
+        return callback(new Error('Origem não autorizada por política de CORS'));
+      }
+      return callback(null, true);
+    },
     credentials: true,
   }),
 );

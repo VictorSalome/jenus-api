@@ -31,7 +31,8 @@ export const shortcutWebhook = async (req: Request, res: Response): Promise<void
     return;
   }
 
-  const userId = authenticatedUserId || req.body?.userId || DEFAULT_USER_ID;
+  // Garante que o userId seja sempre o autenticado pelo JWT ou o default do webhook (ignora req.body.userId para evitar impersonação)
+  const userId = authenticatedUserId || DEFAULT_USER_ID;
   const body = req.body || {};
 
   // Caso 1: Envio de texto bruto de notificação/SMS (ex: "Compra de R$ 100,00 no Colchão aprovada")
