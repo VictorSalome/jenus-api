@@ -7,7 +7,7 @@ import { sendPushNotification } from "../../promo/push/push.service.js";
  */
 export const sendTestPush = async (req: Request, res: Response): Promise<void> => {
   const userId = (req as any).user?.userId || "vssousa";
-  const { title, body, amount, merchant, screen } = req.body || {};
+  const { title, body, amount, merchant, screen, token } = req.body || {};
 
   const pushTitle = title || "Notificação de Teste";
   const pushBody = body || "Compra de R$ 120,00 no Supermercado aprovada";
@@ -31,6 +31,7 @@ export const sendTestPush = async (req: Request, res: Response): Promise<void> =
     pushResult = await sendPushNotification({
       title: pushTitle,
       body: pushBody,
+      token,
       data: {
         screen: screen || "detected",
         amount,
