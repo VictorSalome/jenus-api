@@ -105,8 +105,8 @@ async function syncProfile() {
     for (let i = 0; i < profileData.certifications.length; i++) {
       const cert = profileData.certifications[i];
       await db.run(
-        'INSERT INTO curriculo_profile_certifications (id, name, issuer, date, sort_order) VALUES (?, ?, ?, ?, ?)',
-        cert.id || `cert_${i}`, cert.name, cert.issuer, cert.date || null, i
+        'INSERT INTO curriculo_profile_certifications (id, name, issuer, date, type, description, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        cert.id || `cert_${i}`, cert.name, cert.issuer, cert.date || null, cert.type || 'curso', cert.description || null, i
       );
     }
   }

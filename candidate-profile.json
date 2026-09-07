@@ -127,16 +127,46 @@
   ],
   "certifications": [
     {
-      "id": "cert_fullcycle",
-      "name": "Formação em Desenvolvimento de Software e Arquitetura",
-      "issuer": "Full Cycle - Rocketseat",
-      "date": "2023-01"
+      "id": "cert_node_rocketseat",
+      "type": "curso",
+      "name": "Formação em Node.js e Desenvolvimento Backend — Rocketseat",
+      "issuer": "Rocketseat",
+      "description": "Formação complementar em desenvolvimento Backend utilizando Node.js, TypeScript e APIs RESTful, com estudos de arquitetura, integração de serviços, regras de negócio, bancos de dados e boas práticas de desenvolvimento de software."
     },
     {
-      "id": "cert_devclub",
-      "name": "Formação em Desenvolvimento Web",
-      "issuer": "Rocketseat - Dev Club",
-      "date": "2024-01"
+      "id": "cert_reactnative_rocketseat",
+      "type": "curso",
+      "name": "Formação em React Native e Desenvolvimento Mobile — Rocketseat",
+      "issuer": "Rocketseat",
+      "description": "Formação complementar em desenvolvimento Mobile multiplataforma utilizando React Native, TypeScript e JavaScript, com desenvolvimento para Android e iOS, integração com APIs RESTful, componentes reutilizáveis, navegação, performance e experiência do usuário."
+    },
+    {
+      "id": "cert_react_alura",
+      "type": "curso",
+      "name": "Formação em React e Desenvolvimento Frontend — Alura",
+      "issuer": "Alura",
+      "description": "Formação complementar em desenvolvimento Frontend utilizando React, JavaScript e TypeScript, com estudos de componentização, Hooks, consumo de APIs, gerenciamento de estado, interfaces responsivas e boas práticas de desenvolvimento."
+    },
+    {
+      "id": "cert_node_alura",
+      "type": "curso",
+      "name": "Formação em Node.js e APIs — Alura",
+      "issuer": "Alura",
+      "description": "Formação complementar em desenvolvimento Backend com Node.js, criação e consumo de APIs RESTful, integração com bancos de dados, autenticação, regras de negócio e desenvolvimento de aplicações escaláveis."
+    },
+    {
+      "id": "cert_devweb_rocketseat",
+      "type": "curso",
+      "name": "Formação em Desenvolvimento Web — Rocketseat",
+      "issuer": "Rocketseat",
+      "description": "Formação complementar em desenvolvimento Web e Full Stack, com estudos em React, TypeScript, Node.js, APIs RESTful, desenvolvimento de aplicações modernas, arquitetura de software e boas práticas de programação."
+    },
+    {
+      "id": "cert_arq_fullcycle",
+      "type": "curso",
+      "name": "Formação em Desenvolvimento de Software e Arquitetura — Full Cycle",
+      "issuer": "Full Cycle",
+      "description": "Formação complementar em desenvolvimento de software, arquitetura de aplicações, APIs, microsserviços, Docker, CI/CD, sistemas distribuídos, Event-Driven Architecture e boas práticas de engenharia de software"
     }
   ],
   "languages": [

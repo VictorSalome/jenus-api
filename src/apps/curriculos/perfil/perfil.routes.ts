@@ -406,9 +406,9 @@ router.post(
       for (let i = 0; i < profileData.certifications.length; i++) {
         const cert = profileData.certifications[i];
         await db.run(
-          `INSERT INTO curriculo_profile_certifications (id, name, issuer, date, credential_id, url, sort_order) VALUES (?,?,?,?,?,?,?)`,
-          cert.id || `cert_${i}`, cert.name, cert.issuer, cert.date,
-          cert.credentialId || "", cert.url || "", i
+          `INSERT INTO curriculo_profile_certifications (id, name, issuer, date, credential_id, url, type, description, sort_order) VALUES (?,?,?,?,?,?,?,?,?)`,
+          cert.id || `cert_${i}`, cert.name, cert.issuer, cert.date || null,
+          cert.credentialId || "", cert.url || "", cert.type || 'curso', cert.description || null, i
         );
         certCount++;
       }

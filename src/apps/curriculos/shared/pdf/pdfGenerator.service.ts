@@ -544,17 +544,18 @@ const adicionarFormacao = (doc, education, estilos, yPosition) => {
  */
 const adicionarCertificacoes = (doc, certifications, estilos, yPosition) => {
   yPosition = verificarNovaPagina(doc, yPosition, 100);
-  yPosition = escreverTituloSecao(doc, "Certificações", estilos, yPosition);
+  yPosition = escreverTituloSecao(doc, "Cursos e Certificações", estilos, yPosition);
 
   certifications.forEach((cert) => {
     yPosition = verificarNovaPagina(doc, yPosition, 30);
 
+    const issuerStr = cert.issuer && !cert.name.includes(cert.issuer) ? ` - ${cert.issuer}` : '';
     const dataCert = cert.date ? ` (${formatarData(cert.date, 'ats')})` : '';
     doc
       .font(estilos.textoSmall.font)
       .fontSize(estilos.textoSmall.size)
       .fillColor(CORES.texto)
-      .text(`• ${cert.name} - ${cert.issuer}${dataCert}`, doc.page.margins.left + 4, yPosition, {
+      .text(`• ${cert.name}${issuerStr}${dataCert}`, doc.page.margins.left + 4, yPosition, {
         width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 4,
         lineGap: 2,
       });
