@@ -9,6 +9,7 @@ import * as installments from "../controllers/installments.controller.js";
 import * as invoices from "../controllers/invoices.controller.js";
 import * as notificationEvents from "../controllers/notification-events.controller.js";
 import { shortcutWebhook } from "../controllers/webhook.controller.js";
+import { sendTestPush } from "../controllers/push-test.controller.js";
 import { dashboard } from "../controllers/dashboard.controller.js";
 import { asyncHandler } from "../shared/errors.js";
 import { requireAuth, optionalAuth } from "../../../shared/auth/auth.middleware.js";
@@ -21,6 +22,7 @@ router.post("/webhook/shortcut", optionalAuth, asyncHandler(shortcutWebhook));
 // Demais rotas exigem autenticação JWT
 router.use(requireAuth);
 
+router.post("/push/test", asyncHandler(sendTestPush));
 router.get("/dashboard", asyncHandler(dashboard));
 
 router.get("/accounts", asyncHandler(accounts.list));
