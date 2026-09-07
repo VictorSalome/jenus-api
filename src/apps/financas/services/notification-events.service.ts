@@ -43,7 +43,7 @@ export const processRawNotification = async (
   const parsed = parseNotification(raw);
   if (!parsed) {
     await db.run(
-      "UPDATE fin_notification_events SET status = 'ignored' WHERE id = ? AND user_id = ?",
+      "UPDATE fin_notification_events SET status = 'error' WHERE id = ? AND user_id = ?",
       eventId,
       userId,
     );
@@ -60,6 +60,28 @@ export const processRawNotification = async (
   const matches = await findDuplicateTransactions(userId, fingerprint, date);
 
   const duplicate = matches.length > 0;
+  let finalStatus = duplicate ? "duplicate" : "parsed";
+
+  // Tentativa de importação automática caso não seja duplicada
+  if (!duplicate) {
+    try {
+      const accountId = await ensureDefaultAccount(userId);
+      await createTransaction(userId, {
+        accountId,
+        merchantName: parsed.data.merchantName,
+        description: parsed.data.description,
+        amountCents: parsed.data.amountCents,
+        transactionDate: date,
+        installmentsTotal: parsed.data.installmentsTotal ?? 1,
+        source: "NOTIFICATION",
+        notificationEventId: eventId,
+      });
+      finalStatus = "imported";
+    } catch (err) {
+      console.error("[processRawNotification] Falha ao auto-importar:", err);
+      finalStatus = "error";
+    }
+  }
 
   await db.run(
     `UPDATE fin_notification_events
@@ -68,7 +90,7 @@ export const processRawNotification = async (
     parsed.parser.appLabel,
     JSON.stringify(parsed.data),
     fingerprint,
-    duplicate ? "duplicate" : "parsed",
+    finalStatus,
     eventId,
     userId,
   );
@@ -83,17 +105,15 @@ export const processRawNotification = async (
       amount: amountStr,
     },
     data: {
-      route: '/(financas)/detected',
+      route: finalStatus === 'imported' ? '/(financas)' : '/(financas)/detected',
       eventId,
       amountCents: parsed.data.amountCents,
       merchant,
     },
   });
 
-  // Criação de transação é sempre manual, via importEvent() (botão "Importar" no app) —
-  // eventos reconhecidos ficam como 'parsed'/'duplicate' aguardando decisão do usuário.
   const event = await db.get("SELECT * FROM fin_notification_events WHERE id = ?", eventId);
-  return { event, parsed: null, duplicate, matches };
+  return { event, parsed: parsed.data, duplicate, matches };
 };
 
 export const listEvents = async (userId: string, status?: string) => {
