@@ -328,9 +328,11 @@ const adicionarEspecializacoes = (doc, especializacoes, estilos, yPosition) => {
 
   doc.font(estilos.texto.font).fontSize(estilos.texto.size).fillColor(CORES.texto);
 
-  especializacoes.forEach((esp) => {
+  especializacoes.forEach((esp: any) => {
+    const text = typeof esp === "string" ? esp : esp?.text || "";
+    if (!text) return;
     yPosition = verificarNovaPagina(doc, yPosition, 30);
-    doc.text(`• ${esp}`, doc.page.margins.left, yPosition);
+    doc.text(`• ${text}`, doc.page.margins.left, yPosition);
     yPosition += estilos.espacamento.entreLinhas + 6;
   });
 

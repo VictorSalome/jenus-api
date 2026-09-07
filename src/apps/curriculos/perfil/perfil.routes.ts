@@ -66,8 +66,8 @@ router.get(
         credentialId: c.credential_id,
         url: c.url,
       })),
-      languages: languages.map((l) => ({ language: l.language, level: l.level })),
-      specializations: specializations.map((s) => s.text),
+      languages: languages.map((l) => ({ id: l.id, language: l.language, level: l.level })),
+      specializations: specializations.map((s) => ({ id: s.id, text: s.text })),
       skills,
     };
 
@@ -186,13 +186,13 @@ const SECTIONS = {
     table: "curriculo_profile_languages",
     mapRow: (l: any) => ({ id: l.id, language: l.language, level: l.level }),
     fields: ["id", "language", "level", "sort_order"],
-    insertFields: (data: any) => ({ id: data.id || genId(), language: data.language, level: data.level }),
+    insertFields: (data: any) => ({ ...(data.id ? { id: data.id } : {}), language: data.language, level: data.level }),
   },
   specializations: {
     table: "curriculo_profile_specializations",
     mapRow: (s: any) => ({ id: s.id, text: s.text }),
     fields: ["id", "text", "sort_order"],
-    insertFields: (data: any) => ({ id: data.id || genId(), text: data.text || data.specialization }),
+    insertFields: (data: any) => ({ ...(data.id ? { id: data.id } : {}), text: data.text || data.specialization }),
   },
 };
 
@@ -211,15 +211,16 @@ for (const [section, config] of Object.entries(SECTIONS)) {
     const keys = Object.keys(fields);
     const placeholders = keys.map(() => "?").join(", ");
 
-    await db.run(
+    const result = await db.run(
       `INSERT INTO ${config.table} (${keys.join(", ")}) VALUES (${placeholders})`,
       ...Object.values(fields)
     );
 
+    const insertedId = (fields as any).id || result.lastID;
     const maxOrder = await db.get(`SELECT COALESCE(MAX(sort_order), 0) + 1 as next FROM ${config.table}`);
-    await db.run(`UPDATE ${config.table} SET sort_order = ? WHERE sort_order = 0 AND id = ?`, maxOrder.next, fields.id);
+    await db.run(`UPDATE ${config.table} SET sort_order = ? WHERE sort_order = 0 AND id = ?`, maxOrder.next, insertedId);
 
-    logInfo(`Item adicionado em ${section}`, { id: fields.id });
+    logInfo(`Item adicionado em ${section}`, { id: insertedId });
     const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
     res.json({ success: true, [section]: rows.map((row) => config.mapRow(row)) });
   }));
