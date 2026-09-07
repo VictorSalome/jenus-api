@@ -1,6 +1,8 @@
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+import { execSync } from 'child_process';
 import { initializeApp, cert, type App } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 import { getDb } from '../../../core/database.js';
@@ -110,6 +112,49 @@ export function isApnsRawToken(token: string): boolean {
   return /^[0-9a-fA-F]{64,}$/.test(token);
 }
 
+export function isSimulatorToken(token: string): boolean {
+  return token.startsWith('SIMULATOR_IOS');
+}
+
+function sendSimulatorPush(payload: {
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+}): boolean {
+  if (process.platform !== 'darwin') {
+    console.log('[PushService] 📱 Push para simulador recebido no servidor Linux em nuvem.');
+    return true;
+  }
+
+  try {
+    const tempFile = path.resolve(os.tmpdir(), `sim-push-${Date.now()}.json`);
+    const apnsPayload = {
+      'Simulator Target Bundle': 'com.victorsalome.jenushub',
+      aps: {
+        alert: {
+          title: payload.title,
+          body: payload.body,
+        },
+        sound: 'default',
+        badge: 1,
+      },
+      ...(payload.data || {}),
+    };
+
+    fs.writeFileSync(tempFile, JSON.stringify(apnsPayload, null, 2), 'utf8');
+    execSync(`xcrun simctl push booted com.victorsalome.jenushub "${tempFile}"`, {
+      stdio: 'pipe',
+      timeout: 5000,
+    });
+    try { fs.unlinkSync(tempFile); } catch {}
+    console.log('[PushService] 🚀 Notificação injetada com sucesso no simulador iOS via xcrun simctl push!');
+    return true;
+  } catch (err: any) {
+    console.warn('[PushService] Aviso ao disparar para simulador iOS:', err?.message || err);
+    return false;
+  }
+}
+
 // Register or reactivate a device token
 export async function registerToken(token: string, platform: string, userId?: string): Promise<void> {
   const db = await getDb();
@@ -157,7 +202,8 @@ export async function sendPushNotification(payload: {
   const activeTokens = await getActiveTokens(payload.userId);
   const rawTokens = payload.token ? [payload.token] : activeTokens;
   const expoTokens = rawTokens.filter(isExpoPushToken);
-  const fcmTokens = rawTokens.filter((t) => !isExpoPushToken(t) && !isApnsRawToken(t));
+  const simTokens = rawTokens.filter(isSimulatorToken);
+  const fcmTokens = rawTokens.filter((t) => !isExpoPushToken(t) && !isApnsRawToken(t) && !isSimulatorToken(t));
   const apnsTokens = rawTokens.filter(isApnsRawToken);
 
   if (apnsTokens.length > 0) {
@@ -166,10 +212,18 @@ export async function sendPushNotification(payload: {
     );
   }
 
-  if (expoTokens.length === 0 && fcmTokens.length === 0) return { sent: 0, failed: apnsTokens.length };
+  if (expoTokens.length === 0 && fcmTokens.length === 0 && simTokens.length === 0) return { sent: 0, failed: apnsTokens.length };
 
   let sent = 0;
   let failed = 0;
+
+  if (simTokens.length > 0) {
+    for (const _tok of simTokens) {
+      const ok = sendSimulatorPush(payload);
+      if (ok) sent++;
+      else failed++;
+    }
+  }
 
   if (expoTokens.length > 0) {
     const messages = expoTokens.map((token) => ({
@@ -226,7 +280,7 @@ export async function sendPushNotification(payload: {
   return { sent, failed };
 }
 
-// Send test push to a specific token (suporta Expo e Firebase FCM)
+// Send test push to a specific token (suporta Expo, Firebase FCM e Simulador iOS)
 export async function sendTestPush(token: string): Promise<{ success: boolean; message: string }> {
   if (isApnsRawToken(token)) {
     return {
@@ -234,6 +288,17 @@ export async function sendTestPush(token: string): Promise<{ success: boolean; m
       message:
         'Token informado é um APNs token bruto da Apple (hexadecimal de 200 caracteres). O Firebase FCM aceita exclusivamente o token FCM alfanumérico gerado por messaging().getToken().',
     };
+  }
+
+  if (isSimulatorToken(token)) {
+    const ok = sendSimulatorPush({
+      title: '🔔 Teste de notificação',
+      body: 'Notificação recebida com sucesso no Simulador iOS!',
+      data: { screen: 'system' },
+    });
+    if (ok) {
+      return { success: true, message: 'Push de teste entregue com sucesso no Simulador iOS!' };
+    }
   }
 
   try {
