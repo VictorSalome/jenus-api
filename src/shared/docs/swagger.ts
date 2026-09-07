@@ -31,10 +31,21 @@ const options: swaggerJsdoc.Options = {
     ],
     components: {
       securitySchemes: {
+        oauth2Password: {
+          type: "oauth2",
+          description: "Faça login diretamente pelo cadeado com seu usuário e senha. O token será obtido e aplicado automaticamente!",
+          flows: {
+            password: {
+              tokenUrl: "/api/auth/token",
+              scopes: {},
+            },
+          },
+        },
         bearerAuth: {
           type: "http",
           scheme: "bearer",
           bearerFormat: "JWT",
+          description: "Ou insira o token Bearer JWT manualmente aqui.",
         },
       },
       schemas: {
@@ -85,10 +96,18 @@ const options: swaggerJsdoc.Options = {
         },
       },
     },
+    security: [
+      {
+        oauth2Password: [],
+      },
+      {
+        bearerAuth: [],
+      },
+    ],
   },
   apis: [
-    path.resolve(process.cwd(), "src/apps/**/*.routes.ts"),
-    path.resolve(process.cwd(), "dist/apps/**/*.routes.js"),
+    path.resolve(process.cwd(), "src/**/*.routes.ts"),
+    path.resolve(process.cwd(), "dist/**/*.routes.js"),
   ],
 };
 
