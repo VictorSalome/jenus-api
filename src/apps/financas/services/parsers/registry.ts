@@ -3,6 +3,7 @@ import { nubankParser } from "./nubank.parser.js";
 import { mercadoPagoParser } from "./mercado-pago.parser.js";
 import { amazonParser } from "./amazon.parser.js";
 import { brazilBankParser } from "./brazil-bank.parser.js";
+import { universalParser } from "./universal.parser.js";
 
 /**
  * Registry de parsers de notificações. Para adicionar um novo banco/app,
@@ -13,6 +14,7 @@ export const parsers: NotificationParser[] = [
   mercadoPagoParser,
   amazonParser,
   brazilBankParser,
+  universalParser,
 ];
 
 export const parseNotification = (
