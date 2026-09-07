@@ -35,7 +35,7 @@ const router = Router();
  *                       created_at: { type: string, example: "2026-09-07 14:00:00" }
  *                       last_used_at: { type: string, example: "2026-09-07 15:30:00" }
  */
-router.get('/tokens', optionalAuth, pushController.listTokens);
+router.get('/tokens', requireAuth, pushController.listTokens);
 
 /**
  * @swagger
@@ -115,7 +115,7 @@ router.get('/tokens', optionalAuth, pushController.listTokens);
  *       200:
  *         description: Push enviado com sucesso.
  */
-router.all('/send', optionalAuth, pushController.sendManualPush);
+router.all('/send', requireAuth, pushController.sendManualPush);
 
 /**
  * @swagger
@@ -159,7 +159,7 @@ router.post('/register', optionalAuth, pushController.register);
  *       200:
  *         description: Token removido com sucesso.
  */
-router.post('/unregister', optionalAuth, pushController.unregister);
+router.post('/unregister', requireAuth, pushController.unregister);
 
 /**
  * @swagger

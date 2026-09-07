@@ -11,7 +11,6 @@ import statsRoutes from "./stats/stats.routes.js";
 import backupRoutes from "./backup/backup.routes.js";
 import testConnectionRoutes from "./test-connection/test-connection.routes.js";
 import priceAlertRoutes from "./price-alert/price-alert.routes.js";
-import deployRoutes from "./deploy/deploy.routes.js";
 import pushRoutes from "./push/push.routes.js";
 
 const router = Router();
@@ -27,14 +26,13 @@ router.use("/stats", statsRoutes);
 router.use("/backup", backupRoutes);
 router.use("/test", testConnectionRoutes);
 router.use("/price-alerts", priceAlertRoutes);
-router.use("/deploy", deployRoutes);
 router.use("/push", pushRoutes);
 
 const promoModule: AppModule = {
   name: "promo",
   prefix: "/api",
   router,
-  // promo aplica requireAuth rota a rota (mantém deploy/* público, como hoje).
+  // promo aplica requireAuth rota a rota.
   protected: false,
 };
 

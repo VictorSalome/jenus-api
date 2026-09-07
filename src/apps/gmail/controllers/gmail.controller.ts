@@ -28,8 +28,19 @@ const getUserId = (req: Request): string => {
   return user?.userId ? String(user.userId) : "admin";
 };
 
+function escapeHtml(str: unknown): string {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function htmlPage(title: string, message: string): string {
-  return `<html><body style="font-family:sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center;max-width:480px;padding:0 16px"><h2>${title}</h2><p style="color:#94a3b8">${message}</p></div></body></html>`;
+  const safeTitle = escapeHtml(title);
+  const safeMessage = escapeHtml(message);
+  return `<html><body style="font-family:sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center;max-width:480px;padding:0 16px"><h2>${safeTitle}</h2><p style="color:#94a3b8">${safeMessage}</p></div></body></html>`;
 }
 
 export const authUrl = async (req: Request, res: Response) => {
@@ -55,7 +66,7 @@ export const callback = async (req: Request, res: Response) => {
 
   if (error) {
     res.set("Content-Type", "text/html");
-    res.send(htmlPage("Autorização não concluída", `${error}. Você já pode voltar ao app.`));
+    res.send(htmlPage("Autorização não concluída", `${escapeHtml(error)}. Você já pode voltar ao app.`));
     return;
   }
 

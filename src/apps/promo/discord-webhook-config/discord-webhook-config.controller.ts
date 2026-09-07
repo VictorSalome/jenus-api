@@ -56,6 +56,20 @@ export const testWebhook = async (req: Request, res: Response): Promise<void> =>
     return;
   }
 
+  const isValidUrl =
+    typeof webhookUrl === "string" &&
+    (webhookUrl.startsWith("https://discord.com/api/webhooks/") ||
+      webhookUrl.startsWith("https://discordapp.com/api/webhooks/"));
+
+  if (!isValidUrl) {
+    res.status(400).json({
+      success: false,
+      message:
+        "URL de webhook inválida. A URL deve começar estritamente com https://discord.com/api/webhooks/ ou https://discordapp.com/api/webhooks/",
+    });
+    return;
+  }
+
   try {
     const r = await fetch(webhookUrl);
     const data: any = await r.json().catch(() => null);

@@ -3,9 +3,9 @@ import { getDb } from '../../core/database.js';
 import { notificationDispatcher } from './notification.dispatcher.js';
 import type { NotificationType } from './notification.types.js';
 
-const getUserId = (req: Request): string => {
+const getUserId = (req: Request): string | null => {
   const user = (req as any).user;
-  return user?.userId ? String(user.userId) : 'vssousa';
+  return user?.userId ? String(user.userId) : null;
 };
 
 /**
@@ -29,6 +29,10 @@ export const getTypes = async (_req: Request, res: Response): Promise<void> => {
 export const getPreferences = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getUserId(req);
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Não autorizado' });
+      return;
+    }
     const db = await getDb();
 
     const rows = await db.all(
@@ -77,6 +81,10 @@ export const getPreferences = async (req: Request, res: Response): Promise<void>
 export const updatePreference = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getUserId(req);
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Não autorizado' });
+      return;
+    }
     const { typeId, enabled, quiet_hours_enabled, quiet_hours_start, quiet_hours_end } = req.body;
 
     if (!typeId) {
@@ -115,6 +123,10 @@ export const updatePreference = async (req: Request, res: Response): Promise<voi
 export const getHistory = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getUserId(req);
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Não autorizado' });
+      return;
+    }
     const limit = Math.min(Number(req.query.limit) || 50, 100);
     const db = await getDb();
 
@@ -141,6 +153,10 @@ export const getHistory = async (req: Request, res: Response): Promise<void> => 
 export const testDispatch = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = getUserId(req);
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Não autorizado' });
+      return;
+    }
     const { typeId = 'curriculo.recruiter_reply', templateVars, data } = req.body;
 
     const sampleVars: Record<string, string | number> = {

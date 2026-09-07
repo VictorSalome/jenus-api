@@ -1,18 +1,18 @@
 import { Router } from 'express';
 import * as controller from './notification.controller.js';
-import { requireAuth, optionalAuth } from '../auth/auth.middleware.js';
+import { requireAuth } from '../auth/auth.middleware.js';
 
 const router = Router();
 
 // Consulta do catálogo de tipos é pública/aberta
 router.get('/types', controller.getTypes);
 
-// Disparo de teste permite testar tanto autenticado quanto via chave/dev
-router.post('/test', optionalAuth, controller.testDispatch);
+// Disparo de teste requer autenticação
+router.post('/test', requireAuth, controller.testDispatch);
 
-// Preferências e histórico requerem autenticação (ou fallback para usuário padrão)
-router.get('/preferences', optionalAuth, controller.getPreferences);
-router.put('/preferences', optionalAuth, controller.updatePreference);
-router.get('/history', optionalAuth, controller.getHistory);
+// Preferências e histórico requerem autenticação
+router.get('/preferences', requireAuth, controller.getPreferences);
+router.put('/preferences', requireAuth, controller.updatePreference);
+router.get('/history', requireAuth, controller.getHistory);
 
 export default router;
