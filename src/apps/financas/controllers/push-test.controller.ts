@@ -25,13 +25,12 @@ export const sendTestPush = async (req: Request, res: Response): Promise<void> =
     console.warn("Erro ao registrar evento no banco:", e);
   }
 
-  // 2. Dispara o Push Notification via Expo / FCM para os dispositivos registrados
+  // 2. Dispara o Push Notification via Expo / FCM para TODOS os dispositivos registrados (Android + iOS)
   let pushResult = { sent: 0, failed: 0 };
   try {
     pushResult = await sendPushNotification({
       title: pushTitle,
       body: pushBody,
-      token,
       data: {
         screen: screen || "detected",
         amount,

@@ -1,8 +1,88 @@
+import fs from 'fs';
+import path from 'path';
 import axios from 'axios';
+import { google } from 'googleapis';
 import { getDb } from '../../../core/database.js';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const CHUNK_SIZE = 100;
+const FIREBASE_PROJECT_ID = 'jenus-hub';
+
+const FIREBASE_SA_PATH = path.resolve(process.cwd(), 'secrets/firebase-service-account.json');
+let jwtClient: any = null;
+
+async function getFcmAccessToken(): Promise<string | null> {
+  if (!fs.existsSync(FIREBASE_SA_PATH)) {
+    console.warn('[PushService] secrets/firebase-service-account.json não encontrado para FCM.');
+    return null;
+  }
+  try {
+    if (!jwtClient) {
+      const sa = JSON.parse(fs.readFileSync(FIREBASE_SA_PATH, 'utf8'));
+      jwtClient = new google.auth.JWT({
+        email: sa.client_email,
+        key: sa.private_key,
+        scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+      });
+    }
+    const tokenRes = await jwtClient.getAccessToken();
+    return tokenRes.token || null;
+  } catch (err) {
+    console.warn('[PushService] Erro ao obter Google FCM access token:', err);
+    return null;
+  }
+}
+
+async function sendFcmMessage(token: string, payload: {
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+  priority?: 'normal' | 'high';
+}): Promise<boolean> {
+  try {
+    const accessToken = await getFcmAccessToken();
+    if (!accessToken) return false;
+
+    const stringData: Record<string, string> = {};
+    if (payload.data) {
+      for (const [k, v] of Object.entries(payload.data)) {
+        stringData[k] = typeof v === 'string' ? v : JSON.stringify(v);
+      }
+    }
+
+    const res = await axios.post(
+      `https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`,
+      {
+        message: {
+          token,
+          notification: {
+            title: payload.title,
+            body: payload.body,
+          },
+          data: stringData,
+          android: {
+            priority: payload.priority === 'normal' ? 'NORMAL' : 'HIGH',
+            notification: {
+              sound: 'default',
+              default_vibrate_timings: true,
+              default_light_settings: true,
+            },
+          },
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+    return !!res.data?.name;
+  } catch (err: any) {
+    console.warn('[PushService] Falha no disparo FCM v1:', err?.response?.data || err.message);
+    return false;
+  }
+}
 
 function isExpoPushToken(token: string): boolean {
   return /^ExponentPushToken\[[a-zA-Z0-9]+\]$/.test(token) ||
@@ -86,9 +166,12 @@ export async function sendPushNotification(payload: {
   }
 
   if (otherTokens.length > 0) {
-    console.log(`[PushService] ${otherTokens.length} token(s) nativos (FCM/APNs) registrados:`, otherTokens);
-    // Para tokens nativos FCM, se ainda não houver firebase-admin configurado no backend, contabiliza como recebido
-    sent += otherTokens.length;
+    console.log(`[PushService] Enviando para ${otherTokens.length} token(s) nativos (FCM):`, otherTokens);
+    for (const tok of otherTokens) {
+      const ok = await sendFcmMessage(tok, payload);
+      if (ok) sent++;
+      else failed++;
+    }
   }
 
   return { sent, failed };
