@@ -20,6 +20,7 @@ import systemModule from "./apps/system/index.js";
 import notificationsModule from "./shared/notifications/index.js";
 import { registerApp } from "./shared/http/app-registry.js";
 import { defaultLimiter, authLimiter } from "./shared/rate-limit/presets.js";
+import { mountSwagger } from "./shared/docs/swagger.js";
 
 const app = express();
 
@@ -46,6 +47,7 @@ registerApp(app, gmailModule);
 registerApp(app, financasModule);
 registerApp(app, systemModule);
 registerApp(app, notificationsModule);
+mountSwagger(app);
 
 app.get("/api/health", async (_req, res) => {
   try {
@@ -213,6 +215,8 @@ const startServer = async (): Promise<void> => {
 
     app.listen(config.PORT, () => {
       logger.info(`🚀 Jenus API rodando na porta ${config.PORT}`, "Server");
+      logger.info(`📑 Swagger UI: http://192.168.1.16:${config.PORT}/api/docs`, "Server");
+      logger.info(`📑 Swagger Local: http://localhost:${config.PORT}/api/docs`, "Server");
       logger.info(`📊 Ambiente: ${config.NODE_ENV}`, "Server");
       logger.info(`💾 Banco: ${config.DATABASE_PATH}`, "Server");
       logger.info(`👤 Admin: ${config.ADMIN_USERNAME}`, "Server");

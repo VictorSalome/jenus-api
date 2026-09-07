@@ -6,7 +6,12 @@ import { sendPushNotification } from "../../promo/push/push.service.js";
  * Central de Disparo de Push Notification de Teste (para Android e iOS).
  */
 export const sendTestPush = async (req: Request, res: Response): Promise<void> => {
-  const userId = (req as any).user?.userId || "vssousa";
+  const userId = (req as any).user?.userId;
+  if (!userId) {
+    res.status(401).json({ success: false, message: "Acesso não autorizado." });
+    return;
+  }
+
   const { title, body, amount, merchant, screen, token } = req.body || {};
 
   const pushTitle = title || "Notificação de Teste";
@@ -25,7 +30,7 @@ export const sendTestPush = async (req: Request, res: Response): Promise<void> =
     console.warn("Erro ao registrar evento no banco:", e);
   }
 
-  // 2. Dispara o Push Notification via Expo / FCM para TODOS os dispositivos registrados (Android + iOS)
+  // 2. Dispara o Push Notification via Expo exclusivamente para o usuário ou token fornecido
   let pushResult = { sent: 0, failed: 0 };
   try {
     pushResult = await sendPushNotification({
@@ -38,9 +43,11 @@ export const sendTestPush = async (req: Request, res: Response): Promise<void> =
         eventId: eventResult?.event?.id,
       },
       priority: "high",
+      token: token || undefined,
+      userId: token ? undefined : userId,
     });
   } catch (e) {
-    console.warn("Erro ao disparar push via Expo/FCM:", e);
+    console.warn("Erro ao disparar push via Expo:", e);
   }
 
   res.status(200).json({

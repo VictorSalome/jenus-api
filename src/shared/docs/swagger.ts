@@ -1,4 +1,5 @@
 import { type Application, type Request, type Response } from "express";
+import path from "path";
 import swaggerJsdoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
 
@@ -16,12 +17,16 @@ const options: swaggerJsdoc.Options = {
     },
     servers: [
       {
+        url: "http://192.168.1.16:3001",
+        description: "Rede Local (Wi-Fi / Simulador / Celular)",
+      },
+      {
         url: "http://localhost:3001",
-        description: "Desenvolvimento",
+        description: "Desenvolvimento Local (localhost)",
       },
       {
         url: "https://136.248.109.21.sslip.io",
-        description: "Produção (HTTPS via sslip.io)",
+        description: "Servidor em Nuvem (Oracle Cloud)",
       },
     ],
     components: {
@@ -33,6 +38,23 @@ const options: swaggerJsdoc.Options = {
         },
       },
       schemas: {
+        PushNotificationInput: {
+          type: "object",
+          properties: {
+            title: { type: "string", example: "💳 Compra Aprovada - Nubank" },
+            body: { type: "string", example: "Compra de R$ 120,00 no Supermercado Pão de Açúcar aprovada" },
+            screen: { type: "string", example: "detected" },
+            token: { type: "string", description: "Opcional: se omitido, envia para o token mais recente cadastrado no banco." },
+          },
+        },
+        DeviceRegisterInput: {
+          type: "object",
+          required: ["token", "platform"],
+          properties: {
+            token: { type: "string", example: "fcm_or_expo_device_token_here" },
+            platform: { type: "string", enum: ["ios", "android"], example: "ios" },
+          },
+        },
         Error: {
           type: "object",
           properties: {
@@ -64,7 +86,10 @@ const options: swaggerJsdoc.Options = {
       },
     },
   },
-  apis: ["./src/apps/*/routes/*.ts", "./dist/apps/*/routes/*.js"],
+  apis: [
+    path.resolve(process.cwd(), "src/apps/**/*.routes.ts"),
+    path.resolve(process.cwd(), "dist/apps/**/*.routes.js"),
+  ],
 };
 
 export const spec = swaggerJsdoc(options);

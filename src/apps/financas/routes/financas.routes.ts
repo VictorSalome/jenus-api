@@ -16,12 +16,70 @@ import { requireAuth, optionalAuth } from "../../../shared/auth/auth.middleware.
 
 const router = Router();
 
-// Rota pública de webhook do iOS (Atalhos Apple) — aceita Webhook Key ou Bearer token
+/**
+ * @swagger
+ * /api/financas/webhook/shortcut:
+ *   post:
+ *     summary: Webhook público para receber compras via Atalhos do iOS (Apple Shortcuts) / Siri.
+ *     description: Aceita texto bruto de SMS/notificação bancária ou objeto estruturado. Autentica via header X-Webhook-Key ou Bearer token.
+ *     tags:
+ *       - Finanças
+ *     parameters:
+ *       - in: header
+ *         name: X-Webhook-Key
+ *         schema:
+ *           type: string
+ *         description: Chave de API configurada no servidor (API_KEYS)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               text: { type: string, example: "Compra de R$ 85,90 no Posto Ipiranga aprovada no Nubank" }
+ *               appLabel: { type: string, example: "Nubank" }
+ *     responses:
+ *       201:
+ *         description: Transação processada e salva com sucesso.
+ *       401:
+ *         description: Chave de webhook inválida ou ausente.
+ */
 router.post("/webhook/shortcut", optionalAuth, asyncHandler(shortcutWebhook));
-router.post("/push/test", optionalAuth, asyncHandler(sendTestPush));
 
 // Demais rotas exigem autenticação JWT
 router.use(requireAuth);
+
+/**
+ * @swagger
+ * /api/financas/push/test:
+ *   post:
+ *     summary: Dispara uma notificação de compra e registra o evento financeiro (Requer JWT).
+ *     description: Simula a detecção de uma notificação bancária (Nubank, etc.), salva o evento no banco e despacha a notificação push para o usuário autenticado.
+ *     security:
+ *       - bearerAuth: []
+ *     tags:
+ *       - Finanças
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title: { type: string, example: "Nubank" }
+ *               body: { type: string, example: "Compra de R$ 120,00 no Supermercado Pão de Açúcar aprovada" }
+ *               amount: { type: number, example: 120.00 }
+ *               merchant: { type: string, example: "Supermercado Pão de Açúcar" }
+ *               screen: { type: string, example: "detected" }
+ *               token: { type: string, description: "Opcional: token específico para testar entrega direta." }
+ *     responses:
+ *       200:
+ *         description: Evento financeiro salvo e push enviado.
+ *       401:
+ *         description: Não autorizado.
+ */
+router.post("/push/test", asyncHandler(sendTestPush));
 
 router.get("/dashboard", asyncHandler(dashboard));
 

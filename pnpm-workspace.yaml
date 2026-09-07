@@ -1,6 +1,8 @@
 allowBuilds:
+  '@firebase/util': true
   bufferutil: true
   es5-ext: true
   esbuild: true
+  protobufjs: true
   sqlite3: true
   utf-8-validate: true

@@ -15,21 +15,23 @@ export const shortcutWebhook = async (req: Request, res: Response): Promise<void
     (req.query.key as string) ||
     (req.body && req.body.key);
 
-  const expectedKey = process.env.API_KEYS?.split(",")[0] || "admin-key-123";
+  const allowedKeys = (process.env.API_KEYS || "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
 
-  // Se houver um Bearer token (da auth normal) ou a chave de webhook bater, autoriza.
-  const authHeader = req.headers.authorization;
-  const isBearer = authHeader && authHeader.startsWith("Bearer ");
+  const authenticatedUserId = (req as any).user?.userId;
+  const isKeyValid = Boolean(providedKey && allowedKeys.includes(providedKey));
 
-  if (!isBearer && providedKey !== expectedKey) {
+  if (!authenticatedUserId && !isKeyValid) {
     res.status(401).json({
       success: false,
-      message: "Chave de webhook inválida ou ausente. Use ?key=SUA_CHAVE ou Header X-Webhook-Key.",
+      message: "Acesso não autorizado. Token Bearer válido ou chave de webhook (X-Webhook-Key / ?key=) obrigatória.",
     });
     return;
   }
 
-  const userId = (req as any).user?.userId || DEFAULT_USER_ID;
+  const userId = authenticatedUserId || req.body?.userId || DEFAULT_USER_ID;
   const body = req.body || {};
 
   // Caso 1: Envio de texto bruto de notificação/SMS (ex: "Compra de R$ 100,00 no Colchão aprovada")

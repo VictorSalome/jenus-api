@@ -1,48 +1,67 @@
+import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
-import axios from 'axios';
-import { google } from 'googleapis';
+import { initializeApp, cert, type App } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 import { getDb } from '../../../core/database.js';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const CHUNK_SIZE = 100;
-const FIREBASE_PROJECT_ID = 'jenus-hub';
+const DEFAULT_CHANNEL_ID = 'jenus-alerts';
 
-const FIREBASE_SA_PATH = path.resolve(process.cwd(), 'secrets/firebase-service-account.json');
-let jwtClient: any = null;
+let firebaseApp: App | null = null;
 
-async function getFcmAccessToken(): Promise<string | null> {
-  if (!fs.existsSync(FIREBASE_SA_PATH)) {
-    console.warn('[PushService] secrets/firebase-service-account.json não encontrado para FCM.');
-    return null;
-  }
+function getFirebaseApp(): App | null {
+  if (firebaseApp) return firebaseApp;
+
   try {
-    if (!jwtClient) {
-      const sa = JSON.parse(fs.readFileSync(FIREBASE_SA_PATH, 'utf8'));
-      jwtClient = new google.auth.JWT({
-        email: sa.client_email,
-        key: sa.private_key,
-        scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
-      });
+    let serviceAccount: any = null;
+
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    } else {
+      const saPath =
+        process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
+        path.resolve(process.cwd(), 'secrets/firebase-service-account.json');
+      if (fs.existsSync(saPath)) {
+        serviceAccount = JSON.parse(fs.readFileSync(saPath, 'utf8'));
+      }
     }
-    const tokenRes = await jwtClient.getAccessToken();
-    return tokenRes.token || null;
+
+    if (serviceAccount) {
+      firebaseApp = initializeApp(
+        {
+          credential: cert(serviceAccount),
+          projectId: serviceAccount.project_id || 'jenus-hub',
+        },
+        'jenus-hub'
+      );
+      console.log('[FirebaseAdmin] ✅ Inicializado com sucesso para projeto:', serviceAccount.project_id);
+      return firebaseApp;
+    }
   } catch (err) {
-    console.warn('[PushService] Erro ao obter Google FCM access token:', err);
-    return null;
+    console.warn('[FirebaseAdmin] Aviso ao inicializar Firebase Admin:', err);
   }
+
+  return null;
 }
 
-async function sendFcmMessage(token: string, payload: {
-  title: string;
-  body: string;
-  data?: Record<string, unknown>;
-  priority?: 'normal' | 'high';
-}): Promise<boolean> {
-  try {
-    const accessToken = await getFcmAccessToken();
-    if (!accessToken) return false;
+async function sendFcmNotification(
+  token: string,
+  payload: {
+    title: string;
+    body: string;
+    data?: Record<string, unknown>;
+    priority?: 'normal' | 'high';
+  }
+): Promise<boolean> {
+  const app = getFirebaseApp();
+  if (!app) {
+    console.warn('[PushService] Firebase Admin não inicializado (adicione secrets/firebase-service-account.json ou FIREBASE_SERVICE_ACCOUNT_JSON).');
+    return false;
+  }
 
+  try {
     const stringData: Record<string, string> = {};
     if (payload.data) {
       for (const [k, v] of Object.entries(payload.data)) {
@@ -50,59 +69,57 @@ async function sendFcmMessage(token: string, payload: {
       }
     }
 
-    const res = await axios.post(
-      `https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`,
-      {
-        message: {
-          token,
-          notification: {
-            title: payload.title,
-            body: payload.body,
-          },
-          data: stringData,
-          android: {
-            priority: payload.priority === 'normal' ? 'NORMAL' : 'HIGH',
-            notification: {
-              sound: 'default',
-              default_vibrate_timings: true,
-              default_light_settings: true,
-            },
+    const messaging = getMessaging(app);
+    await messaging.send({
+      token,
+      notification: {
+        title: payload.title,
+        body: payload.body,
+      },
+      data: stringData,
+      android: {
+        priority: payload.priority === 'normal' ? 'normal' : 'high',
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
           },
         },
       },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      },
-    );
-    return !!res.data?.name;
-  } catch (err: any) {
-    console.warn('[PushService] Falha no disparo FCM v1:', err?.response?.data || err.message);
+    });
+    return true;
+  } catch (error: any) {
+    console.warn('[PushService] Erro ao enviar push FCM:', error?.message || error);
+    if (error?.code === 'messaging/registration-token-not-registered') {
+      void unregisterToken(token);
+    }
     return false;
   }
 }
 
 function isExpoPushToken(token: string): boolean {
-  return /^ExponentPushToken\[[a-zA-Z0-9]+\]$/.test(token) ||
-    /^ExpoPushToken\[[a-zA-Z0-9]+\]$/.test(token);
+  return (
+    /^ExponentPushToken\[.+\]$/.test(token) ||
+    /^ExpoPushToken\[.+\]$/.test(token)
+  );
 }
 
 // Register or reactivate a device token
-export async function registerToken(token: string, platform: string): Promise<void> {
+export async function registerToken(token: string, platform: string, userId?: string): Promise<void> {
   const db = await getDb();
-  const existing = await db.get('SELECT id, is_active FROM promo_device_tokens WHERE token = ?', token);
+  const existing = await db.get('SELECT id, is_active, user_id FROM promo_device_tokens WHERE token = ?', token);
 
   if (existing) {
     await db.run(
-      'UPDATE promo_device_tokens SET is_active = 1, platform = ?, last_used_at = datetime("now") WHERE token = ?',
-      platform, token
+      'UPDATE promo_device_tokens SET is_active = 1, platform = ?, user_id = COALESCE(?, user_id), last_used_at = datetime("now") WHERE token = ?',
+      platform, userId || null, token
     );
   } else {
     await db.run(
-      'INSERT INTO promo_device_tokens (token, platform, is_active) VALUES (?, ?, 1)',
-      token, platform
+      'INSERT INTO promo_device_tokens (token, platform, is_active, user_id) VALUES (?, ?, 1, ?)',
+      token, platform, userId || null
     );
   }
 }
@@ -113,27 +130,32 @@ export async function unregisterToken(token: string): Promise<void> {
   await db.run('UPDATE promo_device_tokens SET is_active = 0 WHERE token = ?', token);
 }
 
-// Get all active tokens
-export async function getActiveTokens(): Promise<string[]> {
+// Get all active tokens (optionally filtered by user_id)
+export async function getActiveTokens(userId?: string): Promise<string[]> {
   const db = await getDb();
+  if (userId) {
+    const rows = await db.all('SELECT token FROM promo_device_tokens WHERE is_active = 1 AND user_id = ?', userId);
+    return (rows as any[]).map((r) => r.token);
+  }
   const rows = await db.all('SELECT token FROM promo_device_tokens WHERE is_active = 1');
   return (rows as any[]).map((r) => r.token);
 }
 
-// Send push to all active devices or specific token
+// Send push to all active devices, specific user or specific token
 export async function sendPushNotification(payload: {
   title: string;
   body: string;
   data?: Record<string, unknown>;
   priority?: 'normal' | 'high';
   token?: string;
+  userId?: string;
 }): Promise<{ sent: number; failed: number }> {
-  const activeTokens = await getActiveTokens();
+  const activeTokens = await getActiveTokens(payload.userId);
   const rawTokens = payload.token ? [payload.token] : activeTokens;
-  if (rawTokens.length === 0) return { sent: 0, failed: 0 };
-
   const expoTokens = rawTokens.filter(isExpoPushToken);
-  const otherTokens = rawTokens.filter((t) => !isExpoPushToken(t));
+  const fcmTokens = rawTokens.filter((t) => !isExpoPushToken(t));
+
+  if (expoTokens.length === 0 && fcmTokens.length === 0) return { sent: 0, failed: 0 };
 
   let sent = 0;
   let failed = 0;
@@ -146,17 +168,34 @@ export async function sendPushNotification(payload: {
       data: payload.data || {},
       sound: 'default' as const,
       priority: payload.priority || ('high' as const),
+      channelId: DEFAULT_CHANNEL_ID,
       badge: 1,
     }));
 
     for (let i = 0; i < messages.length; i += CHUNK_SIZE) {
       const chunk = messages.slice(i, i + CHUNK_SIZE);
       try {
-        const { data } = await axios.post(EXPO_PUSH_URL, chunk);
+        const { data } = await axios.post(EXPO_PUSH_URL, chunk, {
+          headers: {
+            Accept: 'application/json',
+            'Accept-Encoding': 'gzip, deflate',
+            'Content-Type': 'application/json',
+          },
+        });
         const receipts = data?.data || [];
-        for (const receipt of receipts) {
-          if (receipt.status === 'ok') sent++;
-          else failed++;
+        for (let j = 0; j < receipts.length; j++) {
+          const receipt = receipts[j];
+          if (receipt.status === 'ok') {
+            sent++;
+          } else {
+            failed++;
+            if (receipt.details?.error === 'DeviceNotRegistered') {
+              const deadToken = chunk[j]?.to;
+              if (deadToken) {
+                void unregisterToken(deadToken);
+              }
+            }
+          }
         }
       } catch (e) {
         console.warn('[PushService] Erro ao enviar chunk Expo:', e);
@@ -165,10 +204,9 @@ export async function sendPushNotification(payload: {
     }
   }
 
-  if (otherTokens.length > 0) {
-    console.log(`[PushService] Enviando para ${otherTokens.length} token(s) nativos (FCM):`, otherTokens);
-    for (const tok of otherTokens) {
-      const ok = await sendFcmMessage(tok, payload);
+  if (fcmTokens.length > 0) {
+    for (const tok of fcmTokens) {
+      const ok = await sendFcmNotification(tok, payload);
       if (ok) sent++;
       else failed++;
     }
@@ -182,15 +220,27 @@ export async function sendTestPush(token: string): Promise<boolean> {
   if (!isExpoPushToken(token)) return false;
 
   try {
-    await axios.post(EXPO_PUSH_URL, {
-      to: token,
-      title: '🔔 Teste de notificação',
-      body: 'Se as notificações estão funcionando!',
-      data: { screen: 'test' },
-      sound: 'default',
-    });
-    return true;
-  } catch {
+    const { data } = await axios.post(
+      EXPO_PUSH_URL,
+      {
+        to: token,
+        title: '🔔 Teste de notificação',
+        body: 'Notificações Expo funcionando perfeitamente!',
+        data: { screen: 'system' },
+        sound: 'default',
+        channelId: DEFAULT_CHANNEL_ID,
+      },
+      {
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    const receipt = data?.data?.[0] || data?.data;
+    return receipt?.status === 'ok';
+  } catch (err) {
+    console.warn('[PushService] Erro no sendTestPush:', err);
     return false;
   }
 }

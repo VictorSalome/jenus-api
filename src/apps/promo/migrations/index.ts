@@ -154,4 +154,11 @@ export const promoMigrations: Migration[] = [
       );
     `,
   },
+  {
+    id: "promo_006_device_tokens_user_id",
+    up: `
+      ALTER TABLE promo_device_tokens ADD COLUMN user_id TEXT;
+      CREATE INDEX IF NOT EXISTS idx_device_tokens_user_id ON promo_device_tokens(user_id);
+    `,
+  },
 ];
