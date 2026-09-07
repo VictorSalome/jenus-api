@@ -106,15 +106,15 @@ export const pushController = {
     }
 
     try {
-      const ok = await sendTestPush(token);
-      if (ok) {
-        res.json({ success: true, message: 'Push de teste enviado' });
+      const result = await sendTestPush(token);
+      if (result.success) {
+        res.json({ success: true, message: result.message });
       } else {
-        res.status(400).json({ error: 'Token inválido ou falha no envio' });
+        res.status(400).json({ success: false, error: result.message });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('[Push] Erro no teste:', err);
-      res.status(500).json({ error: 'Erro ao enviar push de teste' });
+      res.status(500).json({ success: false, error: err?.message || 'Erro ao enviar push de teste' });
     }
   },
 

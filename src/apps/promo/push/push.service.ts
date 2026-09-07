@@ -106,6 +106,10 @@ function isExpoPushToken(token: string): boolean {
   );
 }
 
+export function isApnsRawToken(token: string): boolean {
+  return /^[0-9a-fA-F]{64,}$/.test(token);
+}
+
 // Register or reactivate a device token
 export async function registerToken(token: string, platform: string, userId?: string): Promise<void> {
   const db = await getDb();
@@ -153,9 +157,16 @@ export async function sendPushNotification(payload: {
   const activeTokens = await getActiveTokens(payload.userId);
   const rawTokens = payload.token ? [payload.token] : activeTokens;
   const expoTokens = rawTokens.filter(isExpoPushToken);
-  const fcmTokens = rawTokens.filter((t) => !isExpoPushToken(t));
+  const fcmTokens = rawTokens.filter((t) => !isExpoPushToken(t) && !isApnsRawToken(t));
+  const apnsTokens = rawTokens.filter(isApnsRawToken);
 
-  if (expoTokens.length === 0 && fcmTokens.length === 0) return { sent: 0, failed: 0 };
+  if (apnsTokens.length > 0) {
+    console.warn(
+      `[PushService] ⚠️ ${apnsTokens.length} token(s) ignorado(s) por ser APNs hexadecimal bruto da Apple. O Firebase FCM exige token alfanumérico gerado por messaging().getToken().`
+    );
+  }
+
+  if (expoTokens.length === 0 && fcmTokens.length === 0) return { sent: 0, failed: apnsTokens.length };
 
   let sent = 0;
   let failed = 0;
@@ -216,7 +227,15 @@ export async function sendPushNotification(payload: {
 }
 
 // Send test push to a specific token (suporta Expo e Firebase FCM)
-export async function sendTestPush(token: string): Promise<boolean> {
+export async function sendTestPush(token: string): Promise<{ success: boolean; message: string }> {
+  if (isApnsRawToken(token)) {
+    return {
+      success: false,
+      message:
+        'Token informado é um APNs token bruto da Apple (hexadecimal de 200 caracteres). O Firebase FCM aceita exclusivamente o token FCM alfanumérico gerado por messaging().getToken().',
+    };
+  }
+
   try {
     const result = await sendPushNotification({
       title: '🔔 Teste de notificação',
@@ -225,10 +244,17 @@ export async function sendTestPush(token: string): Promise<boolean> {
       token,
       priority: 'high',
     });
-    return result.sent > 0;
-  } catch (err) {
+    if (result.sent > 0) {
+      return { success: true, message: 'Push de teste enviado com sucesso!' };
+    } else {
+      return {
+        success: false,
+        message: 'Falha no disparo. Verifique se o token é um token FCM ou Expo válido e ativo no banco.',
+      };
+    }
+  } catch (err: any) {
     console.warn('[PushService] Erro no sendTestPush:', err);
-    return false;
+    return { success: false, message: err?.message || 'Erro no envio do push de teste.' };
   }
 }
 
