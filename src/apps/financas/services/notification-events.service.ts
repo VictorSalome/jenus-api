@@ -5,6 +5,7 @@ import { extractAmountCents, extractInstallments, extractMerchant, titleAndText 
 import { buildFingerprint, findDuplicateTransactions } from "./duplicates.service.js";
 import { createTransaction } from "./transactions.service.js";
 import { ensureDefaultAccount } from "./accounts.service.js";
+import { notificationDispatcher } from "../../../shared/notifications/index.js";
 
 export interface CreateEventResult {
   event: any;
@@ -71,6 +72,23 @@ export const processRawNotification = async (
     eventId,
     userId,
   );
+
+  // Disparo automático via NotificationDispatcher central
+  const amountStr = (parsed.data.amountCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  void notificationDispatcher.dispatch('financas.transaction_detected', {
+    userId,
+    fingerprint,
+    templateVars: {
+      merchant,
+      amount: amountStr,
+    },
+    data: {
+      route: '/(financas)/detected',
+      eventId,
+      amountCents: parsed.data.amountCents,
+      merchant,
+    },
+  });
 
   // Criação de transação é sempre manual, via importEvent() (botão "Importar" no app) —
   // eventos reconhecidos ficam como 'parsed'/'duplicate' aguardando decisão do usuário.

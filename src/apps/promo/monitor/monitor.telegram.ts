@@ -513,11 +513,19 @@ async function sendPromoMessage(
           (produtoPromo.includes(produtoAlerta) || produtoAlerta.includes(produtoPromo));
 
         if (price && mesmoProduto && alert.target_price >= price) {
-          const { sendPushNotification: sendPush } = await import('../push/push.service.js');
-          await sendPush({
-            title: '💰 Alerta de preço!',
-            body: `${alert.product_name} atingiu R$${price} (meta: R$${alert.target_price})`,
-            data: { screen: 'price-alert', productId: alert.product_name },
+          const { notificationDispatcher } = await import('../../../shared/notifications/index.js');
+          await notificationDispatcher.dispatch('promo.price_target_reached', {
+            fingerprint: `price_alert.${alert.id}.${Date.now()}`,
+            templateVars: {
+              product_name: alert.product_name,
+              current_price: String(price),
+            },
+            data: {
+              route: '/(app)/price-alerts',
+              productId: alert.product_name,
+              price,
+              targetPrice: alert.target_price,
+            },
             priority: 'high',
           });
 

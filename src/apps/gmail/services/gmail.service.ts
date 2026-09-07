@@ -2,6 +2,7 @@ import { google } from "googleapis";
 import { getDb } from "../../../core/database.js";
 import * as logger from "../../../core/logger.js";
 import { getValidClient, getStoredTokens } from "./oauth.service.js";
+import { notificationDispatcher } from "../../../shared/notifications/index.js";
 
 interface Reply {
   id: string;
@@ -140,6 +141,26 @@ export async function listReplies(
       internalDate: detail.data.internalDate || "",
       isMe,
     });
+
+    // Se a mensagem for de um recrutador (não enviada pelo próprio usuário), dispara push estilo WhatsApp
+    if (!isMe && msg.id) {
+      const senderName = from.replace(/<[^>]+>/, "").trim() || "Recrutador";
+      const snippet = (detail.data.snippet || "").slice(0, 120);
+      void notificationDispatcher.dispatch("curriculo.recruiter_reply", {
+        userId,
+        fingerprint: `gmail.reply.${msg.id}`,
+        templateVars: {
+          sender: senderName,
+          snippet: snippet || "Nova resposta recebida no chat",
+        },
+        data: {
+          route: "/(curriculo)/chat",
+          envioId,
+          threadId: detail.data.threadId || "",
+          messageId: msg.id,
+        },
+      });
+    }
   }
 
   return replies.sort(
