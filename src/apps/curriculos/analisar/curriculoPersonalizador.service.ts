@@ -401,10 +401,7 @@ export const personalizarCurriculo = async (dadosVaga: Record<string, any>): Pro
         dadosVaga,
       ),
       education: perfilCandidato.education,
-      certifications: filtrarCertificacoesRelevantes(
-        perfilCandidato.certifications,
-        dadosVaga,
-      ),
+      certifications: perfilCandidato.certifications || [],
       skills: organizarHabilidadesRelevantes(perfilCandidato.skills, dadosVaga),
       languages: perfilCandidato.languages,
       areasAtuacao: areasAtuacaoRelevantes,
