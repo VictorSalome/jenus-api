@@ -57,6 +57,7 @@ router.use(requireAuth);
  *     summary: Dispara uma notificação de compra e registra o evento financeiro (Requer JWT).
  *     description: Simula a detecção de uma notificação bancária (Nubank, etc.), salva o evento no banco e despacha a notificação push para o usuário autenticado.
  *     security:
+ *       - oauth2Password: []
  *       - bearerAuth: []
  *     tags:
  *       - Finanças

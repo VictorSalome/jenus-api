@@ -167,6 +167,7 @@ router.post('/unregister', optionalAuth, pushController.unregister);
  *   post:
  *     summary: Dispara notificação de teste para um token específico (Requer JWT).
  *     security:
+ *       - oauth2Password: []
  *       - bearerAuth: []
  *     tags:
  *       - Push Notifications
@@ -191,6 +192,7 @@ router.post('/test', requireAuth, pushController.test);
  *   get:
  *     summary: Estatísticas de tokens cadastrados (total e ativos).
  *     security:
+ *       - oauth2Password: []
  *       - bearerAuth: []
  *     tags:
  *       - Push Notifications

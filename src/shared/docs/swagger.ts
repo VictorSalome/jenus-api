@@ -124,6 +124,9 @@ export const mountSwagger = (app: Application): void => {
     swaggerUi.setup(spec, {
       customSiteTitle: "Jenus API — Documentação",
       customCss: ".swagger-ui .topbar { background-color: #0f172a; }",
+      swaggerOptions: {
+        persistAuthorization: true,
+      },
     }),
   );
 };

@@ -3,7 +3,7 @@ import { verifyAccessToken } from './jwt-auth.js';
 
 export const requireAuth = (req: Request, res: Response, next: NextFunction): void => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '') || (req as any).cookies?.accessToken;
+  const token = authHeader?.replace(/^Bearer\s+/i, '').trim() || (req as any).cookies?.accessToken;
 
   if (!token) {
     res.status(401).json({ success: false, message: 'Acesso negado. Faça login.', needsRefresh: true });
@@ -22,7 +22,7 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
 
 export const optionalAuth = (req: Request, _res: Response, next: NextFunction): void => {
   const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '') || (req as any).cookies?.accessToken;
+  const token = authHeader?.replace(/^Bearer\s+/i, '').trim() || (req as any).cookies?.accessToken;
 
   if (token) {
     const decoded = verifyAccessToken(token);
