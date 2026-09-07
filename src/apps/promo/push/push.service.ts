@@ -215,30 +215,17 @@ export async function sendPushNotification(payload: {
   return { sent, failed };
 }
 
-// Send test push to a specific token
+// Send test push to a specific token (suporta Expo e Firebase FCM)
 export async function sendTestPush(token: string): Promise<boolean> {
-  if (!isExpoPushToken(token)) return false;
-
   try {
-    const { data } = await axios.post(
-      EXPO_PUSH_URL,
-      {
-        to: token,
-        title: '🔔 Teste de notificação',
-        body: 'Notificações Expo funcionando perfeitamente!',
-        data: { screen: 'system' },
-        sound: 'default',
-        channelId: DEFAULT_CHANNEL_ID,
-      },
-      {
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-    const receipt = data?.data?.[0] || data?.data;
-    return receipt?.status === 'ok';
+    const result = await sendPushNotification({
+      title: '🔔 Teste de notificação',
+      body: 'Notificação de teste enviada com sucesso pelo Jenus!',
+      data: { screen: 'system' },
+      token,
+      priority: 'high',
+    });
+    return result.sent > 0;
   } catch (err) {
     console.warn('[PushService] Erro no sendTestPush:', err);
     return false;
