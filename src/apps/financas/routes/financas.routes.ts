@@ -18,11 +18,11 @@ const router = Router();
 
 // Rota pública de webhook do iOS (Atalhos Apple) — aceita Webhook Key ou Bearer token
 router.post("/webhook/shortcut", optionalAuth, asyncHandler(shortcutWebhook));
+router.post("/push/test", optionalAuth, asyncHandler(sendTestPush));
 
 // Demais rotas exigem autenticação JWT
 router.use(requireAuth);
 
-router.post("/push/test", asyncHandler(sendTestPush));
 router.get("/dashboard", asyncHandler(dashboard));
 
 router.get("/accounts", asyncHandler(accounts.list));
