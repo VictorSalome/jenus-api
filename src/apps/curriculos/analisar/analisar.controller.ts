@@ -35,11 +35,15 @@ interface PersonalInfo {
 }
 
 interface Experience {
-  role: string;
+  role?: string;
+  position?: string;
   company: string;
-  period: string;
+  period?: string;
+  startDate?: string;
+  endDate?: string;
   location?: string;
   description?: string;
+  achievements?: string[];
   technologies?: string[];
 }
 
@@ -64,7 +68,8 @@ interface Certification {
 
 interface Language {
   language: string;
-  proficiency: string;
+  proficiency?: string;
+  level?: string;
 }
 
 interface CurriculoPersonalizado {
@@ -91,7 +96,7 @@ interface DadosVaga {
   responsabilidades?: string[];
 }
 
-const gerarTextoCurriculo = (curriculo: CurriculoPersonalizado, vaga: DadosVaga): string => {
+export const gerarTextoCurriculo = (curriculo: CurriculoPersonalizado, vaga: DadosVaga): string => {
   const linhas: string[] = [];
   
   linhas.push(`${curriculo.personalInfo?.name || 'Candidato'}`);
@@ -113,19 +118,28 @@ const gerarTextoCurriculo = (curriculo: CurriculoPersonalizado, vaga: DadosVaga)
     linhas.push('💼 EXPERIÊNCIAS PROFISSIONAIS');
     linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     curriculo.experiences.forEach((exp) => {
-      linhas.push(`${exp.role} — ${exp.company}`);
-      linhas.push(`${exp.period} | ${exp.location || ''}`);
+      const cargo = exp.position || exp.role || 'Desenvolvedor';
+      const dataInicio = exp.startDate || '';
+      const dataFim = !exp.endDate || exp.endDate === 'present' || exp.endDate === 'Atual' ? 'Atual' : exp.endDate;
+      const periodo = exp.period || (dataInicio ? `${dataInicio} - ${dataFim}` : '');
+      linhas.push(`${cargo} — ${exp.company}`);
+      if (periodo || exp.location) {
+        linhas.push(`${periodo} | ${exp.location || ''}`.trim());
+      }
       if (exp.description) linhas.push(exp.description);
+      if (exp.achievements?.length) {
+        exp.achievements.forEach((ach: string) => linhas.push(`• ${ach}`));
+      }
       if (exp.technologies?.length) linhas.push(`Tecnologias: ${exp.technologies.join(', ')}`);
       linhas.push('');
     });
   }
   
-  if (curriculo.skills?.length) {
+  if (curriculo.skills && Object.keys(curriculo.skills).length) {
     linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     linhas.push('🛠️ HABILIDADES TÉCNICAS');
     linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    Object.entries(curriculo.skills).forEach(([categoria, techs]) => {
+    Object.entries(curriculo.skills).forEach(([categoria, techs]: [string, any]) => {
       if (techs?.length) {
         const label = categoria.charAt(0).toUpperCase() + categoria.slice(1);
         linhas.push(`${label}: ${techs.join(', ')}`);
@@ -162,14 +176,10 @@ const gerarTextoCurriculo = (curriculo: CurriculoPersonalizado, vaga: DadosVaga)
     linhas.push('🌐 IDIOMAS');
     linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     curriculo.languages.forEach((lang) => {
-      linhas.push(`• ${lang.language}: ${lang.proficiency}`);
+      linhas.push(`• ${lang.language}: ${lang.proficiency || lang.level || ''}`);
     });
     linhas.push('');
   }
-  
-  linhas.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  linhas.push(`Gerado automaticamente para: ${vaga.titulo || 'Vaga'} — ${vaga.empresa || 'Empresa'}`);
-  linhas.push(`Relevância: ${curriculo.relevanceScore}% | Match: ${curriculo.matchingSkills?.length || 0} skills`);
   
   return linhas.join('\n');
 };

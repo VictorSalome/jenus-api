@@ -379,15 +379,7 @@ const adicionarHabilidades = (
 
       yPosition += estilos.espacamento.entreLinhas + 4;
 
-      // Habilidades compatíveis com a vaga recebem um marcador "*" —
-      // evitamos glyphs Unicode (ex.: ★) que não existem na fonte base
-      // Helvetica do PDFKit e podem renderizar como caixa vazia.
-      const habilidadesTexto = habilidades
-        .map((skill) => {
-          const isRelevant = matchingSkills && matchingSkills.includes(skill);
-          return isRelevant ? `${skill} *` : skill;
-        })
-        .join(" • ");
+      const habilidadesTexto = habilidades.join(" • ");
 
       doc
         .font(estilos.textoSmall.font)
@@ -407,16 +399,6 @@ const adicionarHabilidades = (
       yPosition = doc.y + estilos.espacamento.entreLinhas;
     }
   });
-
-  if (algumaCategoriaComItens && matchingSkills && matchingSkills.length > 0) {
-    yPosition = verificarNovaPagina(doc, yPosition, 20);
-    doc
-      .font(estilos.textoSmall.font)
-      .fontSize(9)
-      .fillColor(CORES.textoTerciario)
-      .text("* Habilidade diretamente relacionada aos requisitos da vaga", doc.x, yPosition);
-    yPosition += estilos.espacamento.entreLinhas;
-  }
 
   return yPosition + estilos.espacamento.entreSecoes;
 };

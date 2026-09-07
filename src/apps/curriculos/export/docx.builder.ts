@@ -103,12 +103,12 @@ function experienceBlock(exp: Record<string, any>, isAts: boolean) {
     new Paragraph({
       spacing: { before: 200, after: 40 },
       children: [
-        run(exp.role || exp.cargo || "—", { bold: true, size: 24 }),
+        run(exp.role || exp.cargo || exp.position || "—", { bold: true, size: 24 }),
         run(` — ${exp.company || exp.empresa || "—"}`, { bold: true, size: 22, color: COR_SECUNDARIA }),
       ],
     }),
   ];
-  const period = exp.period || exp.dataInicio || "";
+  const period = exp.period || exp.dataInicio || (exp.startDate ? `${exp.startDate} - ${!exp.endDate || exp.endDate === 'present' || exp.endDate === 'Atual' ? 'Atual' : exp.endDate}` : "");
   const location = exp.location || exp.localizacao || "";
   const meta = [isAts ? normalizarDatasParaAts(period) : period, location].filter(Boolean).join(" | ");
   if (meta) children.push(secondary(meta));
@@ -124,7 +124,7 @@ function experienceBlock(exp: Record<string, any>, isAts: boolean) {
 
 /**
  * Constrói o Document docx a partir do currículo personalizado.
- * variant 'classic': visual com títulos com borda e marcação de match (*)
+ * variant 'classic': visual com títulos com borda e layout refinado
  * variant 'ats': otimizado para parsers de ATS (Gupy et al.) — títulos
  * simples, datas MM/YYYY, sem decoração, layout 100% linear.
  */
@@ -135,7 +135,6 @@ export function buildCurriculoDocx(
 ): Document {
   const isAts = variant === "ats";
   const p = curriculo.personalInfo;
-
   const header: Paragraph[] = [
     new Paragraph({
       alignment: AlignmentType.LEFT,
@@ -160,28 +159,15 @@ export function buildCurriculoDocx(
 
   if (curriculo.summary) {
     body.push(heading("Resumo Profissional", isAts));
-    body.push(new Paragraph({ spacing: { after: 120 }, children: [run(curriculo.summary)] }));
-  }
-
-  if (curriculo.areasAtuacao?.length) {
-    body.push(heading("Áreas de Atuação", isAts));
-    for (const a of curriculo.areasAtuacao) body.push(bullet(a));
-  }
-
-  if (curriculo.specializations?.length) {
-    body.push(heading("Especializações", isAts));
-    for (const s of curriculo.specializations) {
-      const text = typeof s === "string" ? s : s?.text || "";
-      if (text) body.push(bullet(text));
-    }
+    body.push(new Paragraph({
+      spacing: { after: 120 },
+      children: [run(curriculo.summary, { size: 21 })],
+    }));
   }
 
   if (curriculo.skills && Object.keys(curriculo.skills).length) {
     body.push(heading("Habilidades Técnicas", isAts));
-    // ATS (Gupy/Gaia): lê no máximo 30 skills — na variante ats priorizamos
-    // as matchingSkills primeiro e cortamos no limite, sem marcação (*).
     const MAX_SKILLS_ATS = 30;
-    const matching = new Set(curriculo.matchingSkills || []);
     let count = 0;
     for (const [categoria, items] of Object.entries(curriculo.skills)) {
       const arr = Array.isArray(items) ? items : [];
@@ -193,16 +179,11 @@ export function buildCurriculoDocx(
         if (count >= MAX_SKILLS_ATS) break;
         render = render.slice(0, MAX_SKILLS_ATS - count);
         count += render.length;
-      } else {
-        render = render.map((text) => (matching.has(text) ? `${text} *` : text));
       }
       body.push(new Paragraph({
         spacing: { after: 80 },
         children: [run(`${categoria}: `, { bold: true, size: 21 }), run(render.join(" • "), { size: 21 })],
       }));
-    }
-    if (!isAts) {
-      body.push(secondary("* Habilidade diretamente relacionada aos requisitos da vaga"));
     }
   }
 

@@ -472,13 +472,24 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     
     // Ler experiências do banco
     const expRows = await db.all("SELECT * FROM curriculo_profile_experiences ORDER BY start_date DESC");
-    const experiences = expRows.map((e: any) => ({
-      id: e.id, company: e.company, position: e.position,
-      startDate: e.start_date, endDate: e.end_date, location: e.location,
-      description: e.description, keywords: JSON.parse(e.keywords_json || "[]"),
-      achievements: JSON.parse(e.achievements_json || "[]"),
-      technologies: JSON.parse(e.technologies_json || "[]"),
-    }));
+    const experiences = expRows.map((e: any) => {
+      const dataInicio = e.start_date;
+      const dataFim = !e.end_date || e.end_date === "present" || e.end_date === "Atual" ? "Atual" : e.end_date;
+      return {
+        id: e.id,
+        company: e.company,
+        position: e.position,
+        role: e.position,
+        startDate: e.start_date,
+        endDate: e.end_date,
+        period: `${dataInicio} - ${dataFim}`,
+        location: e.location,
+        description: e.description,
+        keywords: JSON.parse(e.keywords_json || "[]"),
+        achievements: JSON.parse(e.achievements_json || "[]"),
+        technologies: JSON.parse(e.technologies_json || "[]"),
+      };
+    });
     
     // Ler educação do banco
     const eduRows = await db.all('SELECT * FROM curriculo_profile_education ORDER BY sort_order');
