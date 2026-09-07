@@ -7,6 +7,7 @@ import * as merchants from "../controllers/merchants.controller.js";
 import * as transactions from "../controllers/transactions.controller.js";
 import * as installments from "../controllers/installments.controller.js";
 import * as invoices from "../controllers/invoices.controller.js";
+import * as debts from "../controllers/debts.controller.js";
 import * as notificationEvents from "../controllers/notification-events.controller.js";
 import { shortcutWebhook } from "../controllers/webhook.controller.js";
 import { sendTestPush } from "../controllers/push-test.controller.js";
@@ -115,6 +116,15 @@ router.post("/installments/:id/pay", asyncHandler(installments.pay));
 router.post("/installments/:id/cancel", asyncHandler(installments.cancel));
 
 router.get("/invoices", asyncHandler(invoices.list));
+
+router.get("/debts/occurrences", asyncHandler(debts.listOccurrences));
+router.post("/debts/occurrences/:id/pay", asyncHandler(debts.addPayment));
+router.delete("/debts/payments/:paymentId", asyncHandler(debts.removePayment));
+router.get("/debts", asyncHandler(debts.listDebts));
+router.get("/debts/:id", asyncHandler(debts.getDebt));
+router.post("/debts", asyncHandler(debts.createDebt));
+router.put("/debts/:id", asyncHandler(debts.updateDebt));
+router.delete("/debts/:id", asyncHandler(debts.removeDebt));
 
 router.get("/notification-events", asyncHandler(notificationEvents.list));
 router.post("/notification-events", asyncHandler(notificationEvents.create));

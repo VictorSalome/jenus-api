@@ -183,4 +183,58 @@ export const financasMigrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_fin_installments_user_status_due ON fin_installments(user_id, status, due_date);
     `,
   },
+  {
+    id: "financas_010_debts",
+    up: `
+      CREATE TABLE IF NOT EXISTS fin_debts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        amount_cents INTEGER NOT NULL,
+        due_day INTEGER NOT NULL DEFAULT 10,
+        category_id INTEGER,
+        account_id INTEGER,
+        start_month TEXT NOT NULL,
+        end_month TEXT,
+        active INTEGER NOT NULL DEFAULT 1,
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (category_id) REFERENCES fin_categories(id) ON DELETE SET NULL,
+        FOREIGN KEY (account_id) REFERENCES fin_accounts(id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_fin_debts_user ON fin_debts(user_id);
+      CREATE INDEX IF NOT EXISTS idx_fin_debts_user_active ON fin_debts(user_id, active);
+
+      CREATE TABLE IF NOT EXISTS fin_debt_occurrences (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        debt_id INTEGER NOT NULL,
+        month TEXT NOT NULL,
+        due_date TEXT NOT NULL,
+        expected_amount_cents INTEGER NOT NULL,
+        paid_amount_cents INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(debt_id, month),
+        FOREIGN KEY (debt_id) REFERENCES fin_debts(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_fin_debt_occ_user_month ON fin_debt_occurrences(user_id, month);
+      CREATE INDEX IF NOT EXISTS idx_fin_debt_occ_debt ON fin_debt_occurrences(debt_id);
+
+      CREATE TABLE IF NOT EXISTS fin_debt_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        occurrence_id INTEGER NOT NULL,
+        amount_cents INTEGER NOT NULL,
+        paid_date TEXT NOT NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (occurrence_id) REFERENCES fin_debt_occurrences(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_fin_debt_pay_occ ON fin_debt_payments(occurrence_id);
+      CREATE INDEX IF NOT EXISTS idx_fin_debt_pay_user ON fin_debt_payments(user_id);
+    `,
+  },
 ];

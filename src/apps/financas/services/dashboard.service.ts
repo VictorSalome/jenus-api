@@ -24,6 +24,8 @@ export interface DashboardData {
   faturasAtuais: any[];
   /** Parcelas futuras (detalhadas) */
   parcelasFuturas: any[];
+  /** Dívidas fixas do mês */
+  dividasMes?: { previstoCents: number; pagoCents: number; restanteCents: number };
 }
 
 /**
@@ -223,6 +225,30 @@ export const getDashboard = async (
     from: nextMonthStart,
   });
 
+  // 10. Dívidas fixas do mês
+  let dividasMes = { previstoCents: 0, pagoCents: 0, restanteCents: 0 };
+  try {
+    const debtsModule = await import("./debts.service.js");
+    await debtsModule.ensureMonthlyOccurrences(userId, ref);
+    const debtsRow = await db.get<{ previsto: number; pago: number }>(
+      `SELECT COALESCE(SUM(expected_amount_cents), 0) as previsto,
+              COALESCE(SUM(paid_amount_cents), 0) as pago
+         FROM fin_debt_occurrences
+        WHERE user_id = ? AND month = ? AND status != 'CANCELLED'`,
+      userId,
+      ref,
+    );
+    const previsto = debtsRow?.previsto ?? 0;
+    const pago = debtsRow?.pago ?? 0;
+    dividasMes = {
+      previstoCents: previsto,
+      pagoCents: pago,
+      restanteCents: Math.max(0, previsto - pago),
+    };
+  } catch {
+    // fallback if table pending migration
+  }
+
   return {
     gastoMesCents,
     gastoParceladoMesCents,
@@ -234,5 +260,6 @@ export const getDashboard = async (
     evolucaoMensal,
     faturasAtuais,
     parcelasFuturas,
+    dividasMes,
   };
 };
