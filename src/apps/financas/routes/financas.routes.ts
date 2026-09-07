@@ -8,10 +8,18 @@ import * as transactions from "../controllers/transactions.controller.js";
 import * as installments from "../controllers/installments.controller.js";
 import * as invoices from "../controllers/invoices.controller.js";
 import * as notificationEvents from "../controllers/notification-events.controller.js";
+import { shortcutWebhook } from "../controllers/webhook.controller.js";
 import { dashboard } from "../controllers/dashboard.controller.js";
 import { asyncHandler } from "../shared/errors.js";
+import { requireAuth, optionalAuth } from "../../../shared/auth/auth.middleware.js";
 
 const router = Router();
+
+// Rota pública de webhook do iOS (Atalhos Apple) — aceita Webhook Key ou Bearer token
+router.post("/webhook/shortcut", optionalAuth, asyncHandler(shortcutWebhook));
+
+// Demais rotas exigem autenticação JWT
+router.use(requireAuth);
 
 router.get("/dashboard", asyncHandler(dashboard));
 
