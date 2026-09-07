@@ -6,6 +6,8 @@ const todayKey = (): string => new Date().toISOString().slice(0, 10);
 export interface DashboardData {
   /** Gasto do mês selecionado (soma de amount_cents das transações cuja transaction_date pertence ao mês) */
   gastoMesCents: number;
+  /** Total de compras parceladas originadas no mês selecionado (installments_total > 1) */
+  gastoParceladoMesCents: number;
   /** Fatura(s) aberta(s) atual(is) */
   faturasAbertas: { cardId: number; cardName: string; totalCents: number; dueDate: string }[];
   /** Comprometimento futuro por mês (próximos 12 meses) */
@@ -54,6 +56,18 @@ export const getDashboard = async (
     monthEnd,
   );
   const gastoMesCents = gastoMesRow?.total ?? 0;
+
+  // 1b. Gasto de compras parceladas originadas no mês selecionado
+  const gastoParceladoRow = await db.get<{ total: number }>(
+    `SELECT COALESCE(SUM(amount_cents), 0) as total
+       FROM fin_transactions
+      WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
+        AND status != 'CANCELLED' AND type = 'debit' AND installments_total > 1`,
+    userId,
+    monthStart,
+    monthEnd,
+  );
+  const gastoParceladoMesCents = gastoParceladoRow?.total ?? 0;
 
   // 2. Faturas abertas (por cartão, ciclo atual)
   const cards = await db.all(
@@ -211,6 +225,7 @@ export const getDashboard = async (
 
   return {
     gastoMesCents,
+    gastoParceladoMesCents,
     faturasAbertas,
     comprometimentoFuturo,
     gastosPorCategoria,
