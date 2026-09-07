@@ -11,7 +11,6 @@ import {
   contentTypeMiddleware,
 } from './shared/middleware/errorHandler.js';
 import { loggerMiddleware } from './shared/utils/logger.js';
-import { autoStartScheduler } from './buscas/scheduler.service.js';
 
 import analisarRoutes, { pdfPreviewRouter } from './analisar/analisar.routes.js';
 import testeRoutes from './teste/teste.routes.js';
@@ -25,12 +24,13 @@ import exportRoutes from './export/export.routes.js';
 import perfilRoutes from './perfil/perfil.routes.js';
 import compatibilidadeRoutes from './compatibilidade.routes.js';
 import emailTestRoutes from './shared/email/emailTest.routes.js';
+import analyticsRoutes from './analytics/analytics.routes.js';
 
 const app = express();
 
 await initializeSmtpRuntimeConfig();
 
-autoStartScheduler();
+// Scraper scheduler desativado: usuário controla envios e análises via Dashboard.
 
 // O nginx injeta X-Forwarded-For/Proto. Sem `trust proxy` aqui o
 // express-rate-limit deste app lança ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
@@ -107,6 +107,7 @@ app.use('/', emailTestRoutes);
 app.use('/', testeRoutes);
 app.use('/', smtpRoutes);
 app.use('/', exportRoutes);
+app.use('/', analyticsRoutes);
 
 app.use(notFoundHandler);
 
