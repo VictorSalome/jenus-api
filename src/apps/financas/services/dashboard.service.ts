@@ -41,7 +41,7 @@ export const getDashboard = async (
 
   const monthStart = `${ref}-01`;
   const monthEnd = new Date(refYear, refMonth, 0).toISOString().slice(0, 10);
-  const afterMonthEnd = new Date(refYear, refMonth + 1, 0).toISOString().slice(0, 10);
+  const nextMonthStart = new Date(refYear, refMonth, 1).toISOString().slice(0, 10);
 
   // 1. Gasto do mês: transações cujo transaction_date pertence ao mês
   const gastoMesRow = await db.get<{ total: number }>(
@@ -116,7 +116,7 @@ export const getDashboard = async (
       ORDER BY due_date ASC
       LIMIT 365`,
     userId,
-    afterMonthEnd,
+    monthEnd,
   );
 
   const byMonth = new Map<string, number>();
@@ -206,7 +206,7 @@ export const getDashboard = async (
   // 9. Parcelas futuras (detalhadas)
   const installmentsModule = await import("./installments.service.js");
   const parcelasFuturas = await installmentsModule.listInstallments(userId, {
-    from: afterMonthEnd,
+    from: nextMonthStart,
   });
 
   return {
