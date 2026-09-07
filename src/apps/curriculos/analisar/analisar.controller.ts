@@ -94,6 +94,8 @@ interface DadosVaga {
   descricao?: string;
   requisitos?: string[];
   responsabilidades?: string[];
+  customSummary?: string;
+  semIa?: boolean;
 }
 
 export const gerarTextoCurriculo = (curriculo: CurriculoPersonalizado, vaga: DadosVaga): string => {
@@ -258,7 +260,7 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
   logInfo("Iniciando geração do currículo", { requestId });
 
   // 1. Validar entrada
-  const { vaga, textoVaga } = req.body;
+  const { vaga, textoVaga, customSummary, semIa } = req.body;
   const textoParaAnalise = vaga || textoVaga;
 
   const validationResult = validateVagaText(textoParaAnalise);
@@ -310,7 +312,9 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
         emailContato: vagaParseada.contactEmail || null,
         descricao: vagaParseada.rawDescription,
         requisitos: vagaParseada.requirements,
-        responsabilidades: vagaParseada.responsibilities
+        responsabilidades: vagaParseada.responsibilities,
+        customSummary: customSummary || null,
+        semIa: !!semIa,
       };
     }
   }
@@ -329,6 +333,8 @@ export const gerarCurriculoController = asyncHandler(async (req, res) => {
       descricao: textoParaAnalise,
       requisitos: dadosExtraidos.requisitosObrigatorios,
       responsabilidades: dadosExtraidos.responsabilidades,
+      customSummary: customSummary || null,
+      semIa: !!semIa,
     };
   }
 

@@ -10,15 +10,23 @@ import { logError } from "../shared/utils/logger.js";
  */
 export const exportarCurriculo = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { format, vagaTitulo, variant = "classic" } = req.body as {
+    const { format, vagaTitulo, variant = "classic", customSummary, semIa } = req.body as {
       format: "pdf" | "docx";
       vagaTitulo?: string;
       variant?: "classic" | "ats";
+      customSummary?: string;
+      semIa?: boolean;
+    };
+
+    const dadosVaga = {
+      titulo: vagaTitulo || undefined,
+      customSummary: customSummary || undefined,
+      semIa: !!semIa,
     };
 
     if (format === "docx") {
       const { buffer, fileName } = await gerarDocxCurriculo(
-        vagaTitulo ? { titulo: vagaTitulo } : {},
+        dadosVaga,
         variant,
       );
       res.setHeader(
@@ -36,8 +44,8 @@ export const exportarCurriculo = async (req: Request, res: Response): Promise<vo
     const { gerarPdfCurriculo } = await import("../shared/pdf/pdfGenerator.service.js");
     const fs = await import("fs/promises");
 
-    const curriculo = await personalizarCurriculo(vagaTitulo ? { titulo: vagaTitulo } : {});
-    const pdfPath = await gerarPdfCurriculo(curriculo, vagaTitulo ? { titulo: vagaTitulo } : {});
+    const curriculo = await personalizarCurriculo(dadosVaga);
+    const pdfPath = await gerarPdfCurriculo(curriculo, dadosVaga);
     const pdfBuffer = await fs.readFile(pdfPath);
     await fs.unlink(pdfPath).catch(() => {});
 

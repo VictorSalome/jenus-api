@@ -380,13 +380,22 @@ export const personalizarCurriculo = async (dadosVaga: Record<string, any>): Pro
       dadosVaga,
     );
 
+    // Resumo: se o app enviou um customSummary (da IA otimizada), usa ele diretamente.
+    // Se o usuário gerou no modo "Sem IA", usa o resumo oficial cadastrado no perfil.
+    // Caso contrário, usa o resumo dinâmico calculado por heurística.
+    const summaryFinal = dadosVaga.customSummary
+      ? dadosVaga.customSummary
+      : (dadosVaga.semIa
+          ? (perfilCandidato.personalInfo?.summary || resumoDinamico.resumo)
+          : resumoDinamico.resumo);
+
     // Criar currículo personalizado
     const curriculoPersonalizado = {
       personalInfo: {
         ...perfilCandidato.personalInfo,
         title: tituloPersonalizado,
       },
-      summary: resumoDinamico.resumo,
+      summary: summaryFinal,
       experiences: filtrarExperienciasRelevantes(
         perfilCandidato.experiences,
         dadosVaga,
