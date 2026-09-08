@@ -97,3 +97,60 @@ export const deleteCategory = async (userId: string, id: number) => {
   );
   await db.run("DELETE FROM fin_categories WHERE id = ? AND user_id = ?", id, userId);
 };
+
+/**
+ * Tenta inferir a categoria apropriada para o estabelecimento ou texto da transação:
+ * 1. Pelo merchant cadastrado no banco (caso o usuário já tenha vinculado uma categoria antes)
+ * 2. Por heurística de palavras-chave inteligentes (posto, combustível, mercado, uber, ifood, farmácia, etc.)
+ */
+export const guessCategoryForTransaction = async (
+  userId: string,
+  merchantName?: string,
+  description?: string,
+): Promise<number | null> => {
+  const db = await getDb();
+  await ensureDefaultCategories(userId);
+
+  const text = `${merchantName || ''} ${description || ''}`.toLowerCase();
+
+  // 1. Verifica se já existe o merchant vinculado a uma categoria
+  if (merchantName) {
+    const row = await db.get<{ category_id: number | null }>(
+      `SELECT category_id FROM fin_merchants
+        WHERE user_id = ? AND name_normalized = ? AND category_id IS NOT NULL`,
+      userId,
+      merchantName.trim().toLowerCase(),
+    );
+    if (row?.category_id) return row.category_id;
+  }
+
+  // 2. Mapeamento por palavras-chave
+  let targetCategoryName: string | null = null;
+
+  if (/posto|shell|ipiranga|petrobras|combust[ií]vel|gasolina|etanol|uber|99app|99|estacionamento|ped[aá]gio/i.test(text)) {
+    targetCategoryName = "Transporte";
+  } else if (/restaurante|ifood|lanchonete|mcdonald|burger|subway|padaria|a[cç]a[ií]|caf[eé]|bar|pizzaria/i.test(text)) {
+    targetCategoryName = "Alimentação";
+  } else if (/mercado|supermercado|carrefour|p[aã]o de a[cç][uú]car|assai|atacad|extra|dia|hortifruti/i.test(text)) {
+    targetCategoryName = "Compras";
+  } else if (/drogaria|farm[aá]cia|raia|drogasil|pacheco|s[aã]o paulo|consulta|laborat[oó]rio|exame/i.test(text)) {
+    targetCategoryName = "Saúde";
+  } else if (/netflix|spotify|cinema|ingresso|show|jogos|steam|playstation|xbox|disney|prime video/i.test(text)) {
+    targetCategoryName = "Lazer";
+  } else if (/aluguel|condom[ií]nio|enel|luz|energia|sabesp|copasa|[aá]gua|internet|claro|vivo|tim/i.test(text)) {
+    targetCategoryName = "Moradia";
+  } else if (/curso|faculdade|escola|livro|udemy|alura/i.test(text)) {
+    targetCategoryName = "Educação";
+  }
+
+  if (targetCategoryName) {
+    const cat = await db.get<{ id: number }>(
+      `SELECT id FROM fin_categories WHERE user_id = ? AND name = ? COLLATE NOCASE LIMIT 1`,
+      userId,
+      targetCategoryName,
+    );
+    if (cat) return cat.id;
+  }
+
+  return null;
+};

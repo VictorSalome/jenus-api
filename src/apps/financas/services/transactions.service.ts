@@ -5,6 +5,7 @@ import { splitInstallments } from "./money.js";
 import { buildFingerprint, normalizeMerchant } from "./duplicates.service.js";
 import { getMerchantByNormalized, createMerchant } from "./merchants.service.js";
 import { AppError } from "../shared/errors.js";
+import { guessCategoryForTransaction } from "./categories.service.js";
 
 export type TransactionSource = "MANUAL" | "NOTIFICATION" | "IMPORT" | "OPEN_FINANCE";
 export type TransactionStatus = "PENDING" | "PAID" | "OVERDUE" | "CANCELLED";
@@ -158,15 +159,30 @@ export const createTransaction = async (
   // Resolve o merchant (cria se não existir) fora da transação para não
   // segurar locks do BEGIN desnecessariamente.
   let merchantId = input.merchantId;
+  let resolvedCategoryId = input.categoryId;
+
   if (input.merchantName) {
     const nameNormalized = normalizeMerchant(input.merchantName);
     const existing = await getMerchantByNormalized(userId, nameNormalized);
     if (existing) {
       merchantId = existing.id;
+      if (!resolvedCategoryId && existing.category_id) {
+        resolvedCategoryId = existing.category_id;
+      }
     } else {
       const merchant = await createMerchant(userId, { name: input.merchantName });
       merchantId = merchant.id;
     }
+  }
+
+  // Se categoria ainda vazia, auto-detecta por palavras-chave (Posto, Mercado, iFood, etc.)
+  if (!resolvedCategoryId) {
+    const guessedId = await guessCategoryForTransaction(
+      userId,
+      input.merchantName,
+      input.description,
+    );
+    if (guessedId) resolvedCategoryId = guessedId;
   }
 
   const amounts = splitInstallments(input.amountCents, installmentsTotal);
@@ -192,7 +208,7 @@ export const createTransaction = async (
       input.accountId,
       input.cardId || null,
       merchantId || null,
-      input.categoryId || null,
+      resolvedCategoryId || null,
       input.description || null,
       input.amountCents,
       input.type || "debit",
