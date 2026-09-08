@@ -1,10 +1,11 @@
-import { chromium, type Page } from "@playwright/test";
 import { initDb } from "../../../core/database.js";
 import { salvarEmpresa, buscarPorSlug } from "../repositories/empresa.repository.js";
 import { StatusLead, type EmpresaLead } from "../types.js";
 import { slugify } from "./utils/slugify.js";
 import { sanitizePhone } from "./utils/phoneSanitizer.js";
 import { normalizarListaFotos } from "./utils/googlePhotos.js";
+
+type Page = any;
 
 export interface OpcoesScraperMaps {
   limite?: number;
@@ -99,6 +100,7 @@ export async function executarScraperMaps(
     empresas: [],
   };
 
+  const { chromium } = await import("@playwright/test");
   const browser = await chromium.launch({
     headless,
     args: [
