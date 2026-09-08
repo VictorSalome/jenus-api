@@ -87,3 +87,10 @@ export const removePayment = async (req: any, res: any) => {
   const data = await service.deletePayment(userId, paymentId);
   res.json({ success: true, data });
 };
+
+export const checkReminders = async (req: any, res: any) => {
+  const userId = getUserId(req);
+  const { checkAndNotifyDebtReminders } = await import("../services/debts-scheduler.service.js");
+  const result = await checkAndNotifyDebtReminders(userId);
+  res.json({ success: true, data: result });
+};

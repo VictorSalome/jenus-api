@@ -227,6 +227,10 @@ const startServer = async (): Promise<void> => {
       );
     }
 
+    // Scheduler de lembretes diários de dívidas
+    const { startDebtsScheduler } = await import("./apps/financas/services/debts-scheduler.service.js");
+    startDebtsScheduler();
+
     app.listen(config.PORT, () => {
       logger.info(`🚀 Jenus API rodando na porta ${config.PORT}`, "Server");
       logger.info(`📑 Swagger UI: http://192.168.1.16:${config.PORT}/api/docs`, "Server");

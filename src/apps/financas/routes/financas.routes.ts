@@ -120,6 +120,7 @@ router.get("/invoices", asyncHandler(invoices.list));
 router.get("/debts/occurrences", asyncHandler(debts.listOccurrences));
 router.post("/debts/occurrences/:id/pay", asyncHandler(debts.addPayment));
 router.delete("/debts/payments/:paymentId", asyncHandler(debts.removePayment));
+router.post("/debts/check-reminders", asyncHandler(debts.checkReminders));
 router.get("/debts", asyncHandler(debts.listDebts));
 router.get("/debts/:id", asyncHandler(debts.getDebt));
 router.post("/debts", asyncHandler(debts.createDebt));
