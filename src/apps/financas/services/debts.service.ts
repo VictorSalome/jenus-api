@@ -387,3 +387,72 @@ export const deletePayment = async (userId: string, paymentId: number) => {
 
   return { success: true, occurrenceId, totalPaid, status: newStatus };
 };
+
+export interface DebtSuggestion {
+  name: string;
+  amountCents: number;
+  dueDay: number;
+  occurrencesCount: number;
+  confidence: 'alta' | 'média';
+  category_id?: number | null;
+}
+
+export const getRecurringSuggestions = async (userId: string): Promise<DebtSuggestion[]> => {
+  const db = await getDb();
+
+  const existingDebts = await db.all<any[]>(
+    "SELECT name FROM fin_debts WHERE user_id = ? AND active = 1",
+    userId,
+  );
+  const existingNames = new Set((existingDebts || []).map((d) => d.name.toLowerCase().trim()));
+
+  const rows = await db.all<any[]>(
+    `SELECT COALESCE(m.name, t.description, 'Despesa') as title,
+            t.amount_cents,
+            t.category_id,
+            strftime('%d', t.transaction_date) as day_of_month,
+            COUNT(DISTINCT substr(t.transaction_date, 1, 7)) as distinct_months,
+            COUNT(*) as total_count
+       FROM fin_transactions t
+       LEFT JOIN fin_merchants m ON m.id = t.merchant_id
+      WHERE t.user_id = ?
+        AND (t.type = 'debit' OR t.type = 'credit')
+        AND t.status != 'CANCELLED'
+        AND t.installments_total = 1
+      GROUP BY title, t.amount_cents
+      HAVING total_count >= 2 OR distinct_months >= 2
+      ORDER BY total_count DESC
+      LIMIT 10`,
+    userId,
+  );
+
+  const KNOWN_SUBSCRIPTIONS = [
+    'netflix', 'spotify', 'amazon prime', 'prime video', 'youtube', 'hbo', 'max',
+    'disney', 'globo', 'globoplay', 'apple', 'icloud', 'openai', 'chatgpt',
+    'gym', 'smart fit', 'bluefit', 'academia', 'aluguel', 'condominio', 'condomínio',
+    'claro', 'vivo', 'tim', 'internet', 'fibra', 'sem parar', 'veloe'
+  ];
+
+  const suggestions: DebtSuggestion[] = [];
+
+  for (const r of rows) {
+    const titleClean = (r.title || '').trim();
+    const lower = titleClean.toLowerCase();
+    if (!titleClean || existingNames.has(lower)) continue;
+
+    const isKnown = KNOWN_SUBSCRIPTIONS.some((s) => lower.includes(s));
+    const day = parseInt(r.day_of_month, 10) || 10;
+
+    suggestions.push({
+      name: titleClean,
+      amountCents: r.amount_cents,
+      dueDay: Math.max(1, Math.min(31, day)),
+      occurrencesCount: r.total_count,
+      confidence: isKnown || r.distinct_months >= 2 ? 'alta' : 'média',
+      category_id: r.category_id || null,
+    });
+  }
+
+  return suggestions;
+};
+

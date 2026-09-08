@@ -10,6 +10,7 @@ import { seedCurriculoProfileFromJson } from '../apps/curriculos/migrations/seed
 import { promoMigrations } from '../apps/promo/migrations/index.js';
 import { gmailMigrations } from '../apps/gmail/migrations/index.js';
 import { financasMigrations } from '../apps/financas/migrations/index.js';
+import { prospeccaoMigrations } from '../apps/prospeccao/migrations/index.js';
 import { authMigrations } from '../shared/auth/migrations.js';
 import { notificationMigrations } from '../shared/notifications/index.js';
 import { seedPromoDatabase } from '../apps/promo/migrations/seed.js';
@@ -41,6 +42,7 @@ export const initDb = async (): Promise<Database<sqlite3.Database, sqlite3.State
     ...promoMigrations,
     ...gmailMigrations,
     ...financasMigrations,
+    ...prospeccaoMigrations,
     ...authMigrations,
     ...notificationMigrations,
   ]);

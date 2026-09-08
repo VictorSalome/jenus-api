@@ -26,6 +26,13 @@ export interface DashboardData {
   parcelasFuturas: any[];
   /** Dívidas fixas do mês */
   dividasMes?: { previstoCents: number; pagoCents: number; restanteCents: number };
+  /** Comprometimento Total Consolidado do mês */
+  comprometimentoTotalMes?: {
+    totalCents: number;
+    pagoCents: number;
+    restanteCents: number;
+    percentualPago: number;
+  };
 }
 
 /**
@@ -249,6 +256,20 @@ export const getDashboard = async (
     // fallback if table pending migration
   }
 
+  // 11. Comprometimento Total Consolidado do Mês
+  const faturasTotalCents = (faturasAbertas || []).reduce((acc, f) => acc + f.totalCents, 0);
+  const totalMesCents = gastoMesCents + faturasTotalCents + (dividasMes?.previstoCents ?? 0);
+  const pagoMesCents = gastoMesCents + (dividasMes?.pagoCents ?? 0);
+  const restanteMesCents = faturasTotalCents + (dividasMes?.restanteCents ?? 0);
+  const percentualPago = totalMesCents > 0 ? Math.min(100, Math.round((pagoMesCents / totalMesCents) * 100)) : 100;
+
+  const comprometimentoTotalMes = {
+    totalCents: totalMesCents,
+    pagoCents: pagoMesCents,
+    restanteCents: restanteMesCents,
+    percentualPago,
+  };
+
   return {
     gastoMesCents,
     gastoParceladoMesCents,
@@ -261,5 +282,6 @@ export const getDashboard = async (
     faturasAtuais,
     parcelasFuturas,
     dividasMes,
+    comprometimentoTotalMes,
   };
 };

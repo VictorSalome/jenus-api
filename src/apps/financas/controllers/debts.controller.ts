@@ -94,3 +94,9 @@ export const checkReminders = async (req: any, res: any) => {
   const result = await checkAndNotifyDebtReminders(userId);
   res.json({ success: true, data: result });
 };
+
+export const listSuggestions = async (req: any, res: any) => {
+  const userId = getUserId(req);
+  const data = await service.getRecurringSuggestions(userId);
+  res.json({ success: true, data });
+};

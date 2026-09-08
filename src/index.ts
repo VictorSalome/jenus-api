@@ -17,6 +17,7 @@ import curriculosModule from "./apps/curriculos/index.js";
 import gmailModule from "./apps/gmail/index.js";
 import financasModule from "./apps/financas/index.js";
 import systemModule from "./apps/system/index.js";
+import prospeccaoModule from "./apps/prospeccao/index.js";
 import notificationsModule from "./shared/notifications/index.js";
 import { registerApp } from "./shared/http/app-registry.js";
 import { defaultLimiter, authLimiter } from "./shared/rate-limit/presets.js";
@@ -60,6 +61,7 @@ registerApp(app, curriculosModule);
 registerApp(app, gmailModule);
 registerApp(app, financasModule);
 registerApp(app, systemModule);
+registerApp(app, prospeccaoModule);
 registerApp(app, notificationsModule);
 mountSwagger(app);
 

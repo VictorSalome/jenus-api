@@ -14,7 +14,11 @@
     "logs:pm2": "pm2 logs jenus-api",
     "deploy": "bash scripts/deploy-oracle.sh",
     "deploy:oracle": "bash scripts/deploy-oracle.sh",
-    "sync-env": "bash scripts/sync-env.sh"
+    "sync-env": "bash scripts/sync-env.sh",
+    "prospeccao:scrape": "tsx src/apps/prospeccao/scraper/mapsScraper.ts",
+    "prospeccao:dispatch": "tsx src/apps/prospeccao/services/dispatcher.service.ts",
+    "prospeccao:approve": "tsx src/apps/prospeccao/services/approve.cli.ts",
+    "prospeccao:test": "tsx src/apps/prospeccao/tests/prospeccao.test.ts"
   },
   "dependencies": {
     "axios": "^1.19.0",
