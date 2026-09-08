@@ -56,6 +56,7 @@ export const notificationMigrations: Migration[] = [
         ('curriculo.weekly_analytics', 'curriculo', 'Relatório Semanal de Candidaturas', 'Resumo consolidado semanal de envios, aberturas e respostas', '📊 Resumo Semanal de Candidaturas', '{{sent_count}} candidaturas enviadas e {{replies_count}} respostas nesta semana.', 'low', 1, 'default'),
 
         -- Módulo de Finanças
+        ('financas.debt_due_soon', 'financas', 'Dívida Fixa Vence Hoje', 'Lembrete no dia de vencimento de dívidas como Aluguel ou Contas', '📌 Vencimento Hoje: {{debt_name}}', 'Sua dívida fixa de R$ {{amount}} vence hoje. Toque para registrar o pagamento.', 'high', 1, 'payment'),
         ('financas.transaction_detected', 'financas', 'Compra / Transação Identificada', 'Gastos detectados automaticamente pelo iOS Shortcut ou Android', '💳 {{merchant}}', 'Compra de R$ {{amount}} identificada. Toque para categorizar.', 'high', 1, 'payment'),
         ('financas.invoice_closed', 'financas', 'Fatura do Cartão Fechada', 'Aviso quando a fatura de cartão de crédito fecha no mês', '🧾 Fatura Fechada: {{card_name}}', 'Valor total: R$ {{amount}}. Vencimento em {{due_date}}.', 'high', 1, 'default'),
         ('financas.invoice_due_soon', 'financas', 'Vencimento de Fatura no Dia', 'Lembrete matinal no dia de vencimento de uma fatura de cartão', '⚠️ Fatura Vence Hoje: {{card_name}}', 'Lembrete: sua fatura de R$ {{amount}} vence hoje.', 'high', 1, 'default'),

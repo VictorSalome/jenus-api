@@ -235,6 +235,10 @@ export const financasMigrations: Migration[] = [
       );
       CREATE INDEX IF NOT EXISTS idx_fin_debt_pay_occ ON fin_debt_payments(occurrence_id);
       CREATE INDEX IF NOT EXISTS idx_fin_debt_pay_user ON fin_debt_payments(user_id);
+
+      INSERT OR IGNORE INTO notification_types (id, module, name, description, title_template, body_template, default_priority, default_enabled, sound_type)
+      VALUES
+        ('financas.debt_due_soon', 'financas', 'Dívida Fixa Vence Hoje', 'Lembrete no dia de vencimento de dívidas como Aluguel ou Contas', '📌 Vencimento Hoje: {{debt_name}}', 'Sua dívida fixa de R$ {{amount}} vence hoje. Toque para registrar o pagamento.', 'high', 1, 'payment');
     `,
   },
 ];
