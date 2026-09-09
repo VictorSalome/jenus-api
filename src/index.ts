@@ -1,15 +1,16 @@
+import * as logger from "./core/logger.js";
+
 process.on("unhandledRejection", (reason, _promise) => {
-  console.error("[Unhandled Rejection]", reason);
+  logger.error(`[Unhandled Rejection] ${reason instanceof Error ? reason.stack || reason.message : String(reason)}`, "Process");
 });
 process.on("uncaughtException", (err) => {
-  console.error("[Uncaught Exception]", err);
+  logger.error(`[Uncaught Exception] ${err?.stack || err?.message || String(err)}`, "Process");
 });
 
 import express from "express";
 import cors from "cors";
 import { config } from "./core/config.js";
 import { initDb } from "./core/database.js";
-import * as logger from "./core/logger.js";
 
 import authApp from "./apps/auth/index.js";
 import promoModule from "./apps/promo/index.js";
@@ -19,7 +20,7 @@ import financasModule from "./apps/financas/index.js";
 import systemModule from "./apps/system/index.js";
 import prospeccaoModule from "./apps/prospeccao/index.js";
 import notificationsModule from "./shared/notifications/index.js";
-import { registerApp } from "./shared/http/app-registry.js";
+import { registerApp, globalErrorHandler, asyncHandler } from "./shared/http/index.js";
 import { defaultLimiter, authLimiter } from "./shared/rate-limit/presets.js";
 import { mountSwagger } from "./shared/docs/swagger.js";
 
@@ -65,7 +66,7 @@ registerApp(app, prospeccaoModule);
 registerApp(app, notificationsModule);
 mountSwagger(app);
 
-app.get("/api/health", async (_req, res) => {
+app.get("/api/health", asyncHandler(async (_req, res) => {
   try {
     const db = await initDb();
     await db.get("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1");
@@ -83,10 +84,10 @@ app.get("/api/health", async (_req, res) => {
       timestamp: new Date().toISOString(),
     });
   }
-});
+}));
 
 // ── Health check UI (Visual) ──
-app.get("/health", async (_req, res) => {
+app.get("/health", asyncHandler(async (_req, res) => {
   let status = "ok";
   let dbStatus = "connected";
   let errorMsg = "";
@@ -200,7 +201,7 @@ app.get("/health", async (_req, res) => {
 </body>
 </html>
   `);
-});
+}));
 
 app.use((_req, res) => {
   res.status(404).json({
@@ -212,6 +213,10 @@ app.use((_req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Middleware global de tratamento de erros Express (4 parâmetros)
+app.use(globalErrorHandler);
+
 
 const startServer = async (): Promise<void> => {
   try {

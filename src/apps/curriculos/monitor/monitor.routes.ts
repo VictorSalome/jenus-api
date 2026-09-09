@@ -8,6 +8,7 @@ import * as logger from "../../../core/logger.js";
 import config from "../config/index.js";
 import fs from "fs/promises";
 import path from "path";
+import { asyncHandler } from "../../../shared/http/index.js";
 
 const router = Router();
 
@@ -15,7 +16,7 @@ const router = Router();
  * GET /api/curriculo/monitor
  * Retorna estatísticas de uso e monitoramento
  */
-router.get("/monitor", async (req, res) => {
+router.get("/monitor", asyncHandler(async (req, res) => {
   const startTime = Date.now();
   try {
     const stats = await getStats();
@@ -131,13 +132,13 @@ router.get("/monitor", async (req, res) => {
       error: err.message,
     });
   }
-});
+}));
 
 /**
  * POST /api/curriculo/auto-apply
  * Executa pipeline completo de candidatura automática
  */
-router.post("/auto-apply", async (req, res) => {
+router.post("/auto-apply", asyncHandler(async (req, res) => {
   try {
     const { query = "", tags = [], minScore = 60, limit = 5 } = req.body;
 
@@ -178,13 +179,13 @@ router.post("/auto-apply", async (req, res) => {
       vagas: resultados.applied.slice(0, 10),
       history: history.slice(-10),
     });
-  } catch (err) {
+  } catch (err: any) {
     res.status(500).json({
       success: false,
       error: err.message,
     });
   }
-});
+}));
 
 router.post("/approve-all-pending", requireAuth, async (req, res) => {
   logger.info("Iniciando aprovação e envio de todos os pendentes", "Curriculo");

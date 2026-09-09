@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as discordController from "./discord.controller.js";
 import { requireAuth } from "../../../shared/auth/auth.middleware.js";
+import { asyncHandler } from "../../../shared/http/index.js";
 
 const router = Router();
 
@@ -21,6 +22,6 @@ const router = Router();
  *       500:
  *         description: Falha no envio (webhook inválido ou não configurado).
  */
-router.post("/test", requireAuth, discordController.testDiscord);
+router.post("/test", requireAuth, asyncHandler(discordController.testDiscord));
 
 export default router;

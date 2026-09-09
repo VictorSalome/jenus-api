@@ -10,37 +10,45 @@ const maskUrl = (url: string): string => {
 };
 
 export const getConfig = async (_req: Request, res: Response): Promise<void> => {
-  const config = await repo.getConfig();
-  if (!config) {
-    res.json({ success: true, data: null });
-    return;
+  try {
+    const config = await repo.getConfig();
+    if (!config) {
+      res.json({ success: true, data: null });
+      return;
+    }
+    res.json({
+      success: true,
+      data: {
+        webhookUrl: maskUrl(config.webhookUrl),
+        updatedAt: config.updatedAt,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: "Erro ao obter configuração de webhook: " + (err?.message || "desconhecido") });
   }
-  res.json({
-    success: true,
-    data: {
-      webhookUrl: maskUrl(config.webhookUrl),
-      updatedAt: config.updatedAt,
-    },
-  });
 };
 
 export const saveConfig = async (req: Request, res: Response): Promise<void> => {
-  const { webhookUrl } = req.body ?? {};
-  if (!webhookUrl || typeof webhookUrl !== "string" || !webhookUrl.trim()) {
-    res.status(400).json({ success: false, message: "webhookUrl é obrigatório" });
-    return;
-  }
-  const trimmed = webhookUrl.trim();
-  if (!WEBHOOK_URL_RE.test(trimmed)) {
-    res.status(400).json({
-      success: false,
-      message: "URL inválida — deve ser no formato https://discord.com/api/webhooks/{id}/{token}",
-    });
-    return;
-  }
+  try {
+    const { webhookUrl } = req.body ?? {};
+    if (!webhookUrl || typeof webhookUrl !== "string" || !webhookUrl.trim()) {
+      res.status(400).json({ success: false, message: "webhookUrl é obrigatório" });
+      return;
+    }
+    const trimmed = webhookUrl.trim();
+    if (!WEBHOOK_URL_RE.test(trimmed)) {
+      res.status(400).json({
+        success: false,
+        message: "URL inválida — deve ser no formato https://discord.com/api/webhooks/{id}/{token}",
+      });
+      return;
+    }
 
-  await repo.saveConfig(trimmed);
-  res.json({ success: true, data: { webhookUrl: maskUrl(trimmed) } });
+    await repo.saveConfig(trimmed);
+    res.json({ success: true, data: { webhookUrl: maskUrl(trimmed) } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: "Erro ao salvar webhook: " + (err?.message || "desconhecido") });
+  }
 };
 
 export const testWebhook = async (req: Request, res: Response): Promise<void> => {
@@ -95,30 +103,34 @@ export const testWebhook = async (req: Request, res: Response): Promise<void> =>
  * um link manual.
  */
 export const revokeConfig = async (_req: Request, res: Response): Promise<void> => {
-  const config = await repo.getConfig();
-
-  if (!config) {
-    res.json({ success: true, discordRevoked: false, message: "Nenhum webhook configurado" });
-    return;
-  }
-
-  let discordRevoked = false;
-  let message: string;
-
   try {
-    const r = await fetch(config.webhookUrl, { method: "DELETE" });
-    if (r.ok || r.status === 404) {
-      discordRevoked = true;
-      message = r.status === 404
-        ? "Webhook já não existia mais no Discord. Config local removida."
-        : "Webhook revogado no Discord com sucesso. Config local removida.";
-    } else {
-      message = `Discord recusou a revogação (HTTP ${r.status}). Config local removida mesmo assim — revogue manualmente pelo Discord se necessário.`;
-    }
-  } catch (err: any) {
-    message = `Não foi possível contatar o Discord (${err?.message || "erro de rede"}). Config local removida mesmo assim — revogue manualmente pelo Discord se necessário.`;
-  }
+    const config = await repo.getConfig();
 
-  await repo.clearConfig();
-  res.json({ success: true, discordRevoked, message });
+    if (!config) {
+      res.json({ success: true, discordRevoked: false, message: "Nenhum webhook configurado" });
+      return;
+    }
+
+    let discordRevoked = false;
+    let message: string;
+
+    try {
+      const r = await fetch(config.webhookUrl, { method: "DELETE" });
+      if (r.ok || r.status === 404) {
+        discordRevoked = true;
+        message = r.status === 404
+          ? "Webhook já não existia mais no Discord. Config local removida."
+          : "Webhook revogado no Discord com sucesso. Config local removida.";
+      } else {
+        message = `Discord recusou a revogação (HTTP ${r.status}). Config local removida mesmo assim — revogue manualmente pelo Discord se necessário.`;
+      }
+    } catch (err: any) {
+      message = `Não foi possível contatar o Discord (${err?.message || "erro de rede"}). Config local removida mesmo assim — revogue manualmente pelo Discord se necessário.`;
+    }
+
+    await repo.clearConfig();
+    res.json({ success: true, discordRevoked, message });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: "Erro ao revogar webhook: " + (err?.message || "desconhecido") });
+  }
 };

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as authController from './auth.controller.js';
 import { requireAuth } from './auth.middleware.js';
+import { asyncHandler } from '../http/index.js';
 
 const router = Router();
 
@@ -43,7 +44,7 @@ const router = Router();
  *       401:
  *         description: Credenciais inválidas.
  */
-router.post('/token', authController.swaggerTokenLogin);
+router.post('/token', asyncHandler(authController.swaggerTokenLogin));
 
 /**
  * @swagger
@@ -75,7 +76,7 @@ router.post('/token', authController.swaggerTokenLogin);
  *       401:
  *         description: Usuário ou senha incorretos.
  */
-router.post('/login', authController.login);
+router.post('/login', asyncHandler(authController.login));
 
 /**
  * @swagger
@@ -93,7 +94,7 @@ router.post('/login', authController.login);
  *       401:
  *         description: Não autenticado.
  */
-router.get('/me', requireAuth, authController.me);
+router.get('/me', requireAuth, asyncHandler(authController.me));
 
 /**
  * @swagger
@@ -106,6 +107,6 @@ router.get('/me', requireAuth, authController.me);
  *       200:
  *         description: Logout realizado.
  */
-router.post('/logout', authController.logout);
+router.post('/logout', asyncHandler(authController.logout));
 
 export default router;

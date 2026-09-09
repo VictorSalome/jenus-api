@@ -17,16 +17,8 @@ export class NotFoundError extends AppError {
 export const asyncHandler = (
   fn: (req: any, res: any, next: any) => Promise<unknown>,
 ) => {
-  return async (req: any, res: any, next: any): Promise<void> => {
-    try {
-      await fn(req, res, next);
-    } catch (err: any) {
-      const status = err instanceof AppError ? err.statusCode : 500;
-      res.status(status).json({
-        success: false,
-        message: err?.message || "Erro interno do servidor",
-      });
-    }
+  return (req: any, res: any, next: any): void => {
+    Promise.resolve(fn(req, res, next)).catch(next);
   };
 };
 

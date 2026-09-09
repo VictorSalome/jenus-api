@@ -100,7 +100,19 @@ export async function executarScraperMaps(
     empresas: [],
   };
 
-  const { chromium } = await import("@playwright/test");
+  let chromium: any;
+  try {
+    const pwModule = "@playwright/test";
+    const pwt = await import(pwModule).catch(() => null);
+    chromium = pwt?.chromium;
+  } catch (err: any) {
+    console.error("[ScraperMaps] Erro ao carregar módulo Playwright:", err);
+  }
+
+  if (!chromium) {
+    throw new Error("O navegador Playwright não está disponível no servidor para mineração web.");
+  }
+
   const browser = await chromium.launch({
     headless,
     args: [

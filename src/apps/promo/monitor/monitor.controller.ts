@@ -6,13 +6,21 @@ import { sendTelegramMessage } from '../telegram-bot/bot.service.js';
 import { sendDiscordPromo } from '../discord/discord.service.js';
 
 export const getStatus = async (_req: Request, res: Response): Promise<void> => {
-  const status = getTelemetry();
-  res.json({ success: true, data: status });
+  try {
+    const status = getTelemetry();
+    res.json({ success: true, data: status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: 'Erro ao obter telemetria: ' + (err?.message || 'desconhecido') });
+  }
 };
 
 export const getConnectionStatusEndpoint = async (_req: Request, res: Response): Promise<void> => {
-  const status = getConnectionStatus();
-  res.json({ success: true, data: status });
+  try {
+    const status = getConnectionStatus();
+    res.json({ success: true, data: status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: 'Erro ao obter status de conexão: ' + (err?.message || 'desconhecido') });
+  }
 };
 
 export const testConnection = async (_req: Request, res: Response): Promise<void> => {

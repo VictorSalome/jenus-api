@@ -3,6 +3,7 @@ import { buscarVagasBrasil, buscarVagasPorTecnologia, buscarVagasRemotas } from 
 import { calcularCompatibilidade } from "../buscas/match.service.js";
 import { logInfo, logError } from "../shared/utils/logger.js";
 import { apiKeyAuth, optionalApiKeyAuth } from "../shared/middleware/apiKeyAuth.js";
+import { asyncHandler } from "../../../shared/http/index.js";
 
 const router = Router();
 
@@ -12,7 +13,7 @@ const router = Router();
  * Query params: ?query=react&tags=javascript,typescript&limit=10
  * Autenticação: Opcional em dev, obrigatória em produção
  */
-router.get("/vagas", optionalApiKeyAuth, async (req: any, res: any) => {
+router.get("/vagas", optionalApiKeyAuth, asyncHandler(async (req: any, res: any) => {
   const startTime = Date.now();
   const { query = "", tags = "", limit = "10" } = req.query;
 
@@ -38,7 +39,7 @@ router.get("/vagas", optionalApiKeyAuth, async (req: any, res: any) => {
     logError("Erro na busca de vagas", err);
     res.status(500).json({ success: false, error: err.message });
   }
-});
+}));
 
 /**
  * GET /scraper/tecnologia/:tech
@@ -46,7 +47,7 @@ router.get("/vagas", optionalApiKeyAuth, async (req: any, res: any) => {
  * Ex: /scraper/tecnologia/react
  * Autenticação: Opcional em dev, obrigatória em produção
  */
-router.get("/tecnologia/:tech", optionalApiKeyAuth, async (req: any, res: any) => {
+router.get("/tecnologia/:tech", optionalApiKeyAuth, asyncHandler(async (req: any, res: any) => {
   const startTime = Date.now();
   const { tech } = req.params;
   const { nivel = "", limit = "5" } = req.query;
@@ -71,14 +72,14 @@ router.get("/tecnologia/:tech", optionalApiKeyAuth, async (req: any, res: any) =
     logError(`Erro na busca por tecnologia ${tech}`, err);
     res.status(500).json({ success: false, error: err.message });
   }
-});
+}));
 
 /**
  * GET /scraper/remoto
  * Busca vagas remotas
  * Autenticação: Opcional em dev, obrigatória em produção
  */
-router.get("/remoto", optionalApiKeyAuth, async (req: any, res: any) => {
+router.get("/remoto", optionalApiKeyAuth, asyncHandler(async (req: any, res: any) => {
   const startTime = Date.now();
   const { tecnologia = "", nivel = "pleno", limit = "10" } = req.query;
 
@@ -103,7 +104,7 @@ router.get("/remoto", optionalApiKeyAuth, async (req: any, res: any) => {
     logError("Erro na busca de vagas remotas", err);
     res.status(500).json({ success: false, error: err.message });
   }
-});
+}));
 
 /**
  * POST /scraper/batch
@@ -111,7 +112,7 @@ router.get("/remoto", optionalApiKeyAuth, async (req: any, res: any) => {
  * Body: { tecnologias: ["react", "nodejs"], limit: 10 }
  * Autenticação: Obrigatória
  */
-router.post("/batch", apiKeyAuth, async (req: any, res: any) => {
+router.post("/batch", apiKeyAuth, asyncHandler(async (req: any, res: any) => {
   const { tecnologias = [], limit = 10 } = req.body;
   const startTime = Date.now();
 
@@ -142,14 +143,14 @@ router.post("/batch", apiKeyAuth, async (req: any, res: any) => {
     logError("Erro na busca em lote", err);
     res.status(500).json({ success: false, error: err.message });
   }
-});
+}));
 
 /**
  * GET /scraper/status
  * Status do serviço de scraping
  * Autenticação: Opcional
  */
-router.get("/status", optionalApiKeyAuth, (req: any, res: any) => {
+router.get("/status", optionalApiKeyAuth, asyncHandler(async (req: any, res: any) => {
   res.json({
     success: true,
     status: "online",
@@ -165,6 +166,6 @@ router.get("/status", optionalApiKeyAuth, (req: any, res: any) => {
     },
     autenticado: req.apiClient?.key !== "anonymous"
   });
-});
+}));
 
 export default router;

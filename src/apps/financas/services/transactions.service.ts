@@ -6,6 +6,7 @@ import { buildFingerprint, normalizeMerchant } from "./duplicates.service.js";
 import { getMerchantByNormalized, createMerchant } from "./merchants.service.js";
 import { AppError } from "../shared/errors.js";
 import { guessCategoryForTransaction } from "./categories.service.js";
+import * as logger from "../../../core/logger.js";
 
 export type TransactionSource = "MANUAL" | "NOTIFICATION" | "IMPORT" | "OPEN_FINANCE";
 export type TransactionStatus = "PENDING" | "PAID" | "OVERDUE" | "CANCELLED";
@@ -255,7 +256,11 @@ export const createTransaction = async (
 
     await db.run("COMMIT");
   } catch (err) {
-    await db.run("ROLLBACK");
+    try {
+      await db.run("ROLLBACK");
+    } catch (rollbackErr) {
+      logger.warn(`Falha ao executar ROLLBACK em createTransaction: ${rollbackErr}`, "Transactions");
+    }
     throw err;
   }
 

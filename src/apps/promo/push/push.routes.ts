@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth, optionalAuth } from '../../../shared/auth/auth.middleware.js';
 import { pushController } from './push.controller.js';
+import { asyncHandler } from '../../../shared/http/index.js';
 
 const router = Router();
 
@@ -35,7 +36,7 @@ const router = Router();
  *                       created_at: { type: string, example: "2026-09-07 14:00:00" }
  *                       last_used_at: { type: string, example: "2026-09-07 15:30:00" }
  */
-router.get('/tokens', requireAuth, pushController.listTokens);
+router.get('/tokens', requireAuth, asyncHandler((req, res) => pushController.listTokens(req, res)));
 
 /**
  * @swagger
@@ -115,7 +116,7 @@ router.get('/tokens', requireAuth, pushController.listTokens);
  *       200:
  *         description: Push enviado com sucesso.
  */
-router.all('/send', requireAuth, pushController.sendManualPush);
+router.all('/send', requireAuth, asyncHandler((req, res) => pushController.sendManualPush(req, res)));
 
 /**
  * @swagger
@@ -137,7 +138,7 @@ router.all('/send', requireAuth, pushController.sendManualPush);
  *       400:
  *         description: Dados inválidos (token ou platform ausente).
  */
-router.post('/register', optionalAuth, pushController.register);
+router.post('/register', optionalAuth, asyncHandler((req, res) => pushController.register(req, res)));
 
 /**
  * @swagger
@@ -159,7 +160,7 @@ router.post('/register', optionalAuth, pushController.register);
  *       200:
  *         description: Token removido com sucesso.
  */
-router.post('/unregister', requireAuth, pushController.unregister);
+router.post('/unregister', requireAuth, asyncHandler((req, res) => pushController.unregister(req, res)));
 
 /**
  * @swagger
@@ -184,7 +185,7 @@ router.post('/unregister', requireAuth, pushController.unregister);
  *       200:
  *         description: Push enviado com sucesso.
  */
-router.post('/test', requireAuth, pushController.test);
+router.post('/test', requireAuth, asyncHandler((req, res) => pushController.test(req, res)));
 
 /**
  * @swagger
@@ -200,6 +201,6 @@ router.post('/test', requireAuth, pushController.test);
  *       200:
  *         description: Contagem retornada com sucesso.
  */
-router.get('/stats', requireAuth, pushController.stats);
+router.get('/stats', requireAuth, asyncHandler((req, res) => pushController.stats(req, res)));
 
 export default router;

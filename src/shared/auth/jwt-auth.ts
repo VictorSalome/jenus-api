@@ -134,48 +134,52 @@ export async function cleanupExpiredTokens(): Promise<void> {
  * Endpoint de refresh token
  */
 export const refreshToken = async (req: Request, res: Response): Promise<void> => {
-  const refreshToken = req.body.refreshToken || req.cookies?.refreshToken;
-  
-  if (!refreshToken) {
-    res.status(401).json({ success: false, message: 'Refresh token não fornecido' });
-    return;
+  try {
+    const refreshToken = req.body.refreshToken || req.cookies?.refreshToken;
+
+    if (!refreshToken) {
+      res.status(401).json({ success: false, message: 'Refresh token não fornecido' });
+      return;
+    }
+
+    const decoded = verifyRefreshToken(refreshToken);
+    if (!decoded) {
+      res.status(401).json({ success: false, message: 'Refresh token inválido' });
+      return;
+    }
+
+    // Extrai tokenId do payload
+    const tokenId = (decoded as any).tokenId;
+    const db = await getDb();
+    const stored = await db.get(
+      'SELECT * FROM auth_refresh_tokens WHERE token_id = ?',
+      tokenId,
+    );
+
+    if (!stored || stored.is_revoked) {
+      res.status(401).json({ success: false, message: 'Refresh token revogado' });
+      return;
+    }
+
+    // Gera novos tokens
+    const user = {
+      id: (decoded as any).userId,
+      email: (decoded as any).email,
+      role: (decoded as any).role,
+    };
+
+    const newAccessToken = generateAccessToken(user);
+    const newRefreshToken = await generateRefreshToken(user.id, (decoded as any).fingerprint);
+
+    res.json({
+      success: true,
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      user,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: 'Erro ao renovar token de autenticação', error: err?.message });
   }
-  
-  const decoded = verifyRefreshToken(refreshToken);
-  if (!decoded) {
-    res.status(401).json({ success: false, message: 'Refresh token inválido' });
-    return;
-  }
-  
-  // Extrai tokenId do payload
-  const tokenId = (decoded as any).tokenId;
-  const db = await getDb();
-  const stored = await db.get(
-    'SELECT * FROM auth_refresh_tokens WHERE token_id = ?',
-    tokenId,
-  );
-
-  if (!stored || stored.is_revoked) {
-    res.status(401).json({ success: false, message: 'Refresh token revogado' });
-    return;
-  }
-
-  // Gera novos tokens
-  const user = {
-    id: (decoded as any).userId,
-    email: (decoded as any).email,
-    role: (decoded as any).role,
-  };
-
-  const newAccessToken = generateAccessToken(user);
-  const newRefreshToken = await generateRefreshToken(user.id, (decoded as any).fingerprint);
-
-  res.json({
-    success: true,
-    accessToken: newAccessToken,
-    refreshToken: newRefreshToken,
-    user,
-  });
 };
 
 // Exporta para uso em controladores

@@ -30,10 +30,25 @@ let ultimaExecucao: Date | null = null;
 let indiceTermo = 0;
 const historico: ItemHistoricoScheduler[] = [];
 
+export type ExecutarCicloFn = (
+  termoCustomizado?: string,
+  limite?: number,
+) => Promise<ItemHistoricoScheduler>;
+
+let cicloOverride: ExecutarCicloFn | null = null;
+
+export const setExecutarCicloOverride = (fn: ExecutarCicloFn | null): void => {
+  cicloOverride = fn;
+};
+
 export const executarCiclo = async (
   termoCustomizado?: string,
   limite?: number,
 ): Promise<ItemHistoricoScheduler> => {
+  if (cicloOverride) {
+    return cicloOverride(termoCustomizado, limite);
+  }
+
   if (executando) {
     throw new Error("Um ciclo de prospecção já está em andamento");
   }

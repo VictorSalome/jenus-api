@@ -291,17 +291,22 @@ router.patch(
 
     if (skills && Array.isArray(skills)) {
       await db.exec("BEGIN TRANSACTION");
-      for (const item of skills) {
-        if (!item.category || !item.tech || !item.action) {
-          throw new ValidationError("Cada skill deve ter category, tech e action");
+      try {
+        for (const item of skills) {
+          if (!item.category || !item.tech || !item.action) {
+            throw new ValidationError("Cada skill deve ter category, tech e action");
+          }
+          if (item.action === "add") {
+            await db.run("INSERT OR REPLACE INTO curriculo_profile_skills (category, tech) VALUES (?, ?)", item.category, item.tech);
+          } else if (item.action === "remove") {
+            await db.run("DELETE FROM curriculo_profile_skills WHERE category = ? AND tech = ?", item.category, item.tech);
+          }
         }
-        if (item.action === "add") {
-          await db.run("INSERT OR REPLACE INTO curriculo_profile_skills (category, tech) VALUES (?, ?)", item.category, item.tech);
-        } else if (item.action === "remove") {
-          await db.run("DELETE FROM curriculo_profile_skills WHERE category = ? AND tech = ?", item.category, item.tech);
-        }
+        await db.exec("COMMIT");
+      } catch (txErr) {
+        try { await db.exec("ROLLBACK"); } catch {}
+        throw txErr;
       }
-      await db.exec("COMMIT");
     } else if (category && tech && action) {
       if (action === "add") {
         await db.run("INSERT OR REPLACE INTO curriculo_profile_skills (category, tech) VALUES (?, ?)", category, tech);
@@ -355,109 +360,114 @@ router.post(
 
     // Limpar tabelas
     await db.exec("BEGIN TRANSACTION");
-    await db.run("DELETE FROM curriculo_profile_personal");
-    await db.run("DELETE FROM curriculo_profile_experiences");
-    await db.run("DELETE FROM curriculo_profile_education");
-    await db.run("DELETE FROM curriculo_profile_certifications");
-    await db.run("DELETE FROM curriculo_profile_languages");
-    await db.run("DELETE FROM curriculo_profile_specializations");
-    await db.run("DELETE FROM curriculo_profile_skills");
+    try {
+      await db.run("DELETE FROM curriculo_profile_personal");
+      await db.run("DELETE FROM curriculo_profile_experiences");
+      await db.run("DELETE FROM curriculo_profile_education");
+      await db.run("DELETE FROM curriculo_profile_certifications");
+      await db.run("DELETE FROM curriculo_profile_languages");
+      await db.run("DELETE FROM curriculo_profile_specializations");
+      await db.run("DELETE FROM curriculo_profile_skills");
 
-    // personalInfo
-    const pi = profileData.personalInfo || {};
-    await db.run(
-      `INSERT INTO curriculo_profile_personal (id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary) VALUES (1,?,?,?,?,?,?,?,?,?,?)`,
-      pi.name, pi.email, pi.phone, pi.hasWhatsApp !== false ? 1 : 0,
-      pi.linkedin, pi.github, pi.portfolio, pi.location, pi.title, pi.summary
-    );
+      // personalInfo
+      const pi = profileData.personalInfo || {};
+      await db.run(
+        `INSERT INTO curriculo_profile_personal (id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary) VALUES (1,?,?,?,?,?,?,?,?,?,?)`,
+        pi.name, pi.email, pi.phone, pi.hasWhatsApp !== false ? 1 : 0,
+        pi.linkedin, pi.github, pi.portfolio, pi.location, pi.title, pi.summary
+      );
 
-    // experiences
-    let expCount = 0;
-    if (Array.isArray(profileData.experiences)) {
-      for (let i = 0; i < profileData.experiences.length; i++) {
-        const exp = profileData.experiences[i];
-        await db.run(
-          `INSERT INTO curriculo_profile_experiences (id, company, position, start_date, end_date, location, description, keywords_json, achievements_json, technologies_json, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-          exp.id || `exp_${i}`, exp.company, exp.position, exp.startDate, exp.endDate,
-          exp.location, exp.description, JSON.stringify(exp.keywords || []),
-          JSON.stringify(exp.achievements || []), JSON.stringify(exp.technologies || []), i
-        );
-        expCount++;
-      }
-    }
-
-    // education
-    let eduCount = 0;
-    if (Array.isArray(profileData.education)) {
-      for (let i = 0; i < profileData.education.length; i++) {
-        const edu = profileData.education[i];
-        await db.run(
-          `INSERT INTO curriculo_profile_education (id, institution, degree, start_date, end_date, location, gpa, description, sort_order) VALUES (?,?,?,?,?,?,?,?,?)`,
-          edu.id || `edu_${i}`, edu.institution, edu.degree, edu.startDate, edu.endDate,
-          edu.location, edu.gpa, edu.description, i
-        );
-        eduCount++;
-      }
-    }
-
-    // certifications
-    let certCount = 0;
-    if (Array.isArray(profileData.certifications)) {
-      for (let i = 0; i < profileData.certifications.length; i++) {
-        const cert = profileData.certifications[i];
-        await db.run(
-          `INSERT INTO curriculo_profile_certifications (id, name, issuer, date, credential_id, url, type, description, sort_order) VALUES (?,?,?,?,?,?,?,?,?)`,
-          cert.id || `cert_${i}`, cert.name, cert.issuer, cert.date || null,
-          cert.credentialId || "", cert.url || "", cert.type || 'curso', cert.description || null, i
-        );
-        certCount++;
-      }
-    }
-
-    // languages
-    let langCount = 0;
-    if (Array.isArray(profileData.languages)) {
-      for (let i = 0; i < profileData.languages.length; i++) {
-        const lang = profileData.languages[i];
-        await db.run(
-          `INSERT INTO curriculo_profile_languages (language, level, sort_order) VALUES (?,?,?)`,
-          lang.language, lang.level, i
-        );
-        langCount++;
-      }
-    }
-
-    // specializations
-    let specCount = 0;
-    if (Array.isArray(profileData.specializations)) {
-      for (let i = 0; i < profileData.specializations.length; i++) {
-        await db.run(
-          `INSERT INTO curriculo_profile_specializations (text, sort_order) VALUES (?,?)`,
-          profileData.specializations[i], i
-        );
-        specCount++;
-      }
-    }
-
-    // skills
-    let skillCount = 0;
-    if (profileData.skills) {
-      for (const [category, techs] of Object.entries(profileData.skills)) {
-        for (const tech of techs as string[]) {
-          await db.run("INSERT OR IGNORE INTO curriculo_profile_skills (category, tech) VALUES (?,?)", category, tech);
-          skillCount++;
+      // experiences
+      let expCount = 0;
+      if (Array.isArray(profileData.experiences)) {
+        for (let i = 0; i < profileData.experiences.length; i++) {
+          const exp = profileData.experiences[i];
+          await db.run(
+            `INSERT INTO curriculo_profile_experiences (id, company, position, start_date, end_date, location, description, keywords_json, achievements_json, technologies_json, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+            exp.id || `exp_${i}`, exp.company, exp.position, exp.startDate, exp.endDate,
+            exp.location, exp.description, JSON.stringify(exp.keywords || []),
+            JSON.stringify(exp.achievements || []), JSON.stringify(exp.technologies || []), i
+          );
+          expCount++;
         }
       }
+
+      // education
+      let eduCount = 0;
+      if (Array.isArray(profileData.education)) {
+        for (let i = 0; i < profileData.education.length; i++) {
+          const edu = profileData.education[i];
+          await db.run(
+            `INSERT INTO curriculo_profile_education (id, institution, degree, start_date, end_date, location, gpa, description, sort_order) VALUES (?,?,?,?,?,?,?,?,?)`,
+            edu.id || `edu_${i}`, edu.institution, edu.degree, edu.startDate, edu.endDate,
+            edu.location, edu.gpa, edu.description, i
+          );
+          eduCount++;
+        }
+      }
+
+      // certifications
+      let certCount = 0;
+      if (Array.isArray(profileData.certifications)) {
+        for (let i = 0; i < profileData.certifications.length; i++) {
+          const cert = profileData.certifications[i];
+          await db.run(
+            `INSERT INTO curriculo_profile_certifications (id, name, issuer, date, credential_id, url, type, description, sort_order) VALUES (?,?,?,?,?,?,?,?,?)`,
+            cert.id || `cert_${i}`, cert.name, cert.issuer, cert.date || null,
+            cert.credentialId || "", cert.url || "", cert.type || 'curso', cert.description || null, i
+          );
+          certCount++;
+        }
+      }
+
+      // languages
+      let langCount = 0;
+      if (Array.isArray(profileData.languages)) {
+        for (let i = 0; i < profileData.languages.length; i++) {
+          const lang = profileData.languages[i];
+          await db.run(
+            `INSERT INTO curriculo_profile_languages (language, level, sort_order) VALUES (?,?,?)`,
+            lang.language, lang.level, i
+          );
+          langCount++;
+        }
+      }
+
+      // specializations
+      let specCount = 0;
+      if (Array.isArray(profileData.specializations)) {
+        for (let i = 0; i < profileData.specializations.length; i++) {
+          await db.run(
+            `INSERT INTO curriculo_profile_specializations (text, sort_order) VALUES (?,?)`,
+            profileData.specializations[i], i
+          );
+          specCount++;
+        }
+      }
+
+      // skills
+      let skillCount = 0;
+      if (profileData.skills) {
+        for (const [category, techs] of Object.entries(profileData.skills)) {
+          for (const tech of techs as string[]) {
+            await db.run("INSERT OR IGNORE INTO curriculo_profile_skills (category, tech) VALUES (?,?)", category, tech);
+            skillCount++;
+          }
+        }
+      }
+
+      await db.exec("COMMIT");
+
+      logInfo("Perfil recarregado do candidate-profile.json", { expCount, eduCount, certCount, langCount, specCount, skillCount });
+      res.json({
+        success: true,
+        message: "Perfil recarregado com sucesso",
+        counts: { experiences: expCount, education: eduCount, certifications: certCount, languages: langCount, specializations: specCount, skills: skillCount },
+      });
+    } catch (reloadErr) {
+      try { await db.exec("ROLLBACK"); } catch {}
+      throw reloadErr;
     }
-
-    await db.exec("COMMIT");
-
-    logInfo("Perfil recarregado do candidate-profile.json", { expCount, eduCount, certCount, langCount, specCount, skillCount });
-    res.json({
-      success: true,
-      message: "Perfil recarregado com sucesso",
-      counts: { experiences: expCount, education: eduCount, certifications: certCount, languages: langCount, specializations: specCount, skills: skillCount },
-    });
   })
 );
 

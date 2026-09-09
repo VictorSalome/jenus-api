@@ -28,6 +28,18 @@ export const getDb = async (): Promise<Database<sqlite3.Database, sqlite3.Statem
       filename: config.DATABASE_PATH,
       driver: sqlite3.Database
     });
+
+    // Configurações essenciais para estabilidade do SQLite em produção:
+    // 1. WAL mode permite leituras concorrentes a escritas sem travar o banco.
+    // 2. busy_timeout evita erros imediatos de "SQLITE_BUSY: database is locked" aguardando até 5000ms.
+    // 3. foreign_keys ativa integridade referencial nativa do SQLite.
+    try {
+      await db.exec('PRAGMA journal_mode = WAL;');
+      await db.exec('PRAGMA busy_timeout = 5000;');
+      await db.exec('PRAGMA foreign_keys = ON;');
+    } catch (pragmaErr) {
+      logger.warn(`Falha ao aplicar PRAGMAs no SQLite: ${pragmaErr}`, 'Database');
+    }
   }
   return db;
 };

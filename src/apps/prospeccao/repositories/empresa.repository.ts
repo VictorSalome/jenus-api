@@ -122,30 +122,38 @@ export const salvarEmpresa = async (
   }
 
   const id = dados.id || randomUUID();
-  await db.run(
-    `INSERT INTO prospeccao_empresas (
-       id, nome, slug, segmento, cidade, bairro, endereco,
-       telefone, whatsapp, email, maps_url, avaliacao,
-       total_avaliacoes, fotos, status, motivo_rejeicao,
-       created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-    id,
-    dados.nome,
-    dados.slug,
-    dados.segmento ?? null,
-    dados.cidade ?? null,
-    dados.bairro ?? null,
-    dados.endereco ?? null,
-    dados.telefone ?? null,
-    dados.whatsapp ?? null,
-    dados.email ?? null,
-    dados.maps_url ?? null,
-    dados.avaliacao ?? null,
-    dados.total_avaliacoes ?? null,
-    fotosStr,
-    dados.status ?? StatusLead.PENDENTE,
-    dados.motivo_rejeicao ?? null
-  );
+  try {
+    await db.run(
+      `INSERT INTO prospeccao_empresas (
+         id, nome, slug, segmento, cidade, bairro, endereco,
+         telefone, whatsapp, email, maps_url, avaliacao,
+         total_avaliacoes, fotos, status, motivo_rejeicao,
+         created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      id,
+      dados.nome,
+      dados.slug,
+      dados.segmento ?? null,
+      dados.cidade ?? null,
+      dados.bairro ?? null,
+      dados.endereco ?? null,
+      dados.telefone ?? null,
+      dados.whatsapp ?? null,
+      dados.email ?? null,
+      dados.maps_url ?? null,
+      dados.avaliacao ?? null,
+      dados.total_avaliacoes ?? null,
+      fotosStr,
+      dados.status ?? StatusLead.PENDENTE,
+      dados.motivo_rejeicao ?? null
+    );
+  } catch (insertErr: any) {
+    if (insertErr?.message?.includes("UNIQUE constraint failed") && dados.slug) {
+      const bySlug = await buscarPorSlug(dados.slug);
+      if (bySlug) return bySlug;
+    }
+    throw insertErr;
+  }
 
   return (await buscarPorId(id))!;
 };

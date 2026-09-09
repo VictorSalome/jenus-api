@@ -8,7 +8,32 @@ import { extractAmountCents, extractInstallments, extractMerchant, titleAndText 
  */
 const KEYWORDS = /(compra|pagamento|parcel|débito|crédito|cartã|fatura|pix|transfer|aprovad|feita|realizad|gasto|cobrança|transação|valor|reais|reias|uber|ifood|mercado|amazon|magalu)/i;
 
+const NON_FINANCE_APPS = [
+  'telegram',
+  'whatsapp',
+  'discord',
+  'instagram',
+  'facebook',
+  'twitter',
+  'reddit',
+  'tiktok',
+  'youtube',
+  'chrome',
+  'browser',
+  'firefox',
+  'gmail',
+  'outlook',
+];
+
 const matches = (raw: RawNotification): boolean => {
+  const pkg = (raw.packageName || '').toLowerCase();
+  const label = (raw.appLabel || '').toLowerCase();
+
+  // Bloqueia categoricamente mensageiros, redes sociais e navegadores
+  if (NON_FINANCE_APPS.some((app) => pkg.includes(app) || label.includes(app))) {
+    return false;
+  }
+
   const text = titleAndText(raw);
   return KEYWORDS.test(text) && Boolean(extractAmountCents(text));
 };

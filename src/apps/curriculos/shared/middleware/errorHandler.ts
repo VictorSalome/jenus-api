@@ -224,29 +224,6 @@ export const notFoundHandler = (
   next(error);
 };
 
-process.on('uncaughtException', (error: Error) => {
-  logError('Exceção não capturada', error);
-  console.error('UNCAUGHT EXCEPTION! Shutting down...');
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (reason: unknown) => {
-  const r = reason as Error | undefined;
-  logError('Promise rejeitada não tratada', {
-    reason: r?.message || String(reason),
-    stack: r?.stack,
-  });
-  console.error('UNHANDLED REJECTION! Shutting down...');
-  process.exit(1);
-});
-
-const gracefulShutdown = (signal: string): void => {
-  console.log(`\n${signal} received. Shutting down gracefully...`);
-  process.exit(0);
-};
-
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 export const requestIdMiddleware = (
   req: Request & { id?: string },

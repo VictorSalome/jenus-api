@@ -11,6 +11,7 @@ import {
   analisarVagaController,
 } from "./analisar.controller.js";
 import { getDb } from "../../../core/database.js";
+import { asyncHandler } from "../../../shared/http/index.js";
 
 const router = express.Router();
 
@@ -85,15 +86,15 @@ const requirePdfPreviewToken = (req: any, res: any, next: any) => {
   );
 };
 
-router.get("/status", statusController);
-router.get("/health", statusController);
-router.post("/analisar-vaga", analisarVagaController);
-router.post("/gerar-curriculo", gerarCurriculoController);
-router.post("/enviar-curriculo", enviarCurriculoController);
+router.get("/status", asyncHandler(statusController));
+router.get("/health", asyncHandler(statusController));
+router.post("/analisar-vaga", asyncHandler(analisarVagaController));
+router.post("/gerar-curriculo", asyncHandler(gerarCurriculoController));
+router.post("/enviar-curriculo", asyncHandler(enviarCurriculoController));
 
 // Rota explícita para download/visualização do PDF na pasta temp (sem auth - usa pdf-preview token)
 export const pdfPreviewRouter = express.Router();
-pdfPreviewRouter.get('/temp/:filename', requirePdfPreviewToken, async (req: any, res: any) => {
+pdfPreviewRouter.get('/temp/:filename', requirePdfPreviewToken, asyncHandler(async (req: any, res: any) => {
   const safeFilename = path.basename(req.params.filename);
   const filePath = path.join(config.paths.temp, safeFilename);
 
@@ -118,15 +119,15 @@ pdfPreviewRouter.get('/temp/:filename', requirePdfPreviewToken, async (req: any,
       });
     }
   });
-});
+}));
 
 // Rota para regerar PDF a partir de um envio
-router.post("/envios/:id/regerar-pdf", requireAuth, async (req: any, res: any) => {
+router.post("/envios/:id/regerar-pdf", requireAuth, asyncHandler(async (req: any, res: any) => {
   try {
     const envioId = req.params.id;
     const db = await getDb();
     const envio = await db.get("SELECT * FROM curriculo_envios WHERE id = ?", envioId);
-    
+
     if (!envio) {
       return res.status(404).json({ success: false, error: { message: "Envio não encontrado" } });
     }
@@ -143,7 +144,7 @@ router.post("/envios/:id/regerar-pdf", requireAuth, async (req: any, res: any) =
 
     const snapshot = JSON.parse(envio.curriculo_snapshot);
     const vaga = await db.get("SELECT * FROM curriculo_vagas WHERE id = ?", envio.vaga_id);
-    
+
     const dadosVaga = {
       titulo: envio.vaga_titulo,
       empresa: vaga?.company || "",
@@ -161,14 +162,14 @@ router.post("/envios/:id/regerar-pdf", requireAuth, async (req: any, res: any) =
       previewUrl: `/api/curriculo/temp/${filename}`,
       filename,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro ao regerar PDF:", error);
     return res.status(500).json({ success: false, error: { message: error.message || "Erro interno" } });
   }
-});
+}));
 
 // Rota para gerar token temporário
-router.post('/temp/:filename/token', requireAuth, async (req: any, res: any) => {
+router.post('/temp/:filename/token', requireAuth, asyncHandler(async (req: any, res: any) => {
   try {
     const { filename } = req.params;
     const safeFilename = path.basename(filename);
@@ -211,7 +212,7 @@ router.post('/temp/:filename/token', requireAuth, async (req: any, res: any) => 
       token,
       expiresIn: 300,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao gerar token temporário:', error);
     res.status(500).json({
       success: false,
@@ -221,6 +222,6 @@ router.post('/temp/:filename/token', requireAuth, async (req: any, res: any) => 
       },
     });
   }
-});
+}));
 
 export default router;

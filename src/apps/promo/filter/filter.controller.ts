@@ -70,7 +70,11 @@ export const updateCategory = async (req: Request, res: Response): Promise<void>
     
     await filterRepo.updateCategory(id, { name: name?.trim(), color });
     res.json({ success: true, message: 'Categoria atualizada' });
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.message?.includes('UNIQUE constraint failed')) {
+      res.status(409).json({ success: false, message: 'Já existe uma categoria com esse nome' });
+      return;
+    }
     res.status(500).json({ success: false, message: 'Erro ao atualizar categoria' });
   }
 };
@@ -128,7 +132,11 @@ export const updateFilter = async (req: Request, res: Response): Promise<void> =
     const keywordsValue = Array.isArray(keywords) ? keywords : (keywords ? keywords.split(',').map((k: string) => k.trim()).filter((k: string) => k) : null);
     await filterRepo.updateFilter(id, { name: name?.trim(), type, keywords: keywordsValue });
     res.json({ success: true, message: 'Filtro atualizado' });
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.message?.includes('UNIQUE constraint failed')) {
+      res.status(409).json({ success: false, message: 'Já existe um filtro com esse nome nesta categoria' });
+      return;
+    }
     res.status(500).json({ success: false, message: 'Erro ao atualizar filtro' });
   }
 };

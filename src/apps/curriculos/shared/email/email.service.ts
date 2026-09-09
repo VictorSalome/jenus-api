@@ -519,10 +519,14 @@ export const enviarCurriculoComRegistro = async ({
     envioId = result.lastID;
     await db.exec("COMMIT");
     logInfo("Envio registrado como PENDING", { envioId, emailDestino });
-  } catch (error) {
-    await db.exec("ROLLBACK");
+  } catch (error: any) {
+    try {
+      await db.exec("ROLLBACK");
+    } catch (rollbackErr) {
+      logError("Falha ao executar ROLLBACK em envio PENDING", rollbackErr);
+    }
     logError("Erro ao registrar envio PENDING", error);
-    throw new Error(`Falha ao registrar envio: ${error.message}`);
+    throw new Error(`Falha ao registrar envio: ${error?.message || error}`);
   }
   
   // 2. Tentar envio
