@@ -93,16 +93,20 @@ export class NotificationDispatcher {
           `[Dispatcher] Notificação ${typeId} suspensa devido ao Horário de Silêncio (${pref.quiet_hours_start} - ${pref.quiet_hours_end})`,
           'Notifications',
         );
-        await db.run(
-          `INSERT INTO notifications_log (user_id, type_id, title, body, payload_json, fingerprint, status)
-           VALUES (?, ?, ?, ?, ?, ?, 'skipped_quiet_hours')`,
-          userId,
-          typeId,
-          options.title || type.name,
-          options.body || '',
-          JSON.stringify(options.data || {}),
-          options.fingerprint || null,
-        );
+        try {
+          await db.run(
+            `INSERT OR IGNORE INTO notifications_log (user_id, type_id, title, body, payload_json, fingerprint, status)
+             VALUES (?, ?, ?, ?, ?, ?, 'skipped_quiet_hours')`,
+            userId,
+            typeId,
+            options.title || type.name,
+            options.body || '',
+            JSON.stringify(options.data || {}),
+            options.fingerprint || null,
+          );
+        } catch (dbErr: any) {
+          logger.warn(`[Dispatcher] Erro ao registrar log de quiet hours: ${dbErr.message}`, 'Notifications');
+        }
         return { success: false, reason: 'skipped_quiet_hours' };
       }
     }
@@ -133,17 +137,22 @@ export class NotificationDispatcher {
     }
 
     // 8. Registro de Auditoria no Banco de Dados
-    const result = await db.run(
-      `INSERT INTO notifications_log (user_id, type_id, title, body, payload_json, fingerprint, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      userId,
-      typeId,
-      title,
-      body,
-      JSON.stringify(payloadData),
-      options.fingerprint || null,
-      pushResult.sent > 0 ? 'sent' : 'failed',
-    );
+    let result;
+    try {
+      result = await db.run(
+        `INSERT OR IGNORE INTO notifications_log (user_id, type_id, title, body, payload_json, fingerprint, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        userId,
+        typeId,
+        title,
+        body,
+        JSON.stringify(payloadData),
+        options.fingerprint || null,
+        pushResult.sent > 0 ? 'sent' : 'failed',
+      );
+    } catch (dbErr: any) {
+      logger.warn(`[Dispatcher] Erro ao registrar log de notificação: ${dbErr.message}`, 'Notifications');
+    }
 
     logger.info(
       `[Dispatcher] Notificação disparada: [${typeId}] "${title}" -> ${pushResult.sent} dispositivos entregues`,
