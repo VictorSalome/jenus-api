@@ -175,6 +175,10 @@ export const getDebt = async (userId: string, id: number) => {
 };
 
 export const createDebt = async (userId: string, data: CreateDebtInput) => {
+  if (!Number.isInteger(data.amountCents) || data.amountCents <= 0) {
+    throw new Error("Valor da dívida deve ser um número inteiro de centavos maior que zero");
+  }
+
   const db = await getDb();
   const startMonth = data.startMonth || currentMonthKey();
   const dueDay = Math.max(1, Math.min(31, data.dueDay || 10));
@@ -213,6 +217,13 @@ export const updateDebt = async (
   id: number,
   data: UpdateDebtInput,
 ) => {
+  if (
+    data.amountCents !== undefined &&
+    (!Number.isInteger(data.amountCents) || data.amountCents <= 0)
+  ) {
+    throw new Error("Valor da dívida deve ser um número inteiro de centavos maior que zero");
+  }
+
   const db = await getDb();
   const existing = await getDebt(userId, id);
   if (!existing) return null;
@@ -277,8 +288,8 @@ export const addPayment = async (
     throw new Error("Ocorrência de dívida não encontrada");
   }
 
-  if (data.amountCents <= 0) {
-    throw new Error("Valor do pagamento deve ser maior que zero");
+  if (data.amountCents <= 0 || !Number.isInteger(data.amountCents)) {
+    throw new Error("Valor do pagamento deve ser um número inteiro de centavos maior que zero");
   }
 
   const paidDate = data.paidDate || todayDateKey();
@@ -409,7 +420,16 @@ export const getRecurringSuggestions = async (userId: string): Promise<DebtSugge
   const rows = await db.all<any[]>(
     `SELECT COALESCE(m.name, t.description, 'Despesa') as title,
             t.amount_cents,
-            t.category_id,
+            (
+              SELECT t2.category_id
+                FROM fin_transactions t2
+                LEFT JOIN fin_merchants m2 ON m2.id = t2.merchant_id
+               WHERE t2.user_id = t.user_id
+                 AND t2.amount_cents = t.amount_cents
+                 AND COALESCE(m2.name, t2.description, 'Despesa') = COALESCE(m.name, t.description, 'Despesa')
+               ORDER BY t2.transaction_date DESC, t2.id DESC
+               LIMIT 1
+            ) as category_id,
             strftime('%d', t.transaction_date) as day_of_month,
             COUNT(DISTINCT substr(t.transaction_date, 1, 7)) as distinct_months,
             COUNT(*) as total_count

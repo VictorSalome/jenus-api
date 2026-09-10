@@ -705,7 +705,7 @@ export const enviarCurriculoTesteHTML = asyncHandler(async (req, res) => {
  * @param {Object} req - Request object
  * @param {Object} res - Response object
  */
-export const visualizarCurriculoHTML = async (req, res) => {
+export const visualizarCurriculoHTML = async (req, res, next) => {
   try {
     logInfo("Gerando visualização do currículo HTML");
 
@@ -720,12 +720,6 @@ export const visualizarCurriculoHTML = async (req, res) => {
     res.send(curriculoHTML);
   } catch (error) {
     logError("Erro na geração do currículo HTML", error);
-
-    res.status(500).json({
-      status: "erro",
-      mensagem: "Falha na geração do currículo HTML",
-      erro: error.message,
-      timestamp: new Date().toISOString(),
-    });
+    next(error);
   }
 };

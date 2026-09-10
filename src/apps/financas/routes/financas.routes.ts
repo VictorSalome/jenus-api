@@ -1,6 +1,8 @@
 import { Router } from "express";
+import multer from "multer";
 
 import * as accounts from "../controllers/accounts.controller.js";
+import * as importTx from "../controllers/import.controller.js";
 import * as cards from "../controllers/cards.controller.js";
 import * as categories from "../controllers/categories.controller.js";
 import * as merchants from "../controllers/merchants.controller.js";
@@ -16,6 +18,10 @@ import { asyncHandler } from "../shared/errors.js";
 import { requireAuth, optionalAuth } from "../../../shared/auth/auth.middleware.js";
 
 const router = Router();
+const uploadXlsx = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+});
 
 /**
  * @swagger
@@ -109,6 +115,13 @@ router.get("/transactions", asyncHandler(transactions.list));
 router.post("/transactions", asyncHandler(transactions.create));
 router.put("/transactions/:id", asyncHandler(transactions.update));
 router.delete("/transactions/:id", asyncHandler(transactions.remove));
+
+router.get("/transactions/import/template", asyncHandler(importTx.downloadTemplate));
+router.post(
+  "/transactions/import",
+  uploadXlsx.single("file"),
+  asyncHandler(importTx.importTransactions),
+);
 
 router.get("/installments", asyncHandler(installments.list));
 router.get("/installments/future", asyncHandler(installments.future));

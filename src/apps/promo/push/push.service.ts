@@ -6,6 +6,7 @@ import { execSync } from 'child_process';
 import { initializeApp, cert, type App } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 import { getDb } from '../../../core/database.js';
+import * as logger from '../../../core/logger.js';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const CHUNK_SIZE = 100;
@@ -38,11 +39,15 @@ function getFirebaseApp(): App | null {
         },
         'jenus-hub'
       );
-      console.log('[FirebaseAdmin] ✅ Inicializado com sucesso para projeto:', serviceAccount.project_id);
+      logger.info(`Inicializado com sucesso para projeto: ${serviceAccount.project_id}`, 'FirebaseAdmin');
       return firebaseApp;
     }
-  } catch (err) {
-    console.warn('[FirebaseAdmin] Aviso ao inicializar Firebase Admin:', err);
+    logger.warn(
+      'Nenhuma credencial encontrada (FIREBASE_SERVICE_ACCOUNT_JSON ou secrets/firebase-service-account.json) — pushes FCM nativos não serão enviados.',
+      'FirebaseAdmin'
+    );
+  } catch (err: any) {
+    logger.error(`Aviso ao inicializar Firebase Admin: ${err?.message || err}`, 'FirebaseAdmin');
   }
 
   return null;
@@ -59,7 +64,10 @@ async function sendFcmNotification(
 ): Promise<boolean> {
   const app = getFirebaseApp();
   if (!app) {
-    console.warn('[PushService] Firebase Admin não inicializado (adicione secrets/firebase-service-account.json ou FIREBASE_SERVICE_ACCOUNT_JSON).');
+    logger.warn(
+      'Firebase Admin não inicializado (adicione secrets/firebase-service-account.json ou FIREBASE_SERVICE_ACCOUNT_JSON).',
+      'PushService'
+    );
     return false;
   }
 
@@ -93,8 +101,16 @@ async function sendFcmNotification(
     });
     return true;
   } catch (error: any) {
-    console.warn('[PushService] Erro ao enviar push FCM:', error?.message || error);
-    if (error?.code === 'messaging/registration-token-not-registered') {
+    logger.warn(`Erro ao enviar push FCM: ${error?.message || error}`, 'PushService');
+    // Erros permanentes do FCM que indicam token morto/inválido — não
+    // adianta tentar de novo, desativa pra não continuar falhando à toa.
+    const deadTokenCodes = [
+      'messaging/registration-token-not-registered',
+      'messaging/invalid-registration-token',
+      'messaging/invalid-argument',
+      'messaging/mismatched-credential',
+    ];
+    if (deadTokenCodes.includes(error?.code)) {
       void unregisterToken(token);
     }
     return false;
@@ -165,12 +181,21 @@ export async function registerToken(token: string, platform: string, userId?: st
       'UPDATE promo_device_tokens SET is_active = 1, platform = ?, user_id = COALESCE(?, user_id), last_used_at = datetime("now") WHERE token = ?',
       platform, userId || null, token
     );
-  } else {
-    await db.run(
-      'INSERT INTO promo_device_tokens (token, platform, is_active, user_id) VALUES (?, ?, 1, ?)',
-      token, platform, userId || null
-    );
+    return;
   }
+
+  // INSERT OR IGNORE: se duas requests concorrentes registrarem o mesmo
+  // token (UNIQUE em `token`), a segunda cai no IGNORE em vez de estourar
+  // SQLITE_CONSTRAINT como erro 500 — e ainda garante o UPDATE de
+  // reativação/last_used_at pro caso de ela ter perdido a corrida do INSERT.
+  await db.run(
+    'INSERT OR IGNORE INTO promo_device_tokens (token, platform, is_active, user_id) VALUES (?, ?, 1, ?)',
+    token, platform, userId || null
+  );
+  await db.run(
+    'UPDATE promo_device_tokens SET is_active = 1, platform = ?, user_id = COALESCE(?, user_id), last_used_at = datetime("now") WHERE token = ?',
+    platform, userId || null, token
+  );
 }
 
 // Deactivate a device token

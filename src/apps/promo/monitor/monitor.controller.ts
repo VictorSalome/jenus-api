@@ -1,25 +1,25 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { startMonitor, stopMonitor } from './monitor.service.js';
 import { startTelegramMonitor } from './monitor.telegram.js';
 import { getConnectionStatus, getTelemetry } from './monitor.state.js';
 import { sendTelegramMessage } from '../telegram-bot/bot.service.js';
 import { sendDiscordPromo } from '../discord/discord.service.js';
 
-export const getStatus = async (_req: Request, res: Response): Promise<void> => {
+export const getStatus = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const status = getTelemetry();
     res.json({ success: true, data: status });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: 'Erro ao obter telemetria: ' + (err?.message || 'desconhecido') });
+    next(err);
   }
 };
 
-export const getConnectionStatusEndpoint = async (_req: Request, res: Response): Promise<void> => {
+export const getConnectionStatusEndpoint = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const status = getConnectionStatus();
     res.json({ success: true, data: status });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: 'Erro ao obter status de conexão: ' + (err?.message || 'desconhecido') });
+    next(err);
   }
 };
 

@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import fetch from "node-fetch";
 import * as repo from "./telegram-bot-config.repository.js";
 
@@ -9,7 +9,7 @@ const maskToken = (token: string): string => {
   return `${id}:${secret.slice(0, 4)}...${tail}`;
 };
 
-export const getConfig = async (_req: Request, res: Response): Promise<void> => {
+export const getConfig = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const config = await repo.getConfig();
     if (!config) {
@@ -25,11 +25,11 @@ export const getConfig = async (_req: Request, res: Response): Promise<void> => 
       },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: "Erro ao obter configuração do bot: " + (err?.message || "desconhecido") });
+    next(err);
   }
 };
 
-export const saveConfig = async (req: Request, res: Response): Promise<void> => {
+export const saveConfig = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { botToken, groupId } = req.body ?? {};
     if (!botToken || typeof botToken !== "string" || !botToken.trim()) {
@@ -44,20 +44,20 @@ export const saveConfig = async (req: Request, res: Response): Promise<void> => 
     await repo.saveConfig(botToken.trim(), groupId.trim());
     res.json({ success: true, data: { botToken: maskToken(botToken.trim()), groupId: groupId.trim() } });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: "Erro ao salvar configuração do bot: " + (err?.message || "desconhecido") });
+    next(err);
   }
 };
 
-export const revokeConfig = async (_req: Request, res: Response): Promise<void> => {
+export const revokeConfig = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     await repo.clearConfig();
     res.json({ success: true, message: "Configuração removida. Cadastre um novo token gerado no @BotFather." });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: "Erro ao remover configuração do bot: " + (err?.message || "desconhecido") });
+    next(err);
   }
 };
 
-export const testToken = async (req: Request, res: Response): Promise<void> => {
+export const testToken = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   let botToken: string | undefined = req.body?.botToken;
 
   if (!botToken) {
@@ -87,6 +87,6 @@ export const testToken = async (req: Request, res: Response): Promise<void> => {
       botUsername: data.result?.username ? `@${data.result.username}` : undefined,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: "Erro ao validar token: " + (err?.message || "desconhecido") });
+    next(err);
   }
 };

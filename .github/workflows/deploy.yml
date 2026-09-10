@@ -35,6 +35,12 @@ jobs:
           chmod 600 ~/.ssh/oracle.key
           ssh-keyscan -H 136.248.109.21 >> ~/.ssh/known_hosts
 
+      - name: Deploy Firebase Service Account
+        run: |
+          echo "🔑 Enviando credencial do Firebase Admin (secrets/firebase-service-account.json)..."
+          ssh -i ~/.ssh/oracle.key ubuntu@136.248.109.21 'mkdir -p /home/ubuntu/jenus-api/secrets'
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' | ssh -i ~/.ssh/oracle.key ubuntu@136.248.109.21 'cat > /home/ubuntu/jenus-api/secrets/firebase-service-account.json'
+
       - name: Deploy to Oracle Cloud VM
         run: |
           echo "🌐 Conectando à Oracle VM..."

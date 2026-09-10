@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import fetch from "node-fetch";
 import * as repo from "./discord-webhook-config.repository.js";
 
@@ -9,7 +9,7 @@ const maskUrl = (url: string): string => {
   return `${url.slice(0, 40)}...${url.slice(-6)}`;
 };
 
-export const getConfig = async (_req: Request, res: Response): Promise<void> => {
+export const getConfig = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const config = await repo.getConfig();
     if (!config) {
@@ -24,11 +24,11 @@ export const getConfig = async (_req: Request, res: Response): Promise<void> => 
       },
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: "Erro ao obter configuração de webhook: " + (err?.message || "desconhecido") });
+    next(err);
   }
 };
 
-export const saveConfig = async (req: Request, res: Response): Promise<void> => {
+export const saveConfig = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { webhookUrl } = req.body ?? {};
     if (!webhookUrl || typeof webhookUrl !== "string" || !webhookUrl.trim()) {
@@ -47,11 +47,11 @@ export const saveConfig = async (req: Request, res: Response): Promise<void> => 
     await repo.saveConfig(trimmed);
     res.json({ success: true, data: { webhookUrl: maskUrl(trimmed) } });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: "Erro ao salvar webhook: " + (err?.message || "desconhecido") });
+    next(err);
   }
 };
 
-export const testWebhook = async (req: Request, res: Response): Promise<void> => {
+export const testWebhook = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   let webhookUrl: string | undefined = req.body?.webhookUrl;
 
   if (!webhookUrl) {
@@ -92,7 +92,7 @@ export const testWebhook = async (req: Request, res: Response): Promise<void> =>
 
     res.json({ success: true, webhookName: data.name, channelId: data.channel_id });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: "Erro ao validar webhook: " + (err?.message || "desconhecido") });
+    next(err);
   }
 };
 
@@ -102,7 +102,7 @@ export const testWebhook = async (req: Request, res: Response): Promise<void> =>
  * Telegram, aqui a API permite invalidar o antigo de verdade, não só abrir
  * um link manual.
  */
-export const revokeConfig = async (_req: Request, res: Response): Promise<void> => {
+export const revokeConfig = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const config = await repo.getConfig();
 
@@ -131,6 +131,6 @@ export const revokeConfig = async (_req: Request, res: Response): Promise<void> 
     await repo.clearConfig();
     res.json({ success: true, discordRevoked, message });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: "Erro ao revogar webhook: " + (err?.message || "desconhecido") });
+    next(err);
   }
 };

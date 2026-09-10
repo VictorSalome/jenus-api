@@ -37,17 +37,25 @@ export const checkAndNotifyDebtReminders = async (
   const today = todayKey();
   const in2Days = addDays(today, 2);
   const currentMonth = currentMonthKey();
+  const targetMonth = in2Days.slice(0, 7);
 
-  // Garante que todos os usuários tenham as ocorrências do mês geradas
+  // Garante que todos os usuários tenham as ocorrências do mês geradas —
+  // tanto do mês corrente quanto do mês da data "daqui a 2 dias" (que pode
+  // cair no mês seguinte, ex.: hoje é dia 29/30/31 e o alvo é dia 1º/2 do
+  // próximo mês). Sem isso, a linha em fin_debt_occurrences desse mês
+  // seguinte pode ainda não existir, e o lembrete nunca dispara.
   const users = targetUserId
     ? [{ user_id: targetUserId }]
     : (await db.all<any[]>("SELECT DISTINCT user_id FROM fin_debts WHERE active = 1") || []);
 
+  const monthsToEnsure = targetMonth === currentMonth ? [currentMonth] : [currentMonth, targetMonth];
   for (const u of users) {
-    try {
-      await ensureMonthlyOccurrences(u.user_id, currentMonth);
-    } catch (e) {
-      logger.warn(`Erro ao gerar ocorrências de dívidas para ${u.user_id}: ${e}`, "DebtsScheduler");
+    for (const month of monthsToEnsure) {
+      try {
+        await ensureMonthlyOccurrences(u.user_id, month);
+      } catch (e) {
+        logger.warn(`Erro ao gerar ocorrências de dívidas para ${u.user_id} (${month}): ${e}`, "DebtsScheduler");
+      }
     }
   }
 
@@ -81,16 +89,19 @@ export const checkAndNotifyDebtReminders = async (
     const title = isToday ? "Dívida vence HOJE!" : "Lembrete de Vencimento";
     const body = `${occ.debt_name}: ${formatCents(occ.remaining_cents)} pendente (Vencimento: ${occ.due_date}).`;
 
-    // Evita duplicidade: verifica se já enviou push sobre essa ocorrência hoje
+    // Evita duplicidade: verifica se já enviou push sobre essa ocorrência hoje.
+    // Usa dois padrões (seguido de "," ou "}") para não casar por substring
+    // (ex.: occurrenceId=1 não deve casar com occurrenceId=15).
     const todayLog = await db.get<{ count: number }>(
       `SELECT COUNT(*) as count FROM notifications_log
         WHERE user_id = ?
           AND type_id = 'financas'
           AND date(sent_at) = date(?)
-          AND payload_json LIKE ?`,
+          AND (payload_json LIKE ? OR payload_json LIKE ?)`,
       occ.user_id,
       today,
-      `%"occurrenceId":${occ.id}%`,
+      `%"occurrenceId":${occ.id},%`,
+      `%"occurrenceId":${occ.id}}%`,
     );
 
     if (todayLog && todayLog.count > 0) {

@@ -1,7 +1,7 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import * as service from "./system.service.js";
 
-export const getLogs = async (req: Request, res: Response): Promise<void> => {
+export const getLogs = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const level = typeof req.query.level === "string" ? req.query.level : undefined;
     const module = typeof req.query.module === "string" ? req.query.module : undefined;
@@ -10,15 +10,15 @@ export const getLogs = async (req: Request, res: Response): Promise<void> => {
     const { entries, available } = await service.getLogs({ level, module, limit });
     res.json({ success: true, data: { entries, available } });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: "Erro ao consultar logs do sistema", error: err?.message });
+    next(err);
   }
 };
 
-export const getModules = async (_req: Request, res: Response): Promise<void> => {
+export const getModules = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const modules = await service.listModules();
     res.json({ success: true, data: modules });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: "Erro ao listar módulos", error: err?.message });
+    next(err);
   }
 };

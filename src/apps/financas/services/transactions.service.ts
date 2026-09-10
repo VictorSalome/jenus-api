@@ -311,6 +311,34 @@ export const updateTransaction = async (
   const existing = await getTransaction(userId, id);
   if (!existing) return null;
 
+  // Valida ownership dos registros referenciados, igual createTransaction:
+  // impede que um accountId/categoryId/merchantId de outro usuário (ou
+  // inexistente) seja associado à transação via update.
+  if (data.accountId !== undefined) {
+    const account = await db.get(
+      "SELECT id FROM fin_accounts WHERE id = ? AND user_id = ?",
+      data.accountId,
+      userId,
+    );
+    if (!account) throw new AppError("Conta não encontrada", 400);
+  }
+  if (data.categoryId !== undefined && data.categoryId !== null) {
+    const category = await db.get(
+      "SELECT id FROM fin_categories WHERE id = ? AND user_id = ?",
+      data.categoryId,
+      userId,
+    );
+    if (!category) throw new AppError("Categoria não encontrada", 400);
+  }
+  if (data.merchantId !== undefined && data.merchantId !== null) {
+    const merchant = await db.get(
+      "SELECT id FROM fin_merchants WHERE id = ? AND user_id = ?",
+      data.merchantId,
+      userId,
+    );
+    if (!merchant) throw new AppError("Estabelecimento não encontrado", 400);
+  }
+
   await db.run(
     `UPDATE fin_transactions
         SET description = ?, category_id = ?, merchant_id = ?, account_id = ?,

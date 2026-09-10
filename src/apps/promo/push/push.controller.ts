@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { getDb } from '../../../core/database.js';
 import {
   registerToken,
@@ -9,7 +9,7 @@ import {
 } from './push.service.js';
 
 export const pushController = {
-  async listTokens(_req: Request, res: Response) {
+  async listTokens(_req: Request, res: Response, next: NextFunction) {
     try {
       const db = await getDb();
       const rows = await db.all(
@@ -17,21 +17,26 @@ export const pushController = {
       );
       res.json({ success: true, count: rows.length, tokens: rows });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      next(err);
     }
   },
 
-  async sendManualPush(req: Request, res: Response) {
+  async sendManualPush(req: Request, res: Response, next: NextFunction) {
     const title = (req.query.title as string) || req.body?.title || '🔔 Notificação de Teste';
     const body = (req.query.body as string) || req.body?.body || 'Compra aprovada no valor de R$ 120,00';
     const screen = (req.query.screen as string) || req.body?.screen || 'detected';
     let targetToken = (req.query.token as string) || req.body?.token;
+    const userId = (req as any).user?.userId;
 
     try {
       const db = await getDb();
       if (!targetToken) {
+        // Restrito ao próprio usuário autenticado — nunca pega o token mais
+        // recente de outro usuário (a rota exige requireAuth, então userId
+        // sempre existe aqui).
         const latest = await db.get(
-          'SELECT token FROM promo_device_tokens WHERE is_active = 1 ORDER BY last_used_at DESC, id DESC LIMIT 1'
+          'SELECT token FROM promo_device_tokens WHERE is_active = 1 AND user_id = ? ORDER BY last_used_at DESC, id DESC LIMIT 1',
+          userId
         );
         targetToken = latest?.token;
       }
@@ -39,7 +44,7 @@ export const pushController = {
       if (!targetToken) {
         return res.status(404).json({
           success: false,
-          message: 'Nenhum token ativo encontrado no banco. Registre o dispositivo primeiro.',
+          message: 'Nenhum token ativo encontrado para este usuário. Registre o dispositivo primeiro.',
         });
       }
 
@@ -58,7 +63,7 @@ export const pushController = {
         result,
       });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      next(err);
     }
   },
 
@@ -98,7 +103,7 @@ export const pushController = {
     }
   },
 
-  async test(req: Request, res: Response) {
+  async test(req: Request, res: Response, next: NextFunction) {
     const { token } = req.body;
 
     if (!token || typeof token !== 'string') {
@@ -114,7 +119,7 @@ export const pushController = {
       }
     } catch (err: any) {
       console.error('[Push] Erro no teste:', err);
-      res.status(500).json({ success: false, error: err?.message || 'Erro ao enviar push de teste' });
+      next(err);
     }
   },
 

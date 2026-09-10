@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { google } from "googleapis";
 import * as logger from "../../../core/logger.js";
 import { getDb } from "../../../core/database.js";
@@ -43,7 +43,7 @@ function htmlPage(title: string, message: string): string {
   return `<html><body style="font-family:sans-serif;background:#0f172a;color:#f8fafc;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center;max-width:480px;padding:0 16px"><h2>${safeTitle}</h2><p style="color:#94a3b8">${safeMessage}</p></div></body></html>`;
 }
 
-export const authUrl = async (req: Request, res: Response) => {
+export const authUrl = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = getUserId(req);
     cleanupStateStore();
@@ -53,7 +53,7 @@ export const authUrl = async (req: Request, res: Response) => {
     const url = getAuthUrl(state);
     res.json({ success: true, url, state });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
@@ -105,11 +105,11 @@ export const callback = async (req: Request, res: Response) => {
   } catch (err: any) {
     logger.error(`Erro no callback Gmail: ${err.message}`, "Gmail");
     res.set("Content-Type", "text/html");
-    res.status(500).send(htmlPage("Erro ao conectar", err.message));
+    res.status(500).send(htmlPage("Erro ao conectar", "Não foi possível concluir a conexão com o Gmail. Tente novamente pelo app."));
   }
 };
 
-export const status = async (req: Request, res: Response) => {
+export const status = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = getUserId(req);
     const stored = await getStoredTokens(userId);
@@ -119,11 +119,11 @@ export const status = async (req: Request, res: Response) => {
       email: stored?.email || null,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-export const messages = async (req: Request, res: Response) => {
+export const messages = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = getUserId(req);
     const envioId = Number(req.query.envioId);
@@ -149,11 +149,11 @@ export const messages = async (req: Request, res: Response) => {
       res.status(400).json({ success: false, message: "Gmail não conectado" });
       return;
     }
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-export const send = async (req: Request, res: Response) => {
+export const send = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = getUserId(req);
     const { envioId, body } = req.body;
@@ -202,16 +202,16 @@ export const send = async (req: Request, res: Response) => {
       return;
     }
     logger.error(`Erro ao enviar resposta Gmail: ${err.message}`, "Gmail");
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };
 
-export const disconnect = async (req: Request, res: Response) => {
+export const disconnect = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = getUserId(req);
     await deleteStoredTokens(userId);
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    next(err);
   }
 };

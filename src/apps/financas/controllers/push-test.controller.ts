@@ -50,9 +50,13 @@ export const sendTestPush = async (req: Request, res: Response): Promise<void> =
     console.warn("Erro ao disparar push via Expo:", e);
   }
 
+  const delivered = pushResult.sent > 0;
+
   res.status(200).json({
-    success: true,
-    message: `Push Notification enviado com sucesso! (${pushResult.sent} dispositivos notificados)`,
+    success: delivered,
+    message: delivered
+      ? `Push Notification enviado com sucesso! (${pushResult.sent} dispositivos notificados)`
+      : "Evento registrado, mas nenhum dispositivo ativo foi notificado.",
     data: {
       title: pushTitle,
       body: pushBody,

@@ -1,10 +1,10 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions/StringSession.js';
 import * as telegramConfigRepo from '../telegram-config/telegram-config.repository.js';
 import { findAll } from '../channel/channel.repository.js';
 
-export const testTelegram = async (_req: Request, res: Response): Promise<void> => {
+export const testTelegram = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const telegramConfig = await telegramConfigRepo.getConfig();
 
@@ -73,10 +73,7 @@ export const testTelegram = async (_req: Request, res: Response): Promise<void> 
     });
 
   } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao testar Telegram: ' + (err.message || 'Erro desconhecido')
-    });
+    next(err);
   }
 };
 

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { processRawNotification } from "../services/notification-events.service.js";
 import { createTransaction } from "../services/transactions.service.js";
 import { ensureDefaultAccount } from "../services/accounts.service.js";
+import { buildFingerprint, findDuplicateTransactions } from "../services/duplicates.service.js";
 
 const DEFAULT_USER_ID = "vssousa";
 
@@ -83,6 +84,21 @@ export const shortcutWebhook = async (req: Request, res: Response): Promise<void
 
     const merchantName = body.merchant || body.merchantName || body.description || "Apple Pay";
     const description = body.description || `Compra via Apple Pay (${merchantName})`;
+
+    // Dedup: Atalhos do iOS reexecutam automaticamente em falha de rede,
+    // reenviando o mesmo payload — sem essa checagem, cada retry criaria
+    // uma transação duplicada (mesmo bug já corrigido no Caso 1).
+    const fingerprint = buildFingerprint(userId, merchantName, amountCents, "IMPORT");
+    const existingMatches = await findDuplicateTransactions(userId, fingerprint, transactionDate);
+    if (existingMatches.length > 0) {
+      res.status(200).json({
+        success: true,
+        duplicate: true,
+        message: "Já processado anteriormente (transação equivalente já existe)",
+        data: existingMatches[0],
+      });
+      return;
+    }
 
     const result = await createTransaction(userId, {
       accountId: defaultAccountId,

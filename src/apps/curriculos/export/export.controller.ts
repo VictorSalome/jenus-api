@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { gerarDocxCurriculo } from "./export.service.js";
 import { logError } from "../shared/utils/logger.js";
 
@@ -8,7 +8,7 @@ import { logError } from "../shared/utils/logger.js";
  * Responde o arquivo binário com Content-Disposition attachment (stream direto,
  * sem persistir em disco — zero limpeza, zero arquivos órfãos).
  */
-export const exportarCurriculo = async (req: Request, res: Response): Promise<void> => {
+export const exportarCurriculo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { format, vagaTitulo, variant = "classic", customSummary, semIa } = req.body as {
       format: "pdf" | "docx";
@@ -63,6 +63,6 @@ export const exportarCurriculo = async (req: Request, res: Response): Promise<vo
     res.status(200).send(pdfBuffer);
   } catch (err: any) {
     logError(`[Export] Erro na exportação: ${err.message}`);
-    res.status(500).json({ success: false, message: "Falha ao exportar currículo", error: err.message });
+    next(err);
   }
 };

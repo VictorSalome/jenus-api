@@ -16,10 +16,13 @@ import jwt from 'jsonwebtoken';
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { getDb } from '../../core/database.js';
+import { config } from '../../core/config.js';
 
-// Configurações
-const ACCESS_TOKEN_SECRET = process.env.JWT_ACCESS_SECRET || 'your-access-token-secret-change-me';
-const REFRESH_TOKEN_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-token-secret-change-me';
+// Configurações — validadas obrigatoriamente em core/config.ts (processo
+// encerra no boot se JWT_ACCESS_SECRET/JWT_REFRESH_SECRET não existirem),
+// por isso não há fallback hardcoded aqui.
+const ACCESS_TOKEN_SECRET = config.JWT_ACCESS_SECRET;
+const REFRESH_TOKEN_SECRET = config.JWT_REFRESH_SECRET;
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
 
@@ -161,12 +164,21 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // Gera novos tokens
+    // O payload do refresh token só carrega {userId, tokenId, fingerprint} —
+    // nunca teve email/role, então não podemos confiar em decoded.email/role
+    // (sempre undefined). Sistema é single-admin (ver auth.controller.ts),
+    // então reconstruímos o user do mesmo jeito que o login faz.
+    const userId = (decoded as any).userId;
     const user = {
-      id: (decoded as any).userId,
-      email: (decoded as any).email,
-      role: (decoded as any).role,
+      id: userId,
+      email: userId,
+      role: 'admin',
     };
+
+    // Revoga o refresh token antigo para que a rotação seja real — sem isso,
+    // um refresh token vazado continuava válido por até 7 dias mesmo após
+    // o usuário legítimo já ter renovado a sessão várias vezes.
+    await revokeRefreshToken(tokenId);
 
     const newAccessToken = generateAccessToken(user);
     const newRefreshToken = await generateRefreshToken(user.id, (decoded as any).fingerprint);

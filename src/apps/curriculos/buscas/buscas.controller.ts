@@ -53,7 +53,7 @@ export const listarFontesController = (req: any, res: any) => {
  * POST /buscar-vagas
  * Busca vagas em todas as fontes e retorna ranqueadas
  */
-export const buscarVagasController = async (req: any, res: any) => {
+export const buscarVagasController = async (req: any, res: any, next: any) => {
   try {
     const { query, tags, limit } = req.body || {};
 
@@ -76,7 +76,7 @@ export const buscarVagasController = async (req: any, res: any) => {
     });
   } catch (err: any) {
     logError(`Erro na busca de vagas: ${err.message}`);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 };
 
@@ -84,7 +84,7 @@ export const buscarVagasController = async (req: any, res: any) => {
  * POST /buscar-vagas/fonte
  * Busca vagas de uma fonte específica
  */
-export const buscarPorFonteController = async (req: any, res: any) => {
+export const buscarPorFonteController = async (req: any, res: any, next: any) => {
   try {
     const { fonte } = req.params;
     const { query, tags, limit } = req.body || {};
@@ -105,7 +105,7 @@ export const buscarPorFonteController = async (req: any, res: any) => {
     });
   } catch (err: any) {
     logError(`Erro na busca por fonte: ${err.message}`);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 };
 
@@ -113,7 +113,7 @@ export const buscarPorFonteController = async (req: any, res: any) => {
  * POST /buscar-vagas/auto-apply
  * Pipeline completo: busca → match → gera currículo → envia
  */
-export const autoApplyController = async (req: any, res: any) => {
+export const autoApplyController = async (req: any, res: any, next: any) => {
   try {
     const { query, tags, minScore, limit } = req.body || {};
 
@@ -129,7 +129,7 @@ export const autoApplyController = async (req: any, res: any) => {
     res.json({ ok: true, ...resultado });
   } catch (err: any) {
     logError(`Erro no auto-apply: ${err.message}`);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 };
 
@@ -150,20 +150,20 @@ export const schedulerStopController = (req: any, res: any) => {
   res.json({ ok: true, ...resultado });
 };
 
-export const schedulerRunNowController = async (req: any, res: any) => {
+export const schedulerRunNowController = async (req: any, res: any, next: any) => {
   try {
     const { tags, minScore } = req.body || {};
     const resultado = await executarBusca({ tags, minScore });
     res.json({ ok: true, ...resultado });
   } catch (err: any) {
     logError(`Erro na execução manual: ${err.message}`);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 };
 
 // ── LinkedIn ──
 
-export const linkedinParseController = async (req: any, res: any) => {
+export const linkedinParseController = async (req: any, res: any, next: any) => {
   try {
     const { html } = req.body || {};
     if (!html)
@@ -176,7 +176,7 @@ export const linkedinParseController = async (req: any, res: any) => {
     res.json({ ok: true, total: ranqueadas.length, vagas: ranqueadas });
   } catch (err: any) {
     logError(`Erro no parse LinkedIn: ${err.message}`);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 };
 
@@ -197,12 +197,12 @@ export const linkedinCronStopController = (req: any, res: any) => {
   res.json({ ok: true, ...resultado });
 };
 
-export const linkedinCronRunNowController = async (req: any, res: any) => {
+export const linkedinCronRunNowController = async (req: any, res: any, next: any) => {
   try {
     const resultado = await executarLinkedinAgora();
     res.json({ ok: true, resultado });
   } catch (err: any) {
     logError(`Erro LinkedIn cron: ${err.message}`);
-    res.status(500).json({ ok: false, error: err.message });
+    next(err);
   }
 };

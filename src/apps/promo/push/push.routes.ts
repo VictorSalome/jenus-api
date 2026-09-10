@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, optionalAuth } from '../../../shared/auth/auth.middleware.js';
+import { requireAuth } from '../../../shared/auth/auth.middleware.js';
 import { pushController } from './push.controller.js';
 import { asyncHandler } from '../../../shared/http/index.js';
 
@@ -36,7 +36,7 @@ const router = Router();
  *                       created_at: { type: string, example: "2026-09-07 14:00:00" }
  *                       last_used_at: { type: string, example: "2026-09-07 15:30:00" }
  */
-router.get('/tokens', requireAuth, asyncHandler((req, res) => pushController.listTokens(req, res)));
+router.get('/tokens', requireAuth, asyncHandler((req, res, next) => pushController.listTokens(req, res, next)));
 
 /**
  * @swagger
@@ -116,7 +116,7 @@ router.get('/tokens', requireAuth, asyncHandler((req, res) => pushController.lis
  *       200:
  *         description: Push enviado com sucesso.
  */
-router.all('/send', requireAuth, asyncHandler((req, res) => pushController.sendManualPush(req, res)));
+router.all('/send', requireAuth, asyncHandler((req, res, next) => pushController.sendManualPush(req, res, next)));
 
 /**
  * @swagger
@@ -138,7 +138,7 @@ router.all('/send', requireAuth, asyncHandler((req, res) => pushController.sendM
  *       400:
  *         description: Dados inválidos (token ou platform ausente).
  */
-router.post('/register', optionalAuth, asyncHandler((req, res) => pushController.register(req, res)));
+router.post('/register', requireAuth, asyncHandler((req, res) => pushController.register(req, res)));
 
 /**
  * @swagger
@@ -185,7 +185,7 @@ router.post('/unregister', requireAuth, asyncHandler((req, res) => pushControlle
  *       200:
  *         description: Push enviado com sucesso.
  */
-router.post('/test', requireAuth, asyncHandler((req, res) => pushController.test(req, res)));
+router.post('/test', requireAuth, asyncHandler((req, res, next) => pushController.test(req, res, next)));
 
 /**
  * @swagger

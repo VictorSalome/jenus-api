@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions/StringSession.js';
 import * as telegramConfigRepo from './telegram-config.repository.js';
@@ -76,7 +76,7 @@ export const getAuthStatus = async (_req: Request, res: Response): Promise<void>
 };
 
 // Start Telegram authentication - sends SMS code
-export const startAuth = async (req: Request, res: Response): Promise<void> => {
+export const startAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const config = await telegramConfigRepo.getConfig();
     if (!config || !config.apiId || !config.apiHash || !config.phone) {
@@ -116,12 +116,12 @@ export const startAuth = async (req: Request, res: Response): Promise<void> => {
     
   } catch (err: any) {
     console.error('[TelegramAuth] Erro ao enviar código:', err);
-    res.status(500).json({ success: false, message: 'Erro ao enviar código: ' + (err.message || 'Unknown') });
+    next(err);
   }
 };
 
 // Verify SMS code and complete authentication
-export const verifyAuth = async (req: Request, res: Response): Promise<void> => {
+export const verifyAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { code } = req.body;
     const sessionId = (req as any).user?.userId || req.ip || 'default';
@@ -168,6 +168,6 @@ export const verifyAuth = async (req: Request, res: Response): Promise<void> => 
     
   } catch (err: any) {
     console.error('[TelegramAuth] Erro ao verificar código:', err);
-    res.status(500).json({ success: false, message: 'Erro ao verificar código: ' + (err.message || 'Unknown') });
+    next(err);
   }
 };

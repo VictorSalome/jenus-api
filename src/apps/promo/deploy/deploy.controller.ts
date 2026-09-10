@@ -3,9 +3,32 @@ import { execSync } from "child_process";
 import { createWriteStream } from "fs";
 import { pipeline } from "stream/promises";
 import { Readable } from "stream";
+import { timingSafeEqual } from "crypto";
 
-const DEPLOY_TOKEN =
-  process.env.DEPLOY_TOKEN || "deploy-token-change-in-production";
+const DEPLOY_TOKEN = process.env.DEPLOY_TOKEN;
+
+function isValidToken(candidate: unknown): boolean {
+  if (!DEPLOY_TOKEN || typeof candidate !== "string") return false;
+
+  const expected = Buffer.from(DEPLOY_TOKEN);
+  const given = Buffer.from(candidate);
+  if (expected.length !== given.length) return false;
+
+  return timingSafeEqual(expected, given);
+}
+
+function requireDeployTokenConfigured(res: Response): boolean {
+  if (!DEPLOY_TOKEN) {
+    console.error(
+      "[Deploy] DEPLOY_TOKEN não configurado — endpoints de deploy desabilitados.",
+    );
+    res.status(503).json({
+      error: "Deploy indisponível: DEPLOY_TOKEN não configurado no servidor",
+    });
+    return false;
+  }
+  return true;
+}
 
 function run(cmd: string): boolean {
   try {
@@ -22,8 +45,10 @@ export const uploadDeploy = async (
   res: Response,
 ): Promise<void> => {
   try {
+    if (!requireDeployTokenConfigured(res)) return;
+
     const token = req.headers["x-deploy-token"];
-    if (token !== DEPLOY_TOKEN) {
+    if (!isValidToken(token)) {
       res.status(403).json({ error: "Invalid token" });
       return;
     }
@@ -50,8 +75,10 @@ export const triggerDeploy = async (
   res: Response,
 ): Promise<void> => {
   try {
+    if (!requireDeployTokenConfigured(res)) return;
+
     const token = req.headers["x-deploy-token"];
-    if (token !== DEPLOY_TOKEN) {
+    if (!isValidToken(token)) {
       res.status(403).json({ error: "Invalid token" });
       return;
     }

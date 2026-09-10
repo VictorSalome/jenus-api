@@ -241,4 +241,15 @@ export const financasMigrations: Migration[] = [
         ('financas.debt_due_soon', 'financas', 'Dívida Fixa Vence Hoje', 'Lembrete no dia de vencimento de dívidas como Aluguel ou Contas', '📌 Vencimento Hoje: {{debt_name}}', 'Sua dívida fixa de R$ {{amount}} vence hoje. Toque para registrar o pagamento.', 'high', 1, 'payment');
     `,
   },
+  {
+    id: "financas_011_notification_dedup",
+    up: `
+      ALTER TABLE fin_notification_events ADD COLUMN post_time INTEGER;
+      CREATE INDEX IF NOT EXISTS idx_fin_events_dedup
+        ON fin_notification_events(user_id, package_name, title, text, created_at);
+      CREATE UNIQUE INDEX IF NOT EXISTS ux_fin_transactions_notification_event
+        ON fin_transactions(notification_event_id)
+        WHERE notification_event_id IS NOT NULL;
+    `,
+  },
 ];

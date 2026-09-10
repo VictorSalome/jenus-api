@@ -15,6 +15,59 @@ export interface CreateEventResult {
 }
 
 /**
+ * Janela de deduplicação de eventos brutos: o Android pode disparar
+ * onNotificationPosted mais de uma vez para a "mesma" notificação lógica
+ * (atualização de conteúdo, reconexão do listener). Duas notificações
+ * idênticas (mesmo pacote/título/texto) do mesmo usuário nesse intervalo
+ * são tratadas como o mesmo evento.
+ */
+const NOTIFICATION_DEDUP_WINDOW_SECONDS = 15;
+
+const findRecentDuplicateEvent = async (
+  userId: string,
+  packageName: string | undefined,
+  title: string | undefined,
+  text: string | undefined,
+  postTime: number | undefined,
+) => {
+  const db = await getDb();
+
+  // Match por post_time exato (sem janela de tempo): cobre o caso da fila
+  // offline do Android reenviar, horas depois, um evento que na verdade já
+  // tinha sido salvo com sucesso (ex.: a resposta HTTP se perdeu por rede
+  // instável, mas o backend já tinha processado). O `postTime` vem do
+  // `StatusBarNotification.postTime` original do Android — é estável entre
+  // as tentativas de reenvio da mesma notificação real.
+  if (postTime) {
+    const exactMatch = await db.get(
+      `SELECT * FROM fin_notification_events
+        WHERE user_id = ? AND package_name IS ? AND post_time = ?
+        ORDER BY id DESC
+        LIMIT 1`,
+      userId,
+      packageName || null,
+      postTime,
+    );
+    if (exactMatch) return exactMatch;
+  }
+
+  return db.get(
+    `SELECT * FROM fin_notification_events
+      WHERE user_id = ?
+        AND package_name IS ?
+        AND title IS ?
+        AND text IS ?
+        AND datetime(created_at) >= datetime('now', '-${NOTIFICATION_DEDUP_WINDOW_SECONDS} seconds')
+      ORDER BY id DESC
+      LIMIT 1`,
+    userId,
+    packageName || null,
+    title || null,
+    text || null,
+  );
+};
+
+/**
  * Recebe o RAW enviado pelo Android, preserva raw_json e tenta processar:
  * 1. salva o evento (status=raw)
  * 2. roda o parser por app
@@ -28,15 +81,64 @@ export const processRawNotification = async (
 ): Promise<CreateEventResult> => {
   const db = await getDb();
 
+  const pkg = (raw.packageName || '').toLowerCase();
+  const label = (raw.appLabel || '').toLowerCase();
+  const title = (raw.title || '').toLowerCase();
+
+  // Defesa em profundidade: Bloqueia categoricamente auto-notificações do Jenus Hub
+  // para impedir ciclos infinitos de auto-detecção ou duplicidade
+  const isSelfNotification =
+    pkg.includes('jenushub') ||
+    pkg.includes('victorsalome') ||
+    pkg.includes('jenus') ||
+    label.includes('jenus') ||
+    title.includes('transação detectada') ||
+    title.includes('lembrete de vencimento') ||
+    title.includes('dívida vence');
+
+  if (isSelfNotification) {
+    const res = await db.run(
+      `INSERT INTO fin_notification_events (user_id, package_name, app_label, title, text, raw_json, status, post_time)
+       VALUES (?, ?, ?, ?, ?, ?, 'ignored', ?)`,
+      userId,
+      raw.packageName || null,
+      raw.appLabel || null,
+      raw.title || null,
+      raw.text || null,
+      JSON.stringify(raw),
+      raw.postTime || null,
+    );
+    const event = await db.get(
+      "SELECT * FROM fin_notification_events WHERE id = ?",
+      res.lastID,
+    );
+    return { event, duplicate: true, matches: [] };
+  }
+
+  // Deduplicação de ingestão: o Android pode reenviar a mesma notificação
+  // lógica (update de conteúdo, reconexão do listener). Se já existe um
+  // evento idêntico recente, devolve ele em vez de criar outro/reimportar.
+  const recentDuplicate = await findRecentDuplicateEvent(
+    userId,
+    raw.packageName,
+    raw.title,
+    raw.text,
+    raw.postTime,
+  );
+  if (recentDuplicate) {
+    return { event: recentDuplicate, duplicate: true, matches: [] };
+  }
+
   const result = await db.run(
-    `INSERT INTO fin_notification_events (user_id, package_name, app_label, title, text, raw_json, status)
-     VALUES (?, ?, ?, ?, ?, ?, 'raw')`,
+    `INSERT INTO fin_notification_events (user_id, package_name, app_label, title, text, raw_json, status, post_time)
+     VALUES (?, ?, ?, ?, ?, ?, 'raw', ?)`,
     userId,
     raw.packageName || null,
     raw.appLabel || null,
     raw.title || null,
     raw.text || null,
     JSON.stringify(raw),
+    raw.postTime || null,
   );
   const eventId = result.lastID;
 
@@ -77,9 +179,23 @@ export const processRawNotification = async (
         notificationEventId: eventId,
       });
       finalStatus = "imported";
-    } catch (err) {
-      console.error("[processRawNotification] Falha ao auto-importar:", err);
-      finalStatus = "error";
+    } catch (err: any) {
+      const isUniqueConstraint =
+        err?.code === "SQLITE_CONSTRAINT" ||
+        /UNIQUE constraint failed/i.test(err?.message || "");
+      if (isUniqueConstraint) {
+        // Já existe uma transação vinculada a este evento (corrida entre
+        // duas ingestões concorrentes do mesmo evento) — trata como duplicata
+        // em vez de erro, o banco já garantiu que não há dado duplicado.
+        console.warn(
+          "[processRawNotification] Transação já existente para este evento (constraint):",
+          err.message,
+        );
+        finalStatus = "duplicate";
+      } else {
+        console.error("[processRawNotification] Falha ao auto-importar:", err);
+        finalStatus = "error";
+      }
     }
   }
 
