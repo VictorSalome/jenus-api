@@ -2,6 +2,7 @@ import cron, { type ScheduledTask } from "node-cron";
 import prospeccaoConfig from "../config.js";
 import { executarScraperMaps } from "../scraper/mapsScraper.js";
 import { executarDisparador } from "./dispatcher.service.js";
+import type { ProgressoScraper } from "../types.js";
 import * as logger from "../../../core/logger.js";
 
 export interface ItemHistoricoScheduler {
@@ -30,6 +31,23 @@ let ultimaExecucao: Date | null = null;
 let indiceTermo = 0;
 const historico: ItemHistoricoScheduler[] = [];
 
+let progressoAtual: ProgressoScraper = {
+  emExecucao: false,
+  termo: "",
+  etapa: "Aguardando início",
+  atual: 0,
+  total: 0,
+  porcentagem: 0,
+  iniciadoEm: null,
+  finalizadoEm: null,
+  erro: null,
+  ultimoResultado: null,
+};
+
+export const obterProgresso = (): ProgressoScraper => {
+  return { ...progressoAtual };
+};
+
 export type ExecutarCicloFn = (
   termoCustomizado?: string,
   limite?: number,
@@ -46,7 +64,44 @@ export const executarCiclo = async (
   limite?: number,
 ): Promise<ItemHistoricoScheduler> => {
   if (cicloOverride) {
-    return cicloOverride(termoCustomizado, limite);
+    const termoOverride = termoCustomizado && termoCustomizado.trim() ? termoCustomizado.trim() : "padrão";
+    progressoAtual = {
+      ...progressoAtual,
+      emExecucao: true,
+      termo: termoOverride,
+      etapa: "Iniciando mineração...",
+      atual: 0,
+      total: limite ?? 10,
+      porcentagem: 0,
+      iniciadoEm: new Date().toISOString(),
+      finalizadoEm: null,
+      erro: null,
+      ultimoResultado: progressoAtual.ultimoResultado ?? null,
+    };
+    try {
+      const res = await cicloOverride(termoCustomizado, limite);
+      progressoAtual = {
+        ...progressoAtual,
+        emExecucao: false,
+        porcentagem: 100,
+        etapa: "Mineração concluída",
+        finalizadoEm: new Date().toISOString(),
+        ultimoResultado: {
+          coletados: res.coletados,
+          enviados: res.enviados,
+        },
+      };
+      return res;
+    } catch (err: any) {
+      progressoAtual = {
+        ...progressoAtual,
+        emExecucao: false,
+        etapa: "Erro na mineração",
+        finalizadoEm: new Date().toISOString(),
+        erro: err?.message || String(err),
+      };
+      throw err;
+    }
   }
 
   if (executando) {
@@ -65,14 +120,43 @@ export const executarCiclo = async (
     indiceTermo = (indiceTermo + 1) % termos.length;
   }
 
+  progressoAtual = {
+    emExecucao: true,
+    termo,
+    etapa: "Iniciando mineração...",
+    atual: 0,
+    total: limite ?? 10,
+    porcentagem: 0,
+    iniciadoEm: new Date().toISOString(),
+    finalizadoEm: null,
+    erro: null,
+    ultimoResultado: progressoAtual.ultimoResultado ?? null,
+  };
+
   logger.info(`Iniciando ciclo para o termo "${termo}" (limite: ${limite ?? "padrão"})...`, "ProspeccaoScheduler");
+  console.log(`[ProspeccaoScheduler] Iniciando ciclo para o termo: "${termo}" (limite: ${limite ?? "padrão"})`);
 
   try {
-    const resumoScraper = await executarScraperMaps(termo, { limite });
+    console.log(`[ProspeccaoScheduler] Executando scraper Google Maps para: "${termo}"...`);
+    const resumoScraper = await executarScraperMaps(termo, {
+      limite,
+      onProgress: (etapa, atual, total) => {
+        const pct = total > 0 ? Math.min(100, Math.round((atual / total) * 100)) : 0;
+        progressoAtual = {
+          ...progressoAtual,
+          etapa,
+          atual,
+          total,
+          porcentagem: pct,
+        };
+      },
+    });
+    console.log(`[ProspeccaoScheduler] Scraper Maps finalizado com sucesso! Empresas mineradas: ${resumoScraper.empresas.length}. Iniciando disparador...`);
     const disparos = await executarDisparador({
       limite,
       baseUrl: prospeccaoConfig.LANDING_PAGE_BASE_URL,
     });
+    console.log(`[ProspeccaoScheduler] Disparador finalizado. Total disparados com sucesso: ${disparos.filter((d) => d.sucesso).length}`);
 
     const item: ItemHistoricoScheduler = {
       data: new Date(),
@@ -80,6 +164,19 @@ export const executarCiclo = async (
       coletados: resumoScraper.empresas.length,
       enviados: disparos.filter((d) => d.sucesso).length,
       sucesso: true,
+    };
+
+    progressoAtual = {
+      ...progressoAtual,
+      emExecucao: false,
+      porcentagem: 100,
+      etapa: "Mineração concluída",
+      finalizadoEm: item.data.toISOString(),
+      erro: null,
+      ultimoResultado: {
+        coletados: item.coletados,
+        enviados: item.enviados,
+      },
     };
 
     ultimaExecucao = item.data;
@@ -99,6 +196,14 @@ export const executarCiclo = async (
       coletados: 0,
       enviados: 0,
       sucesso: false,
+      erro: err?.message || String(err),
+    };
+
+    progressoAtual = {
+      ...progressoAtual,
+      emExecucao: false,
+      etapa: "Erro na mineração",
+      finalizadoEm: new Date().toISOString(),
       erro: err?.message || String(err),
     };
 

@@ -61,7 +61,7 @@ echo "🌐 Conectando à Oracle..."
 # LOCALMENTE (passo 1) e o dist/ é copiado pronto para o VM.
 
 # 1. Sincronizar código + dependências no VM
-ssh -i "$SSH_KEY" \
+ssh -4 -i "$SSH_KEY" \
   -o StrictHostKeyChecking=no \
   "$ORACLE_USER@$ORACLE_HOST" \
   "
@@ -72,6 +72,8 @@ ssh -i "$SSH_KEY" \
     git reset --hard origin/main
     echo '📦 Instalando dependências...'
     npm install
+    echo '🎭 Verificando browser Playwright Chromium...'
+    node node_modules/playwright-core/cli.js install chromium
     echo '🔄 Sincronizando dados do perfil no banco SQLite...'
     node scripts/sync-profile.js
   "
@@ -81,11 +83,11 @@ ssh -i "$SSH_KEY" \
 # Se o scp falhar (rede/VM) ou o mv quebrar no meio, o dist/ antigo continua
 # no lugar e o PM2 não fica apontando para um arquivo inexistente.
 echo '📦 Copiando dist/ local para o VM...'
-if ! scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r dist "$ORACLE_USER@$ORACLE_HOST:$REMOTE_DIR/dist_new"; then
+if ! scp -4 -i "$SSH_KEY" -o StrictHostKeyChecking=no -r dist "$ORACLE_USER@$ORACLE_HOST:$REMOTE_DIR/dist_new"; then
   echo '❌ Falha ao copiar dist/ — deploy abortado (dist/ antigo preservado).'
   exit 1
 fi
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$ORACLE_USER@$ORACLE_HOST" "
+ssh -4 -i "$SSH_KEY" -o StrictHostKeyChecking=no "$ORACLE_USER@$ORACLE_HOST" "
   set -e
   cd '$REMOTE_DIR'
   if [ ! -f dist_new/index.js ]; then
@@ -104,7 +106,7 @@ ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$ORACLE_USER@$ORACLE_HOST" "
 "
 
 # 3. Recarregar PM2
-ssh -i "$SSH_KEY" \
+ssh -4 -i "$SSH_KEY" \
   -o StrictHostKeyChecking=no \
   "$ORACLE_USER@$ORACLE_HOST" \
   "

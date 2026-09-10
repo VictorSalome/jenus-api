@@ -9,6 +9,10 @@ import { extractAmountCents, extractInstallments, extractMerchant, titleAndText 
 const KEYWORDS = /(compra|pagamento|parcel|débito|crédito|cartã|fatura|pix|transfer|aprovad|feita|realizad|gasto|cobrança|transação|valor|reais|reias|uber|ifood|mercado|amazon|magalu)/i;
 
 const NON_FINANCE_APPS = [
+  'jenus',
+  'jenushub',
+  'victorsalome',
+  'com.victorsalome.jenushub',
   'telegram',
   'whatsapp',
   'discord',
@@ -28,9 +32,15 @@ const NON_FINANCE_APPS = [
 const matches = (raw: RawNotification): boolean => {
   const pkg = (raw.packageName || '').toLowerCase();
   const label = (raw.appLabel || '').toLowerCase();
+  const title = (raw.title || '').toLowerCase();
 
-  // Bloqueia categoricamente mensageiros, redes sociais e navegadores
-  if (NON_FINANCE_APPS.some((app) => pkg.includes(app) || label.includes(app))) {
+  // Bloqueia categoricamente o próprio app Jenus, mensageiros, redes sociais e navegadores
+  if (
+    NON_FINANCE_APPS.some((app) => pkg.includes(app) || label.includes(app)) ||
+    title.includes('transação detectada') ||
+    title.includes('lembrete de vencimento') ||
+    title.includes('dívida vence')
+  ) {
     return false;
   }
 

@@ -25,6 +25,8 @@ import {
 } from "../services/dispatcher.service.js";
 import prospeccaoRouter from "../routes/prospeccao.routes.js";
 import { setExecutarCicloOverride } from "../services/scheduler.service.js";
+import { generateAccessToken } from "../../../shared/auth/jwt-auth.js";
+import { globalErrorHandler } from "../../../shared/http/error-handler.js";
 
 async function runTests() {
   console.log("==================================================");
@@ -283,6 +285,7 @@ async function runTests() {
     const app = express();
     app.use(express.json());
     app.use("/api/prospeccao", prospeccaoRouter);
+    app.use(globalErrorHandler);
 
     server = http.createServer(app);
     await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
@@ -291,9 +294,19 @@ async function runTests() {
     console.log(`  ✓ Servidor de teste HTTP ouvindo em: ${apiBase}`);
 
     // Helper para requisições
+    const testToken = generateAccessToken({
+      id: "test-admin",
+      email: "admin@test.com",
+      role: "admin",
+    });
+
     const requestJson = async (url: string, options?: RequestInit): Promise<{ status: number; ok: boolean; data: any }> => {
       const res = await fetch(url, {
-        headers: { "Content-Type": "application/json", ...(options?.headers || {}) },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${testToken}`,
+          ...(options?.headers || {}),
+        },
         ...options,
       });
       const data: any = await res.json().catch(() => null);
@@ -518,12 +531,53 @@ async function runTests() {
     });
     assert.equal(resExecutarErro.status, 500, "POST /executar deve responder 500 em caso de erro no ciclo");
     assert.equal(resExecutarErro.data.success, false);
-    assert.equal(resExecutarErro.data.message, "Erro ao executar ciclo de prospecção");
-    assert.equal(resExecutarErro.data.error, "Simulação de falha no pipeline de prospecção");
+    assert.equal(resExecutarErro.data.error?.message, "Simulação de falha no pipeline de prospecção");
 
     // Restaurar override
     setExecutarCicloOverride(null);
     console.log("  ✓ [9/9] POST /executar validado (200 com payload estruturado e 500 no tratamento de erros).\n");
+
+    // 5.10 GET /api/prospeccao/progresso
+    const resProgresso = await requestJson(`${apiBase}/progresso`);
+    assert.equal(resProgresso.status, 200, "GET /progresso deve responder 200");
+    assert.equal(resProgresso.data.success, true);
+    assert.ok(resProgresso.data.data, "Deve conter payload de progresso");
+    assert.equal(typeof resProgresso.data.data.emExecucao, "boolean");
+    assert.equal(typeof resProgresso.data.data.porcentagem, "number");
+    assert.equal(typeof resProgresso.data.data.etapa, "string");
+    console.log("  ✓ [10/11] GET /progresso validado (200 com estrutura ProgressoScraper).");
+
+    // 5.11 POST /api/prospeccao/executar com async: true (202 Accepted)
+    setExecutarCicloOverride(async (termo, limite) => {
+      await new Promise((r) => setTimeout(r, 50));
+      return {
+        data: new Date(),
+        termo: termo || "padrão",
+        coletados: limite || 2,
+        enviados: 1,
+        sucesso: true,
+      };
+    });
+
+    const resExecutarAsync = await requestJson(`${apiBase}/executar`, {
+      method: "POST",
+      body: JSON.stringify({ termo: "barbearia async", limite: 2, async: true }),
+    });
+    assert.equal(resExecutarAsync.status, 202, "POST /executar com async: true deve responder 202");
+    assert.equal(resExecutarAsync.data.success, true);
+    assert.equal(resExecutarAsync.data.message, "Mineração iniciada em segundo plano");
+    assert.ok(resExecutarAsync.data.data, "Deve retornar estado do progresso");
+    assert.equal(resExecutarAsync.data.data.termo, "barbearia async");
+
+    // Aguardar conclusão da promessa de fundo
+    await new Promise((r) => setTimeout(r, 100));
+
+    const resProgressoAposAsync = await requestJson(`${apiBase}/progresso`);
+    assert.equal(resProgressoAposAsync.data.data.emExecucao, false);
+    assert.equal(resProgressoAposAsync.data.data.porcentagem, 100);
+    assert.equal(resProgressoAposAsync.data.data.etapa, "Mineração concluída");
+    setExecutarCicloOverride(null);
+    console.log("  ✓ [11/11] POST /executar com async: true validado (202 Accepted e progresso finalizado em segundo plano).\n");
 
     // Fechar servidor HTTP
     await new Promise<void>((resolve, reject) => {

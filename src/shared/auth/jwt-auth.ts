@@ -57,6 +57,19 @@ export function generateAccessToken(user: User): string {
 }
 
 /**
+ * Gera token de teste permanente (válido por 100 anos) para testes automatizados, scripts e cURL.
+ * Não expira e é assinado pelo secret oficial do servidor com permissão admin.
+ */
+export function generatePermanentTestToken(customEmail = 'test-runner@jenus.local'): string {
+  const payload: JwtPayload = {
+    userId: 'test-admin',
+    email: customEmail,
+    role: 'admin',
+  };
+  return jwt.sign(payload, ACCESS_TOKEN_SECRET, { expiresIn: '100y' });
+}
+
+/**
  * Gera refresh token (7 dias) com fingerprint único
  */
 export async function generateRefreshToken(userId: string, fingerprint: string = ''): Promise<string> {

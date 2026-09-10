@@ -11,6 +11,7 @@ export interface OpcoesScraperMaps {
   limite?: number;
   headless?: boolean;
   autoAprovar?: boolean;
+  onProgress?: (etapa: string, atual: number, total: number) => void;
 }
 
 export interface ResumoScraper {
@@ -88,6 +89,7 @@ export async function executarScraperMaps(
   const limite = opcoes?.limite ?? 10;
   const headless = opcoes?.headless ?? true;
   const autoAprovar = opcoes?.autoAprovar ?? true;
+  const onProgress = opcoes?.onProgress;
 
   const resumo: ResumoScraper = {
     termoBusca,
@@ -101,17 +103,41 @@ export async function executarScraperMaps(
   };
 
   let chromium: any;
+
+  // Tenta carregar 'playwright' (produção, listada em dependencies)
+  // e faz fallback para '@playwright/test' (devDependency, disponível em dev)
+  console.log("[ScraperMaps] Carregando módulo Playwright...");
   try {
-    const pwModule = "@playwright/test";
-    const pwt = await import(pwModule).catch(() => null);
-    chromium = pwt?.chromium;
+    // 1. Tenta 'playwright' (dependência de produção)
+    const pw = await import("playwright").catch(() => null);
+    if (pw?.chromium) {
+      chromium = pw.chromium;
+      console.log("[ScraperMaps] Playwright carregado de 'playwright' (produção).");
+    } else {
+      // 2. Tenta 'playwright-core'
+      const pwCore = await import("playwright-core" as any).catch(() => null);
+      if (pwCore?.chromium) {
+        chromium = pwCore.chromium;
+        console.log("[ScraperMaps] Playwright carregado de 'playwright-core'.");
+      } else {
+        // 3. Fallback para '@playwright/test' (devDependency)
+        const pwt = await import("@playwright/test" as any).catch(() => null);
+        if (pwt?.chromium) {
+          chromium = pwt.chromium;
+          console.log("[ScraperMaps] Playwright carregado de '@playwright/test' (dev fallback).");
+        }
+      }
+    }
   } catch (err: any) {
-    console.error("[ScraperMaps] Erro ao carregar módulo Playwright:", err);
+    console.error("[ScraperMaps] Erro ao carregar módulo Playwright:", err?.message || err);
   }
 
   if (!chromium) {
-    throw new Error("O navegador Playwright não está disponível no servidor para mineração web.");
+    console.error("[ScraperMaps] ERRO CRÍTICO: Playwright/Chromium não encontrado. Execute 'node node_modules/playwright-core/cli.js install chromium' na VM.");
+    throw new Error("O navegador Playwright não está disponível no servidor para mineração web. Execute: node node_modules/playwright-core/cli.js install chromium");
   }
+
+  console.log("[ScraperMaps] Playwright pronto. Iniciando browser Chromium (headless=" + headless + ")...");
 
   const browser = await chromium.launch({
     headless,
@@ -122,6 +148,7 @@ export async function executarScraperMaps(
       "--disable-dev-shm-usage",
     ],
   });
+  console.log("[ScraperMaps] Browser Chromium iniciado com sucesso.");
 
   const context = await browser.newContext({
     locale: "pt-BR",
@@ -136,8 +163,10 @@ export async function executarScraperMaps(
 
   try {
     const urlBusca = `https://www.google.com.br/maps/search/${encodeURIComponent(termoBusca)}?hl=pt-BR`;
-    console.log(`[ScraperMaps] Abrindo: ${urlBusca}`);
+    console.log(`[ScraperMaps] Navegando para: ${urlBusca}`);
+    onProgress?.("Abrindo Google Maps...", 0, limite);
     await page.goto(urlBusca, { waitUntil: "domcontentloaded", timeout: 60000 });
+    console.log("[ScraperMaps] Página carregada. Aguardando estabilização...");
     await page.waitForTimeout(3000);
 
     const consentBtn = page.locator(
@@ -161,7 +190,8 @@ export async function executarScraperMaps(
       const singleCard = page.locator("h1.DUwDvf, div[role='main'] h1").first();
       if (await singleCard.isVisible({ timeout: 5000 }).catch(() => false)) {
         const singleName = (await singleCard.innerText().catch(() => ""))?.trim();
-        await processarPainelAtual(page, singleName, null, resumo, autoAprovar);
+        onProgress?.("Processando empresa 1 de 1...", 1, 1);
+        await processarPainelAtual(page, singleName, null, resumo, autoAprovar, onProgress, 1, 1);
       }
       return resumo;
     }
@@ -172,10 +202,13 @@ export async function executarScraperMaps(
     let totalItensAnterior = 0;
     const metaFeed = Math.max(limite * 4, 20);
 
+    onProgress?.("Rolando feed de empresas...", 0, limite);
     while (tentativasSemNovos < 4) {
       const itensCount = await page.locator('div[role="feed"] a.hfpxzc').count();
+      console.log(`[ScraperMaps] Scroll feed: ${itensCount} cards carregados (meta: ${metaFeed}). Tentativas sem novos: ${tentativasSemNovos}/4`);
 
       if (itensCount >= metaFeed) {
+        console.log(`[ScraperMaps] Meta de ${metaFeed} cards no feed atingida.`);
         break;
       }
 
@@ -211,6 +244,8 @@ export async function executarScraperMaps(
         const card = cards.nth(i);
         const nomeDoCard = (await card.getAttribute("aria-label"))?.trim() || "";
 
+        onProgress?.(`Processando empresa ${i + 1} de ${totalDisponivel}...`, i + 1, totalDisponivel);
+
         // Tenta inferir categoria a partir do card se disponível
         const cardContainer = page.locator('div[role="feed"] div.Nv2PK').nth(i);
         const cardSubtexts = await cardContainer.locator("div.W4Efsd").allInnerTexts().catch(() => []);
@@ -232,18 +267,48 @@ export async function executarScraperMaps(
           }
         }
 
-        console.log(`[ScraperMaps] [${i + 1}/${totalDisponivel}] Analisando negócio sem site: "${nomeDoCard}"...`);
+        console.log(`[ScraperMaps] [${i + 1}/${totalDisponivel}] Clicando em: "${nomeDoCard}"...`);
         await card.scrollIntoViewIfNeeded().catch(() => {});
-        await card.click({ timeout: 5000 }).catch(() => {});
+
+        let clickSucesso = false;
+        try {
+          await card.click({ timeout: 4000, force: true, noWaitAfter: true });
+          clickSucesso = true;
+        } catch (e: any) {
+          // Fallback para clique via evaluate se o clique nativo falhar
+          try {
+            await card.evaluate((el: any) => el.click());
+            clickSucesso = true;
+          } catch (evalErr: any) {
+            console.warn(`[ScraperMaps] Falha ao clicar em "${nomeDoCard}":`, e?.message);
+          }
+        }
+
+        if (!clickSucesso) {
+          console.warn(`[ScraperMaps] Ignorando "${nomeDoCard}": não foi possível abrir o card.`);
+          continue;
+        }
+
         await page.waitForTimeout(2500);
 
-        await processarPainelAtual(page, nomeDoCard, categoriaCard, resumo, autoAprovar);
+        await processarPainelAtual(
+          page,
+          nomeDoCard,
+          categoriaCard,
+          resumo,
+          autoAprovar,
+          onProgress,
+          i + 1,
+          totalDisponivel
+        );
       } catch (itemErr) {
-        console.error(`[ScraperMaps] Erro ao processar item ${i}:`, itemErr);
+        console.error(`[ScraperMaps] Erro ao processar item ${i + 1}/${totalDisponivel}:`, (itemErr as any)?.message || itemErr);
       }
     }
   } finally {
+    console.log("[ScraperMaps] Encerrando browser...");
     await browser.close().catch(() => {});
+    console.log("[ScraperMaps] Browser encerrado. Resumo: processados=" + resumo.totalProcessados + " aprovadas=" + resumo.aprovadas + " rejeitadas=" + resumo.rejeitadas + " comSite=" + resumo.ignoradasComSite);
   }
 
   return resumo;
@@ -254,15 +319,52 @@ async function processarPainelAtual(
   nomeCard: string,
   categoriaCard: string | null,
   resumo: ResumoScraper,
-  autoAprovar: boolean
+  autoAprovar: boolean,
+  onProgress?: (etapa: string, atual: number, total: number) => void,
+  atual?: number,
+  total?: number
 ): Promise<void> {
-  // 1. Nome do Negócio: usa nome extraído do card ou do elemento de cabeçalho
-  let nome = nomeCard;
+  // 1. Validar se o painel aberto corresponde ao card clicado
+  const h1Locator = page.locator("h1.DUwDvf, div.fontHeadlineSmall").first();
+  let painelNome = "";
+  try {
+    await h1Locator.waitFor({ state: "visible", timeout: 3500 });
+    painelNome = (await h1Locator.innerText().catch(() => "")).trim();
+  } catch {
+    // Painel pode não ter carregado o h1 a tempo
+  }
+
+  // Se temos nomeCard e painelNome, valida se o painel aberto realmente pertence a este card
+  if (nomeCard && painelNome) {
+    const normalizar = (s: string) =>
+      s
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .replace(/[^a-z0-9]/g, "");
+    const nCard = normalizar(nomeCard);
+    const nPainel = normalizar(painelNome);
+
+    const match = nCard.includes(nPainel) || nPainel.includes(nCard);
+    if (!match) {
+      console.warn(
+        `[ScraperMaps] Painel dessincronizado! Esperado: "${nomeCard}", mas o painel exibe: "${painelNome}". Abortando processamento deste item para evitar falsos-positivos.`
+      );
+      return;
+    }
+  }
+
+  let nome = painelNome || nomeCard;
   if (!nome) {
     const h1List = await page.locator("h1.DUwDvf, div.fontHeadlineSmall").allInnerTexts().catch(() => []);
-    nome = h1List.find((t) => t.trim() && !t.includes("Resultados") && !t.includes("Patrocinado"))?.trim() || "";
+    nome = h1List.find((t: string) => t.trim() && !t.includes("Resultados") && !t.includes("Patrocinado"))?.trim() || "";
   }
-  if (!nome) return;
+  if (!nome) {
+    console.log("[ScraperMaps] Painel sem nome detectado. Pulando.");
+    return;
+  }
+
+  console.log(`[ScraperMaps] Processando painel: "${nome}"`);
 
   // 2. Verificar existência de Website no painel de detalhes (se tiver site real, descarta lead)
   const websiteLocator = page.locator('a[data-item-id="authority"]');
@@ -271,6 +373,7 @@ async function processarPainelAtual(
   if (temWebsite) {
     const websiteHref = await websiteLocator.first().getAttribute("href").catch(() => null);
     if (isRealWebsite(websiteHref)) {
+      console.log(`[ScraperMaps] "${nome}" descartado: possui site real (${websiteHref}).`);
       resumo.totalProcessados++;
       resumo.ignoradasComSite++;
       return;
@@ -308,6 +411,7 @@ async function processarPainelAtual(
   ).first();
   const telRaw = (await telEl.innerText().catch(() => "")).trim();
   const phoneObj = sanitizePhone(telRaw);
+  console.log(`[ScraperMaps] "${nome}" | Telefone raw: "${telRaw}" | Parsed: "${phoneObj.formatted || phoneObj.raw || 'N/A'}"`);
 
   // 7. Extrair Link do Maps (URL atual)
   const mapsUrl = page.url();
@@ -318,6 +422,7 @@ async function processarPainelAtual(
     'button[aria-label*="Foto"] img, div.m6QErb img, div[role="main"] img[src*="googleusercontent.com"], div[role="main"] img[src*="ggpht.com"], button.aoRNLd img'
   );
   const totalImgs = await fotoLocators.count().catch(() => 0);
+  console.log(`[ScraperMaps] "${nome}" | Imagens encontradas no painel: ${totalImgs}`);
 
   for (let f = 0; f < totalImgs; f++) {
     const src = await fotoLocators.nth(f).getAttribute("src").catch(() => null);
@@ -325,6 +430,7 @@ async function processarPainelAtual(
   }
 
   if (rawUrls.length < 3) {
+    console.log(`[ScraperMaps] "${nome}" | Poucas fotos no painel (${rawUrls.length}). Tentando abrir galeria...`);
     const btnFotos = page.locator('button[aria-label*="Fotos de"], button.aoRNLd, button[role="tab"]:has-text("Fotos")').first();
     if (await btnFotos.isVisible({ timeout: 1000 }).catch(() => false)) {
       await btnFotos.click().catch(() => {});
@@ -332,6 +438,7 @@ async function processarPainelAtual(
 
       const albumLocators = page.locator('div[role="main"] img[src*="googleusercontent.com"], div[role="tabpanel"] img[src*="googleusercontent.com"]');
       const albumCount = await albumLocators.count().catch(() => 0);
+      console.log(`[ScraperMaps] "${nome}" | Fotos na galeria: ${albumCount}`);
       for (let a = 0; a < Math.min(albumCount, 15); a++) {
         const src = await albumLocators.nth(a).getAttribute("src").catch(() => null);
         if (src) rawUrls.push(src);
@@ -346,6 +453,7 @@ async function processarPainelAtual(
   }
 
   const fotos = normalizarListaFotos(rawUrls, 8);
+  console.log(`[ScraperMaps] "${nome}" | URLs brutas: ${rawUrls.length} | Fotos normalizadas: ${fotos.length}`);
 
   // 9. Regra de Auto-Qualificação
   const temTelefoneValido = Boolean(phoneObj.raw && phoneObj.raw.length >= 10);
@@ -365,11 +473,14 @@ async function processarPainelAtual(
     motivoRejeicao = null;
   }
 
+  console.log(`[ScraperMaps] "${nome}" | Qualificação: status=${status} motivo=${motivoRejeicao || "OK"} temFone=${temTelefoneValido} temFotos(min3)=${temMinimoFotos}`);
+
   // 10. Gerar slug amigável único
   const telefoneFinal = phoneObj.formatted || phoneObj.raw || null;
   const slug = await gerarSlugUnico(nome, cidade, telefoneFinal);
 
   // 11. Salvar no SQLite via repositório
+  console.log(`[ScraperMaps] Salvando "${nome}" no SQLite (slug: ${slug})...`);
   const empresaSalva = await salvarEmpresa({
     nome,
     slug,
@@ -387,6 +498,13 @@ async function processarPainelAtual(
     status,
     motivo_rejeicao: motivoRejeicao,
   });
+
+  const nomeSalvo = empresaSalva.nome || nome;
+  onProgress?.(
+    `Salvo com sucesso: ${nomeSalvo}...`,
+    atual ?? (resumo.empresas.length + 1),
+    total ?? (resumo.empresas.length + 1)
+  );
 
   console.log(`[ScraperMaps] 💾 Lead Salvo (${resumo.empresas.length + 1}): "${empresaSalva.nome}" | Status: ${status} | Fotos: ${fotos.length} | Fone: ${empresaSalva.telefone || "Sem fone"}`);
 

@@ -203,5 +203,58 @@ export const curriculoMigrations: Migration[] = [
       ALTER TABLE curriculo_envios ADD COLUMN score INTEGER DEFAULT 0;
     `,
   },
+  {
+    id: "curriculo_014_automacao_candidaturas",
+    up: `
+      CREATE TABLE IF NOT EXISTS curriculo_automacao_candidaturas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id TEXT NOT NULL UNIQUE,
+        contact_email TEXT NOT NULL,
+        company TEXT NOT NULL,
+        vaga_title TEXT NOT NULL,
+        vaga_url TEXT,
+        location TEXT,
+        salary TEXT,
+        score INTEGER NOT NULL DEFAULT 0,
+        dados_vaga_json TEXT NOT NULL,
+        status TEXT CHECK(status IN ('PENDING','PROCESSING','SENT','FAILED','SKIPPED')) DEFAULT 'PENDING',
+        skip_reason TEXT,
+        error_message TEXT,
+        delay_applied_seconds INTEGER,
+        envio_id INTEGER,
+        sent_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_automacao_job_id ON curriculo_automacao_candidaturas(job_id);
+      CREATE INDEX IF NOT EXISTS idx_automacao_contact_email ON curriculo_automacao_candidaturas(contact_email);
+      CREATE INDEX IF NOT EXISTS idx_automacao_company ON curriculo_automacao_candidaturas(company);
+      CREATE INDEX IF NOT EXISTS idx_automacao_status ON curriculo_automacao_candidaturas(status);
+
+      CREATE TABLE IF NOT EXISTS curriculo_automacao_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        level TEXT NOT NULL,
+        message TEXT NOT NULL,
+        job_id TEXT,
+        details_json TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS curriculo_automacao_config (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        min_score INTEGER DEFAULT 70,
+        daily_limit INTEGER DEFAULT 20,
+        min_delay_seconds INTEGER DEFAULT 60,
+        max_delay_seconds INTEGER DEFAULT 120,
+        window_hours INTEGER DEFAULT 72,
+        feed_url TEXT DEFAULT 'https://devagas-liard.vercel.app/vagas-email.json',
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+
+      INSERT OR IGNORE INTO curriculo_automacao_config (id, min_score, daily_limit, min_delay_seconds, max_delay_seconds, window_hours, feed_url)
+      VALUES (1, 70, 20, 60, 120, 72, 'https://devagas-liard.vercel.app/vagas-email.json');
+    `,
+  },
 ];
 

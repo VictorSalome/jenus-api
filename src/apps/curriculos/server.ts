@@ -25,6 +25,7 @@ import perfilRoutes from './perfil/perfil.routes.js';
 import compatibilidadeRoutes from './compatibilidade.routes.js';
 import emailTestRoutes from './shared/email/emailTest.routes.js';
 import analyticsRoutes from './analytics/analytics.routes.js';
+import automacaoRoutes from './automacao/automacao.routes.js';
 
 const app = express();
 
@@ -108,6 +109,7 @@ app.use('/', testeRoutes);
 app.use('/', smtpRoutes);
 app.use('/', exportRoutes);
 app.use('/', analyticsRoutes);
+app.use('/', automacaoRoutes);
 
 app.use(notFoundHandler);
 

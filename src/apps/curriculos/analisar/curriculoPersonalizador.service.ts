@@ -1070,3 +1070,5 @@ const extrairCompetenciasChave = (responsabilidades: string[], skills: Record<st
 
   return [...new Set(competencias)];
 };
+
+export { carregarPerfilCandidato, calcularPontuacaoRelevancia };

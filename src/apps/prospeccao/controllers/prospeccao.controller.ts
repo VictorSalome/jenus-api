@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import {
   obterEstatisticas,
   listarEmpresas,
@@ -13,9 +13,11 @@ import {
   pararScheduler,
   executarCiclo,
   obterStatusScheduler,
+  obterProgresso,
 } from "../services/scheduler.service.js";
+import * as logger from "../../../core/logger.js";
 
-export const obterStatus = async (_req: Request, res: Response): Promise<void> => {
+export const obterStatus = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const estatisticas = await obterEstatisticas();
     const scheduler = obterStatusScheduler();
@@ -27,15 +29,11 @@ export const obterStatus = async (_req: Request, res: Response): Promise<void> =
       },
     });
   } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      message: "Erro ao obter status da prospecção",
-      error: err?.message,
-    });
+    next(err);
   }
 };
 
-export const iniciar = async (_req: Request, res: Response): Promise<void> => {
+export const iniciar = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     iniciarScheduler();
     res.json({
@@ -44,15 +42,11 @@ export const iniciar = async (_req: Request, res: Response): Promise<void> => {
       data: obterStatusScheduler(),
     });
   } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      message: "Erro ao iniciar scheduler",
-      error: err?.message,
-    });
+    next(err);
   }
 };
 
-export const parar = async (_req: Request, res: Response): Promise<void> => {
+export const parar = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     pararScheduler();
     res.json({
@@ -61,18 +55,43 @@ export const parar = async (_req: Request, res: Response): Promise<void> => {
       data: obterStatusScheduler(),
     });
   } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      message: "Erro ao parar scheduler",
-      error: err?.message,
-    });
+    next(err);
   }
 };
 
-export const executarAgora = async (req: Request, res: Response): Promise<void> => {
+export const obterProgressoController = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { termo, limite } = req.body || {};
+    const progresso = obterProgresso();
+    res.json({
+      success: true,
+      data: progresso,
+    });
+  } catch (err: any) {
+    next(err);
+  }
+};
+
+export const executarAgora = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { termo, limite, async: isAsync } = req.body || {};
     const parsedLimite = limite !== undefined ? Number(limite) : undefined;
+
+    if (isAsync) {
+      executarCiclo(termo, parsedLimite).catch((err: any) => {
+        logger.error(
+          `Erro no ciclo em segundo plano para "${termo || "padrão"}": ${err?.message || err}`,
+          "ProspeccaoController"
+        );
+      });
+
+      res.status(202).json({
+        success: true,
+        message: "Mineração iniciada em segundo plano",
+        data: obterProgresso(),
+      });
+      return;
+    }
+
     const resultado = await executarCiclo(termo, parsedLimite);
 
     res.json({
@@ -81,15 +100,11 @@ export const executarAgora = async (req: Request, res: Response): Promise<void> 
       data: resultado,
     });
   } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      message: "Erro ao executar ciclo de prospecção",
-      error: err?.message,
-    });
+    next(err);
   }
 };
 
-export const listar = async (req: Request, res: Response): Promise<void> => {
+export const listar = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const limit = req.query.limit ? Number(req.query.limit) : undefined;
@@ -100,15 +115,11 @@ export const listar = async (req: Request, res: Response): Promise<void> => {
       data: empresas,
     });
   } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      message: "Erro ao listar empresas",
-      error: err?.message,
-    });
+    next(err);
   }
 };
 
-export const buscarPorSlug = async (req: Request, res: Response): Promise<void> => {
+export const buscarPorSlug = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { slug } = req.params;
     if (!slug) {
@@ -133,15 +144,11 @@ export const buscarPorSlug = async (req: Request, res: Response): Promise<void> 
       data: empresa,
     });
   } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      message: "Erro ao buscar empresa por slug",
-      error: err?.message,
-    });
+    next(err);
   }
 };
 
-export const atualizarStatusLead = async (req: Request, res: Response): Promise<void> => {
+export const atualizarStatusLead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { status, motivo_rejeicao } = req.body;
@@ -168,15 +175,11 @@ export const atualizarStatusLead = async (req: Request, res: Response): Promise<
       data: leadAtualizado,
     });
   } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      message: "Erro ao atualizar status do lead",
-      error: err?.message,
-    });
+    next(err);
   }
 };
 
-export const aprovarLead = async (req: Request, res: Response): Promise<void> => {
+export const aprovarLead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const lead = await atualizarStatus(id, StatusLead.APROVADA);
@@ -186,11 +189,11 @@ export const aprovarLead = async (req: Request, res: Response): Promise<void> =>
     }
     res.json({ success: true, message: "Lead aprovado com sucesso", data: lead });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: "Erro ao aprovar lead", error: err?.message });
+    next(err);
   }
 };
 
-export const rejeitarLead = async (req: Request, res: Response): Promise<void> => {
+export const rejeitarLead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const { motivo } = req.body || {};
@@ -201,11 +204,11 @@ export const rejeitarLead = async (req: Request, res: Response): Promise<void> =
     }
     res.json({ success: true, message: "Lead rejeitado com sucesso", data: lead });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: "Erro ao rejeitar lead", error: err?.message });
+    next(err);
   }
 };
 
-export const dispararLead = async (req: Request, res: Response): Promise<void> => {
+export const dispararLead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const empresa = await buscarEmpresaPorId(id);
@@ -228,15 +231,11 @@ export const dispararLead = async (req: Request, res: Response): Promise<void> =
       data: resultado,
     });
   } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      message: "Erro ao disparar lead",
-      error: err?.message,
-    });
+    next(err);
   }
 };
 
-export const converterLead = async (req: Request, res: Response): Promise<void> => {
+export const converterLead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const lead = await atualizarStatus(id, StatusLead.CONVERTIDA);
@@ -250,10 +249,6 @@ export const converterLead = async (req: Request, res: Response): Promise<void> 
       data: lead,
     });
   } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      message: "Erro ao converter lead",
-      error: err?.message,
-    });
+    next(err);
   }
 };

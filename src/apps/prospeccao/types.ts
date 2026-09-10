@@ -88,3 +88,19 @@ export interface AtualizarEmpresaLeadDTO {
 }
 
 export type EstatisticasStatus = Record<StatusLead, number>;
+
+export interface ProgressoScraper {
+  emExecucao: boolean;
+  termo: string;
+  etapa: string;
+  atual: number;
+  total: number;
+  porcentagem: number;
+  iniciadoEm?: string | null;
+  finalizadoEm?: string | null;
+  erro?: string | null;
+  ultimoResultado?: {
+    coletados: number;
+    enviados: number;
+  } | null;
+}
