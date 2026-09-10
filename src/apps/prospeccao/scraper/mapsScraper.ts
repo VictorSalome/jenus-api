@@ -231,87 +231,67 @@ export async function executarScraperMaps(
       if (fimLista) break;
     }
 
-    const cards = page.locator('div[role="feed"] a.hfpxzc');
-    const totalDisponivel = await cards.count();
-    console.log(`[ScraperMaps] Itens disponíveis no feed: ${totalDisponivel}. Buscando ${limite} leads sem site...`);
+    const itensCandidatos = await page.evaluate(() => {
+      const doc = (globalThis as any).document;
+      const cards: any[] = Array.from(doc.querySelectorAll('div[role="feed"] div.Nv2PK'));
+      return cards
+        .map((c: any) => {
+          const a = c.querySelector('a.hfpxzc');
+          const name = a?.getAttribute('aria-label')?.trim() || '';
+          const href = a?.href || '';
+          const subtexts = Array.from(c.querySelectorAll('div.W4Efsd')).map((el: any) => el.textContent || '');
+          const categoria = subtexts.find((t: string) => t.includes('·'))?.split('·')[0].trim() || null;
+          const siteEl = c.querySelector(
+            'a[aria-label*="site" i], a[data-value*="site" i], a[data-value*="website" i]'
+          );
+          const siteHref = siteEl?.href || null;
+
+          return {
+            name,
+            href,
+            categoria,
+            siteHref,
+          };
+        })
+        .filter((item: any) => item.name && item.href);
+    });
+
+    const totalDisponivel = itensCandidatos.length;
+    console.log(`[ScraperMaps] Itens extraídos do feed: ${totalDisponivel}. Buscando ${limite} leads sem site...`);
 
     for (let i = 0; i < totalDisponivel; i++) {
       if (resumo.empresas.length >= limite) {
         console.log(`[ScraperMaps] ✅ Meta de ${limite} empresas alcançada com sucesso! Encerrando.`);
         break;
       }
-      try {
-        const card = cards.nth(i);
-        const nomeDoCard = (await card.getAttribute("aria-label"))?.trim() || "";
 
+      const item = itensCandidatos[i];
+      try {
         onProgress?.(`Processando empresa ${i + 1} de ${totalDisponivel}...`, i + 1, totalDisponivel);
 
-        // Tenta inferir categoria a partir do card se disponível
-        const cardContainer = page.locator('div[role="feed"] div.Nv2PK').nth(i);
-        const cardSubtexts = await cardContainer.locator("div.W4Efsd").allInnerTexts().catch(() => []);
-        const categoriaCard = cardSubtexts.find((t) => t.includes("·"))?.split("·")[0].trim() || null;
-
-        // Verifica website direto no card no feed
-        const siteInCard = cardContainer.locator(
-          'a[aria-label*="site" i], a[data-value*="site" i], a[data-value*="website" i]'
-        );
-        const temSiteNoCard = await siteInCard.first().isVisible({ timeout: 400 }).catch(() => false);
-
-        if (temSiteNoCard) {
-          const siteHref = await siteInCard.first().getAttribute("href").catch(() => null);
-          if (isRealWebsite(siteHref)) {
-            console.log(`[ScraperMaps] [${i + 1}/${totalDisponivel}] Pulando "${nomeDoCard}": já possui site oficial.`);
-            resumo.totalProcessados++;
-            resumo.ignoradasComSite++;
-            continue;
-          }
-        }
-
-        console.log(`[ScraperMaps] [${i + 1}/${totalDisponivel}] Abrindo: "${nomeDoCard}"...`);
-        await card.scrollIntoViewIfNeeded().catch(() => {});
-
-        let clickSucesso = false;
-        const cardTitle = cardContainer.locator('div.qBF1Pd, div.fontHeadlineSmall').first();
-
-        try {
-          if (await cardTitle.isVisible({ timeout: 500 }).catch(() => false)) {
-            await cardTitle.click({ timeout: 3000, force: true, noWaitAfter: true });
-            clickSucesso = true;
-          } else {
-            await card.click({ timeout: 3000, force: true, noWaitAfter: true });
-            clickSucesso = true;
-          }
-        } catch {
-          try {
-            await card.evaluate((el: any) => el.click());
-            clickSucesso = true;
-          } catch (evalErr: any) {
-            console.warn(`[ScraperMaps] Falha ao clicar em "${nomeDoCard}":`, evalErr?.message);
-          }
-        }
-
-        if (!clickSucesso) {
-          console.warn(`[ScraperMaps] Ignorando "${nomeDoCard}": não foi possível abrir o card.`);
+        if (item.siteHref && isRealWebsite(item.siteHref)) {
+          console.log(`[ScraperMaps] [${i + 1}/${totalDisponivel}] Pulando "${item.name}": já possui site oficial no card.`);
+          resumo.totalProcessados++;
+          resumo.ignoradasComSite++;
           continue;
         }
 
-        // Aguarda estabilização do painel do novo estabelecimento
-        const h1 = page.locator("div[role='main'] h1.DUwDvf, div[role='main'] div.fontHeadlineSmall, h1.DUwDvf").first();
-        await h1.waitFor({ state: "visible", timeout: 4000 }).catch(() => {});
-        await page.waitForTimeout(2000);
+        console.log(`[ScraperMaps] [${i + 1}/${totalDisponivel}] Navegando para o local: "${item.name}"...`);
+        await page.goto(item.href, { waitUntil: "domcontentloaded", timeout: 45000 });
+        await page.waitForTimeout(2500);
 
         await processarPainelAtual(
           page,
-          nomeDoCard,
-          categoriaCard,
+          item.name,
+          item.categoria,
           resumo,
           autoAprovar,
           onProgress,
           i + 1,
           totalDisponivel
         );
-      } catch (itemErr) {
-        console.error(`[ScraperMaps] Erro ao processar item ${i + 1}/${totalDisponivel}:`, (itemErr as any)?.message || itemErr);
+      } catch (itemErr: any) {
+        console.error(`[ScraperMaps] Erro ao processar "${item.name}":`, itemErr?.message || itemErr);
       }
     }
   } finally {
@@ -321,6 +301,23 @@ export async function executarScraperMaps(
   }
 
   return resumo;
+}
+
+async function fecharPainelSeAberto(page: Page): Promise<void> {
+  try {
+    const btnVoltar = page
+      .locator(
+        'button[aria-label="Voltar"], button[aria-label="Back"], button[jsaction*="pane.back"], button[jsaction*="navigationRail.back"], button[aria-label="Fechar"], button[aria-label="Close"], button.hYBOP'
+      )
+      .first();
+
+    if (await btnVoltar.isVisible({ timeout: 800 }).catch(() => false)) {
+      await btnVoltar.click().catch(() => {});
+      await page.waitForTimeout(600);
+    }
+  } catch {
+    // Silencioso se não houver botão aberto
+  }
 }
 
 async function extrairFotosValidadas(
@@ -343,55 +340,49 @@ async function extrairFotosValidadas(
   }
 
   // 2. Tentar abrir a galeria oficial do estabelecimento
-  const btnFotos = panelMain
+  const btnFotos = page
     .locator(
-      'button[aria-label*="Fotos de"], button[aria-label*="Photos of"], button.aoRNLd, button[role="tab"]:has-text("Fotos")'
+      'button[role="tab"]:has-text("Fotos"), button[role="tab"]:has-text("Photos"), button[aria-label*="Fotos de"], button[aria-label*="Photos of"], button.aoRNLd'
     )
     .first();
 
   if (await btnFotos.isVisible({ timeout: 1500 }).catch(() => false)) {
     try {
       await btnFotos.click().catch(() => {});
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(2000);
 
-      // Galeria aberta: coletar imagens do container da galeria
-      const galleryPanel = page
-        .locator('div[role="tabpanel"], div.m6QErb[aria-label*="Fotos"], div[role="main"]')
-        .first();
+      // Galeria aberta: coletar imagens do container da galeria (tanto <img> quanto background-image)
+      const fotosGaleria: string[] = await page.evaluate(() => {
+        const doc = (globalThis as any).document;
+        const urls: string[] = [];
 
-      const galleryImgs = galleryPanel.locator(
-        'img[src*="googleusercontent.com"], img[src*="ggpht.com"], img[src*="streetviewpixels"]'
-      );
-      const galleryCount = await galleryImgs.count().catch(() => 0);
-
-      for (let g = 0; g < Math.min(galleryCount, 25); g++) {
-        const imgEl = galleryImgs.nth(g);
-        // Exclui expressamente qualquer imagem do feed lateral, de recomendações ou de reviews
-        const isExcluded = await imgEl
-          .evaluate((el: any) => {
-            return Boolean(
-              el.closest('div[role="feed"]') ||
-              el.closest('[aria-label*="Pessoas também"], [aria-label*="People also"]') ||
-              el.closest('div.jftiEf')
-            );
-          })
-          .catch(() => true);
-
-        if (!isExcluded) {
-          const src = await imgEl.getAttribute("src").catch(() => null);
-          if (src) {
-            candidatos.push({ url: src, source: "galeria" });
+        // Imagens de fotos na galeria
+        const imgs = doc.querySelectorAll(
+          'div[role="tabpanel"] img, div.m6QErb[aria-label*="Fotos"] img, div[role="main"] a[data-photo-index] img, button[aria-label*="Foto"] img, div.m6QErb div[role="img"] img'
+        );
+        imgs.forEach((img: any) => {
+          if (img.src && !img.closest('div[role="feed"]') && !img.closest('div.jftiEf')) {
+            urls.push(img.src);
           }
-        }
-      }
+        });
 
-      // Fechar galeria e retornar ao painel principal
-      const backBtn = page
-        .locator('button[aria-label="Voltar"], button[aria-label="Back"], button.w8kdnf')
-        .first();
-      if (await backBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await backBtn.click().catch(() => {});
-        await page.waitForTimeout(500);
+        // Background-image de cards de foto
+        const bgElements = doc.querySelectorAll(
+          'div[role="tabpanel"] div[style*="background-image"], div[role="main"] div[style*="background-image"]'
+        );
+        bgElements.forEach((el: any) => {
+          const bg = el.style.backgroundImage || '';
+          const match = bg.match(/url\(["']?([^"']+)["']?\)/);
+          if (match && match[1] && !el.closest('div[role="feed"]') && !el.closest('div.jftiEf')) {
+            urls.push(match[1]);
+          }
+        });
+
+        return urls;
+      });
+
+      for (const url of fotosGaleria) {
+        candidatos.push({ url, source: "galeria" });
       }
     } catch (galErr: any) {
       console.warn(`[ScraperMaps] Falha ao navegar na galeria de "${nome}":`, galErr?.message || galErr);
@@ -477,13 +468,13 @@ async function processarPainelAtual(
 ): Promise<void> {
   // 1. Validar se o painel aberto corresponde ao card clicado
   const h1Locator = page.locator("h1.DUwDvf, div.fontHeadlineSmall").first();
-  let painelNome = "";
-  try {
-    await h1Locator.waitFor({ state: "visible", timeout: 3500 });
-    painelNome = (await h1Locator.innerText().catch(() => "")).trim();
-  } catch {
-    // Painel pode não ter carregado o h1 a tempo
-  }
+    let painelNome = "";
+    try {
+      await h1Locator.waitFor({ state: "visible", timeout: 3500 });
+      painelNome = (await h1Locator.innerText().catch(() => "")).trim();
+    } catch {
+      // Painel pode não ter carregado o h1 a tempo
+    }
 
   // Se temos nomeCard e painelNome, valida se o painel aberto realmente pertence a este card
   if (nomeCard && painelNome) {
