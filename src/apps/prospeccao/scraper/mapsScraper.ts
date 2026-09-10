@@ -1,9 +1,9 @@
 import { initDb } from "../../../core/database.js";
 import { salvarEmpresa, buscarPorSlug } from "../repositories/empresa.repository.js";
-import { StatusLead, type EmpresaLead } from "../types.js";
+import { StatusLead, type EmpresaLead, type FotoMeta } from "../types.js";
 import { slugify } from "./utils/slugify.js";
 import { sanitizePhone } from "./utils/phoneSanitizer.js";
-import { normalizarListaFotos } from "./utils/googlePhotos.js";
+import { normalizarListaFotos, normalizarListaFotosComMeta } from "./utils/googlePhotos.js";
 
 type Page = any;
 
@@ -267,20 +267,26 @@ export async function executarScraperMaps(
           }
         }
 
-        console.log(`[ScraperMaps] [${i + 1}/${totalDisponivel}] Clicando em: "${nomeDoCard}"...`);
+        console.log(`[ScraperMaps] [${i + 1}/${totalDisponivel}] Abrindo: "${nomeDoCard}"...`);
         await card.scrollIntoViewIfNeeded().catch(() => {});
 
         let clickSucesso = false;
+        const cardTitle = cardContainer.locator('div.qBF1Pd, div.fontHeadlineSmall').first();
+
         try {
-          await card.click({ timeout: 4000, force: true, noWaitAfter: true });
-          clickSucesso = true;
-        } catch (e: any) {
-          // Fallback para clique via evaluate se o clique nativo falhar
+          if (await cardTitle.isVisible({ timeout: 500 }).catch(() => false)) {
+            await cardTitle.click({ timeout: 3000, force: true, noWaitAfter: true });
+            clickSucesso = true;
+          } else {
+            await card.click({ timeout: 3000, force: true, noWaitAfter: true });
+            clickSucesso = true;
+          }
+        } catch {
           try {
             await card.evaluate((el: any) => el.click());
             clickSucesso = true;
           } catch (evalErr: any) {
-            console.warn(`[ScraperMaps] Falha ao clicar em "${nomeDoCard}":`, e?.message);
+            console.warn(`[ScraperMaps] Falha ao clicar em "${nomeDoCard}":`, evalErr?.message);
           }
         }
 
@@ -289,7 +295,10 @@ export async function executarScraperMaps(
           continue;
         }
 
-        await page.waitForTimeout(2500);
+        // Aguarda estabilização do painel do novo estabelecimento
+        const h1 = page.locator("div[role='main'] h1.DUwDvf, div[role='main'] div.fontHeadlineSmall, h1.DUwDvf").first();
+        await h1.waitFor({ state: "visible", timeout: 4000 }).catch(() => {});
+        await page.waitForTimeout(2000);
 
         await processarPainelAtual(
           page,
@@ -312,6 +321,148 @@ export async function executarScraperMaps(
   }
 
   return resumo;
+}
+
+async function extrairFotosValidadas(
+  page: Page,
+  nome: string
+): Promise<FotoMeta[]> {
+  const panelMain = page.locator('div[role="main"]').first();
+  const candidatos: Array<{ url: string; source: "capa" | "galeria" | "painel" }> = [];
+
+  // 1. Foto de capa do cabeçalho do estabelecimento
+  const capaLocators = panelMain.locator(
+    'button.aoRNLd img, button[aria-label*="Foto"] img, button[aria-label*="Photo"] img'
+  );
+  const totalCapas = await capaLocators.count().catch(() => 0);
+  for (let c = 0; c < totalCapas; c++) {
+    const src = await capaLocators.nth(c).getAttribute("src").catch(() => null);
+    if (src) {
+      candidatos.push({ url: src, source: "capa" });
+    }
+  }
+
+  // 2. Tentar abrir a galeria oficial do estabelecimento
+  const btnFotos = panelMain
+    .locator(
+      'button[aria-label*="Fotos de"], button[aria-label*="Photos of"], button.aoRNLd, button[role="tab"]:has-text("Fotos")'
+    )
+    .first();
+
+  if (await btnFotos.isVisible({ timeout: 1500 }).catch(() => false)) {
+    try {
+      await btnFotos.click().catch(() => {});
+      await page.waitForTimeout(1500);
+
+      // Galeria aberta: coletar imagens do container da galeria
+      const galleryPanel = page
+        .locator('div[role="tabpanel"], div.m6QErb[aria-label*="Fotos"], div[role="main"]')
+        .first();
+
+      const galleryImgs = galleryPanel.locator(
+        'img[src*="googleusercontent.com"], img[src*="ggpht.com"], img[src*="streetviewpixels"]'
+      );
+      const galleryCount = await galleryImgs.count().catch(() => 0);
+
+      for (let g = 0; g < Math.min(galleryCount, 25); g++) {
+        const imgEl = galleryImgs.nth(g);
+        // Exclui expressamente qualquer imagem do feed lateral, de recomendações ou de reviews
+        const isExcluded = await imgEl
+          .evaluate((el: any) => {
+            return Boolean(
+              el.closest('div[role="feed"]') ||
+              el.closest('[aria-label*="Pessoas também"], [aria-label*="People also"]') ||
+              el.closest('div.jftiEf')
+            );
+          })
+          .catch(() => true);
+
+        if (!isExcluded) {
+          const src = await imgEl.getAttribute("src").catch(() => null);
+          if (src) {
+            candidatos.push({ url: src, source: "galeria" });
+          }
+        }
+      }
+
+      // Fechar galeria e retornar ao painel principal
+      const backBtn = page
+        .locator('button[aria-label="Voltar"], button[aria-label="Back"], button.w8kdnf')
+        .first();
+      if (await backBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await backBtn.click().catch(() => {});
+        await page.waitForTimeout(500);
+      }
+    } catch (galErr: any) {
+      console.warn(`[ScraperMaps] Falha ao navegar na galeria de "${nome}":`, galErr?.message || galErr);
+    }
+  }
+
+  // 3. Normalização prévia e eliminação de lixo visual (avatares, ícones, tiles)
+  const metaCandidatos = normalizarListaFotosComMeta(candidatos, 15);
+  console.log(`[ScraperMaps] "${nome}" | Candidatos brutos: ${candidatos.length} | Meta válidos: ${metaCandidatos.length}`);
+  if (metaCandidatos.length === 0) {
+    return [];
+  }
+
+  // 4. Validação no browser das dimensões reais (naturalWidth >= 600 && naturalHeight >= 400)
+  try {
+    const fotosValidadas: FotoMeta[] = await page.evaluate(
+      async (items: FotoMeta[]) => {
+        const validadas: FotoMeta[] = [];
+
+        for (const item of items) {
+          try {
+            const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+              const ImageConstructor = (globalThis as any).Image;
+              const img = new ImageConstructor();
+              img.referrerPolicy = "no-referrer";
+              const timer = setTimeout(() => reject(new Error("timeout")), 3500);
+              img.onload = () => {
+                clearTimeout(timer);
+                resolve({ width: img.naturalWidth, height: img.naturalHeight });
+              };
+              img.onerror = () => {
+                clearTimeout(timer);
+                reject(new Error("error"));
+              };
+              img.src = item.url;
+            });
+
+            // Resolução mínima exigida: largura >= 600 e altura >= 400
+            if (dims.width >= 600 && dims.height >= 400) {
+              const ratio = dims.width / dims.height;
+              // Proporção fotográfica plausível (entre 0.5 e 2.5)
+              if (ratio >= 0.5 && ratio <= 2.5) {
+                validadas.push({
+                  ...item,
+                  width: dims.width,
+                  height: dims.height,
+                });
+              }
+            }
+          } catch {
+            // Falha de carregamento ou timeout
+          }
+
+          if (validadas.length >= 8) break;
+        }
+
+        return validadas;
+      },
+      metaCandidatos
+    );
+
+    if (fotosValidadas.length > 0) {
+      return fotosValidadas;
+    }
+
+    // Se o browser bloqueou o carregamento dinâmico no sandbox (CSP), mantém as fotos com alta confiança (/p/, /gps-cs-s/)
+    return metaCandidatos.filter((m) => m.confianca === "alta").slice(0, 8);
+  } catch (evalErr: any) {
+    console.warn(`[ScraperMaps] Falha na validação de dimensões de "${nome}":`, evalErr?.message || evalErr);
+    return metaCandidatos.filter((m) => m.confianca === "alta").slice(0, 8);
+  }
 }
 
 async function processarPainelAtual(
@@ -416,44 +567,10 @@ async function processarPainelAtual(
   // 7. Extrair Link do Maps (URL atual)
   const mapsUrl = page.url();
 
-  // 8. Extrair Fotos e normalizar para alta resolução (=w1200-h800-k-no)
-  const rawUrls: string[] = [];
-  const fotoLocators = page.locator(
-    'button[aria-label*="Foto"] img, div.m6QErb img, div[role="main"] img[src*="googleusercontent.com"], div[role="main"] img[src*="ggpht.com"], button.aoRNLd img'
-  );
-  const totalImgs = await fotoLocators.count().catch(() => 0);
-  console.log(`[ScraperMaps] "${nome}" | Imagens encontradas no painel: ${totalImgs}`);
-
-  for (let f = 0; f < totalImgs; f++) {
-    const src = await fotoLocators.nth(f).getAttribute("src").catch(() => null);
-    if (src) rawUrls.push(src);
-  }
-
-  if (rawUrls.length < 3) {
-    console.log(`[ScraperMaps] "${nome}" | Poucas fotos no painel (${rawUrls.length}). Tentando abrir galeria...`);
-    const btnFotos = page.locator('button[aria-label*="Fotos de"], button.aoRNLd, button[role="tab"]:has-text("Fotos")').first();
-    if (await btnFotos.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await btnFotos.click().catch(() => {});
-      await page.waitForTimeout(1500);
-
-      const albumLocators = page.locator('div[role="main"] img[src*="googleusercontent.com"], div[role="tabpanel"] img[src*="googleusercontent.com"]');
-      const albumCount = await albumLocators.count().catch(() => 0);
-      console.log(`[ScraperMaps] "${nome}" | Fotos na galeria: ${albumCount}`);
-      for (let a = 0; a < Math.min(albumCount, 15); a++) {
-        const src = await albumLocators.nth(a).getAttribute("src").catch(() => null);
-        if (src) rawUrls.push(src);
-      }
-
-      const backBtn = page.locator('button[aria-label="Voltar"], button[aria-label="Back"]').first();
-      if (await backBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await backBtn.click().catch(() => {});
-        await page.waitForTimeout(500);
-      }
-    }
-  }
-
-  const fotos = normalizarListaFotos(rawUrls, 8);
-  console.log(`[ScraperMaps] "${nome}" | URLs brutas: ${rawUrls.length} | Fotos normalizadas: ${fotos.length}`);
+  // 8. Extrair Fotos reais com validação de dimensões (>= 600x400) e isolamento estrito de DOM
+  const fotosMeta = await extrairFotosValidadas(page, nome);
+  const fotos = fotosMeta.map((f) => f.url);
+  console.log(`[ScraperMaps] "${nome}" | Fotos reais validadas (>=600x400): ${fotos.length}`);
 
   // 9. Regra de Auto-Qualificação
   const temTelefoneValido = Boolean(phoneObj.raw && phoneObj.raw.length >= 10);
@@ -494,7 +611,7 @@ async function processarPainelAtual(
     maps_url: mapsUrl,
     avaliacao: !isNaN(avaliacao as number) ? avaliacao : null,
     total_avaliacoes: !isNaN(totalAvaliacoes as number) ? totalAvaliacoes : null,
-    fotos,
+    fotos: fotosMeta.length > 0 ? fotosMeta : fotos,
     status,
     motivo_rejeicao: motivoRejeicao,
   });

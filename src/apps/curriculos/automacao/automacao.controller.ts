@@ -83,6 +83,7 @@ export const iniciarAutomacaoController = async (
       maxDelaySeconds,
       windowHours,
       feedUrl,
+      overrideEmail,
     } = req.body || {};
 
     const status = await vagasEmailWorker.iniciar({
@@ -96,6 +97,7 @@ export const iniciarAutomacaoController = async (
         : {}),
       ...(windowHours !== undefined ? { windowHours: Number(windowHours) } : {}),
       ...(feedUrl ? { feedUrl: String(feedUrl) } : {}),
+      ...(overrideEmail !== undefined ? { overrideEmail: overrideEmail ? String(overrideEmail) : null } : {}),
     });
 
     res.json({
@@ -103,6 +105,12 @@ export const iniciarAutomacaoController = async (
       ...status,
     });
   } catch (err: any) {
+    if (
+      err.message?.includes("já está em execução") ||
+      err.message?.includes("já foi atingido")
+    ) {
+      return res.status(400).json({ ok: false, message: err.message });
+    }
     logError("Erro ao iniciar automação:", err);
     next(err);
   }
@@ -130,8 +138,8 @@ export const retomarAutomacaoController = (req: Request, res: Response) => {
  * POST /automacao/stop
  * Cancela o worker
  */
-export const pararAutomacaoController = (req: Request, res: Response) => {
-  const status = vagasEmailWorker.parar();
+export const pararAutomacaoController = async (req: Request, res: Response) => {
+  const status = await vagasEmailWorker.parar();
   res.json({ ok: true, ...status });
 };
 

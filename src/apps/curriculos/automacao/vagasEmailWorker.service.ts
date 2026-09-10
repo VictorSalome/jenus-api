@@ -1,4 +1,5 @@
 import axios from "axios";
+import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { getDb } from "../../../core/database.js";
@@ -55,11 +56,18 @@ class VagasEmailWorkerService {
 
   private abortController: AbortController | null = null;
   private delayPromiseResolve: (() => void) | null = null;
+  private currentRunId: number | null = null;
+  private currentRunUuid: string | null = null;
 
   constructor() {
     this.carregarConfiguracaoSalva().catch((err) => {
       logError("Erro ao carregar configuração inicial da automação:", err);
     });
+  }
+
+  private isInterrompido(): boolean {
+    const s = this.state as AutomacaoState;
+    return s === "STOPPING" || s === "STOPPED" || s === "IDLE" || Boolean(this.abortController?.signal.aborted);
   }
 
   // ── Configurações ──────────────────────────────────────────────────────────
@@ -226,7 +234,7 @@ class VagasEmailWorkerService {
     };
   }
 
-  // ── Contagem de Envios nas últimas 24h ─────────────────────────────────────
+  // ── Contagem e Reserva Atômica de Envios nas últimas 24h ──────────────────
 
   private async contarEnviosUltimas24h(): Promise<number> {
     const db = await getDb();
@@ -236,6 +244,65 @@ class VagasEmailWorkerService {
        WHERE status = 'SENT' AND sent_at >= datetime('now', '-24 hours')`,
     );
     return row?.total || 0;
+  }
+
+  /**
+   * Reserva atomicamente um slot diário de envio usando transação no SQLite.
+   * Impede condições de corrida (race conditions) mesmo em múltiplas instâncias ou requisições concorrentes.
+   */
+  private async reservarSlotEnvioAtomico(
+    vaga: VagaNormalizada,
+    runId: number | null,
+    dailyLimit: number,
+  ): Promise<boolean> {
+    const db = await getDb();
+    try {
+      await db.exec("BEGIN IMMEDIATE");
+
+      // 1. Contar envios confirmados (SENT) + slots em processamento ativo (PROCESSING nos últimos 10 min)
+      const contagem = await db.get<{ total: number }>(
+        `SELECT (
+          (SELECT count(*) FROM curriculo_automacao_candidaturas WHERE status = 'SENT' AND sent_at >= datetime('now', '-24 hours')) +
+          (SELECT count(*) FROM curriculo_automacao_candidaturas WHERE status = 'PROCESSING' AND updated_at >= datetime('now', '-10 minutes'))
+        ) as total`,
+      );
+
+      const totalOcupado = contagem?.total ?? 0;
+      if (totalOcupado >= dailyLimit) {
+        await db.exec("ROLLBACK");
+        return false;
+      }
+
+      // 2. Transiciona a vaga para PROCESSING reservando o slot atomicamente
+      await db.run(
+        `INSERT INTO curriculo_automacao_candidaturas
+         (job_id, contact_email, company, vaga_title, vaga_url, location, salary, score, dados_vaga_json, status, run_id, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROCESSING', ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(job_id) DO UPDATE SET
+           status = 'PROCESSING',
+           run_id = excluded.run_id,
+           updated_at = CURRENT_TIMESTAMP`,
+        vaga.jobId,
+        vaga.contactEmail,
+        vaga.company,
+        vaga.title,
+        vaga.sourceUrl,
+        vaga.location,
+        vaga.salary,
+        vaga.score,
+        JSON.stringify(vaga.dadosVagaFormatados),
+        runId,
+      );
+
+      await db.exec("COMMIT");
+      return true;
+    } catch (err) {
+      try {
+        await db.exec("ROLLBACK");
+      } catch {}
+      logError("Erro na reserva atômica de slot de envio:", err);
+      return false;
+    }
   }
 
   // ── Modo Preview Completo ──────────────────────────────────────────────────
@@ -439,46 +506,124 @@ class VagasEmailWorkerService {
     if (!vaga) throw new Error("Vaga não encontrada no feed");
 
     const dadosVagaFormatados = this.normalizarDadosVaga(vaga);
-    return personalizarCurriculo(dadosVagaFormatados);
+    const curriculo = await personalizarCurriculo(dadosVagaFormatados);
+
+    // Persiste o snapshot no banco para garantir que o preview é exatamente o que será enviado
+    try {
+      const db = await getDb();
+      await db.run(
+        `UPDATE curriculo_automacao_candidaturas
+         SET curriculo_snapshot_json = ?
+         WHERE job_id = ?`,
+        JSON.stringify(curriculo),
+        jobId,
+      );
+    } catch {}
+
+    return curriculo;
+  }
+
+  private async finalizarRun(
+    status: AutomacaoState,
+    stopReason?: string,
+  ): Promise<void> {
+    if (!this.currentRunId) return;
+    try {
+      const db = await getDb();
+      await db.run(
+        `UPDATE curriculo_automacao_runs
+         SET status = ?,
+             total_enviadas = ?,
+             total_puladas = ?,
+             total_falhas = ?,
+             finished_at = CURRENT_TIMESTAMP,
+             stop_reason = ?
+         WHERE id = ?`,
+        status,
+        this.enviadas,
+        this.puladas,
+        this.falhas,
+        stopReason || null,
+        this.currentRunId,
+      );
+    } catch (err) {
+      logError("Erro ao finalizar curriculo_automacao_runs:", err);
+    }
   }
 
   // ── Métodos de Controle do Worker (Start / Pause / Resume / Stop) ──────────
 
   public async iniciar(configCustom?: Partial<AutomacaoConfig>): Promise<AutomacaoStatus> {
-    if (this.state === "RUNNING") {
-      return this.getStatus();
+    if (this.state === "RUNNING" || this.state === "STOPPING") {
+      throw new Error(
+        "Uma automação já está em execução no servidor. Pause ou pare antes de iniciar outra.",
+      );
     }
 
-    if (configCustom) {
-      await this.salvarConfiguracao(configCustom);
-    } else {
-      await this.carregarConfiguracaoSalva();
-    }
-
+    // Trava síncrona imediata contra concorrência
     this.state = "RUNNING";
-    this.iniciadoEm = new Date().toISOString();
-    this.processadas = 0;
-    this.enviadas = 0;
-    this.puladas = 0;
-    this.falhas = 0;
-    this.mensagem = "Iniciando análise de vagas...";
-    this.abortController = new AbortController();
 
-    await this.registrarLog(
-      "info",
-      `Iniciando ciclo de envio automático. MinScore=${this.config.minScore}%, Limite=${this.config.dailyLimit}/dia, Delay=${this.config.minDelaySeconds}s-${this.config.maxDelaySeconds}s`,
-    );
+    try {
+      if (configCustom) {
+        await this.salvarConfiguracao(configCustom);
+      } else {
+        await this.carregarConfiguracaoSalva();
+      }
 
-    // Dispara execução em background
-    this.executarCiclo().catch(async (err) => {
-      this.state = "FAILED";
-      this.mensagem = `Erro fatal no worker: ${err?.message || err}`;
-      await this.registrarLog("error", this.mensagem, null, {
-        stack: err?.stack,
+      // Proteção atômica do limite diário antes de iniciar
+      const enviosUltimas24h = await this.contarEnviosUltimas24h();
+      if (enviosUltimas24h >= this.config.dailyLimit) {
+        throw new Error(
+          `Limite diário de ${this.config.dailyLimit} candidaturas já foi atingido nas últimas 24h.`,
+        );
+      }
+
+      const runUuid = crypto.randomUUID();
+      this.currentRunUuid = runUuid;
+
+      const db = await getDb();
+      const runInsert = await db.run(
+        `INSERT INTO curriculo_automacao_runs
+         (run_uuid, status, min_score, daily_limit, min_delay_seconds, max_delay_seconds, window_hours, config_snapshot_json)
+         VALUES (?, 'RUNNING', ?, ?, ?, ?, ?, ?)`,
+        runUuid,
+        this.config.minScore,
+        this.config.dailyLimit,
+        this.config.minDelaySeconds,
+        this.config.maxDelaySeconds,
+        this.config.windowHours,
+        JSON.stringify(this.config),
+      );
+      this.currentRunId = runInsert.lastID as number;
+
+      this.iniciadoEm = new Date().toISOString();
+      this.processadas = 0;
+      this.enviadas = 0;
+      this.puladas = 0;
+      this.falhas = 0;
+      this.mensagem = "Iniciando análise de vagas...";
+      this.abortController = new AbortController();
+
+      await this.registrarLog(
+        "info",
+        `[Run #${this.currentRunId}] Iniciando ciclo com snapshot: MinScore=${this.config.minScore}%, Limite=${this.config.dailyLimit}/dia, Delay=${this.config.minDelaySeconds}s-${this.config.maxDelaySeconds}s`,
+      );
+
+      // Dispara execução em background
+      this.executarCiclo().catch(async (err) => {
+        this.state = "FAILED";
+        this.mensagem = `Erro fatal no worker: ${err?.message || err}`;
+        await this.finalizarRun("FAILED", this.mensagem);
+        await this.registrarLog("error", this.mensagem, null, {
+          stack: err?.stack,
+        });
       });
-    });
 
-    return this.getStatus();
+      return this.getStatus();
+    } catch (err) {
+      this.state = "IDLE";
+      throw err;
+    }
   }
 
   public pausar(): AutomacaoStatus {
@@ -487,6 +632,14 @@ class VagasEmailWorkerService {
       this.mensagem = "Automação pausada pelo usuário";
       if (this.delayPromiseResolve) {
         this.delayPromiseResolve();
+      }
+      if (this.currentRunId) {
+        getDb().then((db) => {
+          db.run(
+            "UPDATE curriculo_automacao_runs SET status = 'PAUSED' WHERE id = ?",
+            this.currentRunId,
+          );
+        });
       }
       this.registrarLog("warn", "Automação pausada pelo usuário");
     }
@@ -497,18 +650,26 @@ class VagasEmailWorkerService {
     if (this.state === "PAUSED") {
       this.state = "RUNNING";
       this.mensagem = "Automação retomada pelo usuário";
-      this.registrarLog("info", "Automação retomada pelo usuário");
       if (this.delayPromiseResolve) {
         this.delayPromiseResolve();
       }
+      if (this.currentRunId) {
+        getDb().then((db) => {
+          db.run(
+            "UPDATE curriculo_automacao_runs SET status = 'RUNNING' WHERE id = ?",
+            this.currentRunId,
+          );
+        });
+      }
+      this.registrarLog("info", "Automação retomada pelo usuário");
     }
     return this.getStatus();
   }
 
-  public parar(): AutomacaoStatus {
+  public async parar(motivo = "Cancelado pelo usuário"): Promise<AutomacaoStatus> {
     if (this.state === "RUNNING" || this.state === "PAUSED") {
       this.state = "STOPPING";
-      this.mensagem = "Parando worker...";
+      this.mensagem = "Parando worker imediatamente...";
       if (this.abortController) {
         this.abortController.abort();
       }
@@ -519,7 +680,8 @@ class VagasEmailWorkerService {
       this.mensagem = "Automação cancelada pelo usuário";
       this.proximoEnvioTimestamp = null;
       this.delayAtualSegundos = null;
-      this.registrarLog("warn", "Automação cancelada pelo usuário");
+      await this.finalizarRun("STOPPED", motivo);
+      await this.registrarLog("warn", `Automação parada: ${motivo}`);
     }
     return this.getStatus();
   }
@@ -532,7 +694,9 @@ class VagasEmailWorkerService {
 
     let tempoRestante = segundos;
     while (tempoRestante > 0) {
-      if (this.state === "STOPPING" || this.state === "IDLE") {
+      if (this.isInterrompido()) {
+        this.delayAtualSegundos = null;
+        this.proximoEnvioTimestamp = null;
         return false;
       }
       while ((this.state as AutomacaoState) === "PAUSED") {
@@ -540,10 +704,9 @@ class VagasEmailWorkerService {
           this.delayPromiseResolve = resolve;
           setTimeout(resolve, 1000);
         });
-        if (
-          (this.state as AutomacaoState) === "STOPPING" ||
-          (this.state as AutomacaoState) === "IDLE"
-        ) {
+        if (this.isInterrompido()) {
+          this.delayAtualSegundos = null;
+          this.proximoEnvioTimestamp = null;
           return false;
         }
       }
@@ -608,34 +771,49 @@ class VagasEmailWorkerService {
       `Feed analisado: ${preview.totalNoFeed} vagas no total. ${preview.elegiveis.length} vagas elegíveis (score >= ${this.config.minScore}%) e ${preview.puladas.length} puladas. Limite diário disponível: ${preview.limiteDiarioRestante}.`,
     );
 
+    if (this.currentRunId) {
+      await db.run(
+        `UPDATE curriculo_automacao_runs
+         SET total_feed = ?, total_elegiveis = ?, total_puladas = ?
+         WHERE id = ?`,
+        preview.totalNoFeed,
+        preview.elegiveis.length,
+        preview.puladas.length,
+        this.currentRunId,
+      );
+    }
+
     if (preview.elegiveis.length === 0) {
       this.state = "COMPLETED";
       this.mensagem = "Nenhuma vaga elegível para envio neste momento.";
+      await this.finalizarRun("COMPLETED", this.mensagem);
       await this.registrarLog("info", this.mensagem);
       return;
     }
 
     // 2. Loop de processamento das vagas elegíveis
     for (let i = 0; i < preview.elegiveis.length; i++) {
-      if (this.state === "STOPPING" || this.state === "IDLE") {
+      if (
+        this.state === "STOPPING" ||
+        this.state === "IDLE" ||
+        this.abortController?.signal.aborted
+      ) {
+        await this.registrarLog("warn", "Ciclo interrompido imediatamente por comando de parada.");
         break;
       }
 
       // Pausa solicitada
       while ((this.state as AutomacaoState) === "PAUSED") {
         await new Promise((r) => setTimeout(r, 1000));
-        if (
-          (this.state as AutomacaoState) === "STOPPING" ||
-          (this.state as AutomacaoState) === "IDLE"
-        )
-          break;
+        if (this.isInterrompido()) break;
       }
 
-      // Checar limite diário antes de cada envio
+      // Checagem atômica do limite diário antes de cada envio
       const enviosUltimas24h = await this.contarEnviosUltimas24h();
       if (enviosUltimas24h >= this.config.dailyLimit) {
         this.state = "COMPLETED";
         this.mensagem = `Limite diário de ${this.config.dailyLimit} envios atingido.`;
+        await this.finalizarRun("COMPLETED", this.mensagem);
         await this.registrarLog("warn", this.mensagem);
         break;
       }
@@ -653,36 +831,56 @@ class VagasEmailWorkerService {
       this.aguardando = Math.max(0, preview.elegiveis.length - this.processadas);
       this.mensagem = `Processando: ${vaga.title} na empresa ${vaga.company}`;
 
-      // A. Marcar como PROCESSING no banco de dados
-      await db.run(
-        `INSERT INTO curriculo_automacao_candidaturas
-         (job_id, contact_email, company, vaga_title, vaga_url, location, salary, score, dados_vaga_json, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROCESSING')
-         ON CONFLICT(job_id) DO UPDATE SET
-           status = 'PROCESSING',
-           updated_at = CURRENT_TIMESTAMP`,
-        vaga.jobId,
-        vaga.contactEmail,
-        vaga.company,
-        vaga.title,
-        vaga.sourceUrl,
-        vaga.location,
-        vaga.salary,
-        vaga.score,
-        JSON.stringify(vaga.dadosVagaFormatados),
+      // A. Reserva atômica de slot no banco (trava imediata contra concorrência e race condition)
+      const slotReservado = await this.reservarSlotEnvioAtomico(
+        vaga,
+        this.currentRunId,
+        this.config.dailyLimit,
       );
 
-      // B. Gerar Currículo e Enviar
+      if (!slotReservado) {
+        this.state = "COMPLETED";
+        this.mensagem = `Limite diário de ${this.config.dailyLimit} envios atingido (reserva atômica de slot esgotada).`;
+        await this.finalizarRun("COMPLETED", this.mensagem);
+        await this.registrarLog("warn", this.mensagem);
+        break;
+      }
+
+      // B. Gerar Currículo e Enviar (usando snapshot se já existir)
       let pdfPath: string | null = null;
       try {
-        await this.registrarLog(
-          "info",
-          `Gerando currículo personalizado (sem IA) para ${vaga.title} @ ${vaga.company} (Score: ${vaga.score}%)`,
+        if (this.isInterrompido()) {
+          await this.registrarLog("warn", "Parada solicitada antes de personalizar currículo.", vaga.jobId);
+          break;
+        }
+
+        let curriculoPersonalizado: any = null;
+        const candExistente = await db.get<any>(
+          "SELECT curriculo_snapshot_json FROM curriculo_automacao_candidaturas WHERE job_id = ?",
           vaga.jobId,
         );
 
-        const curriculoPersonalizado = await personalizarCurriculo(
-          vaga.dadosVagaFormatados,
+        if (candExistente?.curriculo_snapshot_json) {
+          try {
+            curriculoPersonalizado = JSON.parse(candExistente.curriculo_snapshot_json);
+          } catch {}
+        }
+
+        if (!curriculoPersonalizado) {
+          curriculoPersonalizado = await personalizarCurriculo(vaga.dadosVagaFormatados);
+          await db.run(
+            `UPDATE curriculo_automacao_candidaturas
+             SET curriculo_snapshot_json = ?
+             WHERE job_id = ?`,
+            JSON.stringify(curriculoPersonalizado),
+            vaga.jobId,
+          );
+        }
+
+        await this.registrarLog(
+          "info",
+          `Gerando PDF com currículo calibrado para ${vaga.title} @ ${vaga.company} (Score: ${vaga.score}%)`,
+          vaga.jobId,
         );
 
         pdfPath = await gerarPdfCurriculo(
@@ -694,11 +892,33 @@ class VagasEmailWorkerService {
           throw new Error("Falha ao gerar o PDF do currículo.");
         }
 
+        // Verificação crítica antes do disparo de e-mail irreversível
+        if (this.isInterrompido()) {
+          if (pdfPath) {
+            try { await fs.unlink(pdfPath); } catch {}
+          }
+          await this.registrarLog(
+            "warn",
+            `Envio cancelado no último segundo antes do disparo para ${vaga.contactEmail} devido a comando de parada.`,
+            vaga.jobId,
+          );
+          break;
+        }
+
         const perfil = await carregarPerfilCandidato();
+        const destinoFinal = (this.config.overrideEmail || vaga.contactEmail).trim();
+
+        if (this.config.overrideEmail) {
+          await this.registrarLog(
+            "info",
+            `[TESTE CONTROLADO] Redirecionando envio da vaga "${vaga.title}" para ${destinoFinal} (email original: ${vaga.contactEmail})`,
+            vaga.jobId,
+          );
+        }
 
         // Envio oficial com registro atômico
         const resultadoEnvio = await enviarCurriculoComRegistro({
-          emailDestino: vaga.contactEmail,
+          emailDestino: destinoFinal,
           caminhoArquivoPdf: pdfPath,
           dadosVaga: vaga.dadosVagaFormatados,
           candidato: perfil.personalInfo,
@@ -725,6 +945,15 @@ class VagasEmailWorkerService {
 
         this.enviadas++;
         this.ultimoDisparoEm = new Date().toISOString();
+
+        if (this.currentRunId) {
+          await db.run(
+            "UPDATE curriculo_automacao_runs SET total_enviadas = ? WHERE id = ?",
+            this.enviadas,
+            this.currentRunId,
+          );
+        }
+
         await this.registrarLog(
           "success",
           `✅ Candidatura enviada com sucesso para ${vaga.contactEmail} (${vaga.title} - ${vaga.company})`,
@@ -743,6 +972,14 @@ class VagasEmailWorkerService {
           errMsg,
           vaga.jobId,
         );
+
+        if (this.currentRunId) {
+          await db.run(
+            "UPDATE curriculo_automacao_runs SET total_falhas = ? WHERE id = ?",
+            this.falhas,
+            this.currentRunId,
+          );
+        }
 
         await this.registrarLog(
           "error",
@@ -785,7 +1022,10 @@ class VagasEmailWorkerService {
       this.state = "COMPLETED";
       this.vagaAtual = null;
       this.mensagem = `Ciclo concluído. Enviadas: ${this.enviadas}, Falhas: ${this.falhas}, Puladas: ${this.puladas}.`;
+      await this.finalizarRun("COMPLETED");
       await this.registrarLog("success", this.mensagem);
+    } else if (this.state === "STOPPING" || this.state === "IDLE") {
+      await this.finalizarRun("STOPPED", "Interrompido pelo usuário");
     }
   }
 }

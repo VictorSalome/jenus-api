@@ -75,7 +75,8 @@ async function sendFcmNotification(
     const stringData: Record<string, string> = {};
     if (payload.data) {
       for (const [k, v] of Object.entries(payload.data)) {
-        stringData[k] = typeof v === 'string' ? v : JSON.stringify(v);
+        if (v === undefined || v === null) continue;
+        stringData[k] = typeof v === 'string' ? v : typeof v === 'object' ? JSON.stringify(v) : String(v);
       }
     }
 
@@ -107,8 +108,6 @@ async function sendFcmNotification(
     const deadTokenCodes = [
       'messaging/registration-token-not-registered',
       'messaging/invalid-registration-token',
-      'messaging/invalid-argument',
-      'messaging/mismatched-credential',
     ];
     if (deadTokenCodes.includes(error?.code)) {
       void unregisterToken(token);

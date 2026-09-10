@@ -19,6 +19,7 @@ export type AutomacaoState =
   | 'RUNNING'
   | 'PAUSED'
   | 'STOPPING'
+  | 'STOPPED'
   | 'COMPLETED'
   | 'FAILED';
 
@@ -45,6 +46,7 @@ export interface AutomacaoConfig {
   maxDelaySeconds: number;
   windowHours: number;
   feedUrl: string;
+  overrideEmail?: string | null;
 }
 
 export interface VagaNormalizada {

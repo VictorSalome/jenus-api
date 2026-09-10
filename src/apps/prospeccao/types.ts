@@ -8,6 +8,14 @@ export const StatusLead = {
 
 export type StatusLead = (typeof StatusLead)[keyof typeof StatusLead];
 
+export interface FotoMeta {
+  url: string;
+  width?: number;
+  height?: number;
+  source: "capa" | "galeria" | "streetview" | "painel";
+  confianca: "alta" | "media";
+}
+
 export interface EmpresaLeadRaw {
   id: string;
   nome: string;
@@ -44,6 +52,7 @@ export interface EmpresaLead {
   avaliacao?: number | null;
   total_avaliacoes?: number | null;
   fotos: string[];
+  fotos_meta?: FotoMeta[];
   status: StatusLead;
   motivo_rejeicao?: string | null;
   created_at: string;
@@ -64,7 +73,7 @@ export interface SalvarEmpresaLeadDTO {
   maps_url?: string | null;
   avaliacao?: number | null;
   total_avaliacoes?: number | null;
-  fotos?: string[] | string | null;
+  fotos?: string[] | FotoMeta[] | string | null;
   status?: StatusLead;
   motivo_rejeicao?: string | null;
 }

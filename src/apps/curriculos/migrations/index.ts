@@ -256,5 +256,34 @@ export const curriculoMigrations: Migration[] = [
       VALUES (1, 70, 20, 60, 120, 72, 'https://devagas-liard.vercel.app/vagas-email.json');
     `,
   },
+  {
+    id: "curriculo_015_automacao_runs_and_snapshots",
+    up: `
+      CREATE TABLE IF NOT EXISTS curriculo_automacao_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_uuid TEXT NOT NULL UNIQUE,
+        status TEXT CHECK(status IN ('RUNNING','PAUSED','STOPPED','COMPLETED','FAILED')) DEFAULT 'RUNNING',
+        min_score INTEGER NOT NULL,
+        daily_limit INTEGER NOT NULL,
+        min_delay_seconds INTEGER NOT NULL,
+        max_delay_seconds INTEGER NOT NULL,
+        window_hours INTEGER NOT NULL,
+        total_feed INTEGER DEFAULT 0,
+        total_elegiveis INTEGER DEFAULT 0,
+        total_enviadas INTEGER DEFAULT 0,
+        total_puladas INTEGER DEFAULT 0,
+        total_falhas INTEGER DEFAULT 0,
+        started_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        finished_at TEXT,
+        stop_reason TEXT,
+        config_snapshot_json TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_automacao_runs_status ON curriculo_automacao_runs(status);
+
+      ALTER TABLE curriculo_automacao_candidaturas ADD COLUMN run_id INTEGER;
+      ALTER TABLE curriculo_automacao_candidaturas ADD COLUMN curriculo_snapshot_json TEXT;
+    `,
+  },
 ];
 

@@ -17,6 +17,8 @@ import { sanitizePhone } from "../scraper/utils/phoneSanitizer.js";
 import {
   normalizarFotoGoogle,
   normalizarListaFotos,
+  normalizarListaFotosComMeta,
+  calcularConfiancaFoto,
   HD_RESOLUTION_SUFFIX,
 } from "../scraper/utils/googlePhotos.js";
 import {
@@ -222,19 +224,37 @@ async function runTests() {
     const streetViewHD = normalizarFotoGoogle(streetView);
     assert.ok(streetViewHD.includes("w=1200") && streetViewHD.includes("h=800"));
 
-    // Descarte de avatares/tiles
+    // Descarte de avatares de revisores (/a/, /a-/) e ícones gstatic
     const avatarUrl = "https://maps.gstatic.com/tactile/pane/default_avatar.png";
-    assert.equal(normalizarFotoGoogle(avatarUrl), "", "Avatares devem ser descartados");
+    const reviewerAvatarUrl = "https://lh3.googleusercontent.com/a/ACg8ocLxyz=s120-c";
+    const placeIconUrl = "https://gstatic.com/local/placeinfo/lgbtq_friendly_ic_24dp.png";
+    assert.equal(normalizarFotoGoogle(avatarUrl), "", "Avatares padrão devem ser descartados");
+    assert.equal(normalizarFotoGoogle(reviewerAvatarUrl), "", "Avatares de clientes (/a/) devem ser descartados");
+    assert.equal(normalizarFotoGoogle(placeIconUrl), "", "Ícones gstatic devem ser descartados");
+    assert.equal(calcularConfiancaFoto(googleFotoOriginal), "alta", "Fotos com /p/ devem ter confiança alta");
+    assert.equal(calcularConfiancaFoto(reviewerAvatarUrl), null, "Avatares devem retornar confiança nula");
 
-    // Teste de lista com deduplicação
+    // Teste de lista com FotoMeta e deduplicação
+    const listaMeta = normalizarListaFotosComMeta([
+      { url: googleFotoOriginal, source: "capa" },
+      { url: "https://lh3.googleusercontent.com/p/AF1QipNxyz=s400", source: "galeria" }, // duplicada na mesma chave base
+      { url: reviewerAvatarUrl },
+      { url: placeIconUrl },
+      { url: "https://lh3.googleusercontent.com/p/AF1QipOutra=w100", source: "galeria" },
+    ]);
+    assert.equal(listaMeta.length, 2, "Lista com meta deve descartar avatares, ícones e duplicatas");
+    assert.equal(listaMeta[0].source, "capa");
+    assert.equal(listaMeta[0].confianca, "alta");
+
+    // Teste de lista legada com strings
     const listaNormalizada = normalizarListaFotos([
       googleFotoOriginal,
-      "https://lh3.googleusercontent.com/p/AF1QipNxyz=s400", // duplicada na mesma chave base
+      "https://lh3.googleusercontent.com/p/AF1QipNxyz=s400",
       avatarUrl,
       "https://lh3.googleusercontent.com/p/AF1QipOutra=w100",
     ]);
     assert.equal(listaNormalizada.length, 2, "Lista deve descartar avatar e deduplicar foto repetida");
-    console.log("  ✓ googlePhotos: conversão HD, StreetView e descarte de avatares validados.\n");
+    console.log("  ✓ googlePhotos: conversão HD, StreetView, FotoMeta e descarte de avatares/ícones validados.\n");
 
     // ----------------------------------------------------
     // 4. Disparador dispatcher.service.ts

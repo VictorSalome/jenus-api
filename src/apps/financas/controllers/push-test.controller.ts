@@ -30,24 +30,51 @@ export const sendTestPush = async (req: Request, res: Response): Promise<void> =
     console.warn("Erro ao registrar evento no banco:", e);
   }
 
-  // 2. Dispara o Push Notification via Expo exclusivamente para o usuário ou token fornecido
+  // Extrai valores do evento parseado se não fornecidos explicitamente
+  let finalAmount = amount;
+  let finalMerchant = merchant;
+  if (eventResult?.event?.parsed_json) {
+    try {
+      const parsed = typeof eventResult.event.parsed_json === 'string'
+        ? JSON.parse(eventResult.event.parsed_json)
+        : eventResult.event.parsed_json;
+      if (finalAmount === undefined && parsed?.amountCents) {
+        finalAmount = (parsed.amountCents / 100).toFixed(2);
+      }
+      if (finalMerchant === undefined && parsed?.merchantName) {
+        finalMerchant = parsed.merchantName;
+      }
+    } catch {
+      // best-effort
+    }
+  }
+
+  const pushData: Record<string, string> = {
+    screen: screen || "detected",
+  };
+  if (finalAmount !== undefined && finalAmount !== null) {
+    pushData.amount = String(finalAmount);
+  }
+  if (finalMerchant !== undefined && finalMerchant !== null) {
+    pushData.merchant = String(finalMerchant);
+  }
+  if (eventResult?.event?.id !== undefined && eventResult?.event?.id !== null) {
+    pushData.eventId = String(eventResult.event.id);
+  }
+
+  // 2. Dispara o Push Notification (FCM, Expo ou Simulador) para o usuário ou token fornecido
   let pushResult = { sent: 0, failed: 0 };
   try {
     pushResult = await sendPushNotification({
       title: pushTitle,
       body: pushBody,
-      data: {
-        screen: screen || "detected",
-        amount,
-        merchant,
-        eventId: eventResult?.event?.id,
-      },
+      data: pushData,
       priority: "high",
       token: token || undefined,
       userId: token ? undefined : userId,
     });
   } catch (e) {
-    console.warn("Erro ao disparar push via Expo:", e);
+    console.warn("Erro ao disparar push:", e);
   }
 
   const delivered = pushResult.sent > 0;

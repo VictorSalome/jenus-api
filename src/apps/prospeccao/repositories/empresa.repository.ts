@@ -6,25 +6,59 @@ import {
   type EmpresaLeadRaw,
   type SalvarEmpresaLeadDTO,
   type EstatisticasStatus,
+  type FotoMeta,
 } from "../types.js";
 
-const parseFotos = (fotosRaw: unknown): string[] => {
-  if (Array.isArray(fotosRaw)) return fotosRaw;
-  if (typeof fotosRaw === "string") {
+const parseFotosComMeta = (
+  fotosRaw: unknown
+): { fotos: string[]; fotos_meta: FotoMeta[] } => {
+  let rawList: any[] = [];
+  if (Array.isArray(fotosRaw)) {
+    rawList = fotosRaw;
+  } else if (typeof fotosRaw === "string") {
     try {
       const parsed = JSON.parse(fotosRaw);
-      return Array.isArray(parsed) ? parsed : [];
+      rawList = Array.isArray(parsed) ? parsed : [];
     } catch {
-      return [];
+      rawList = [];
     }
   }
-  return [];
+
+  const fotos: string[] = [];
+  const fotos_meta: FotoMeta[] = [];
+
+  for (const item of rawList) {
+    if (!item) continue;
+    if (typeof item === "string") {
+      fotos.push(item);
+      fotos_meta.push({
+        url: item,
+        source: "painel",
+        confianca: "alta",
+      });
+    } else if (typeof item === "object" && typeof item.url === "string") {
+      fotos.push(item.url);
+      fotos_meta.push({
+        url: item.url,
+        width: item.width,
+        height: item.height,
+        source: item.source || "painel",
+        confianca: item.confianca || "alta",
+      });
+    }
+  }
+
+  return { fotos, fotos_meta };
 };
 
-const mapRowToLead = (row: EmpresaLeadRaw): EmpresaLead => ({
-  ...row,
-  fotos: parseFotos(row.fotos),
-});
+const mapRowToLead = (row: EmpresaLeadRaw): EmpresaLead => {
+  const { fotos, fotos_meta } = parseFotosComMeta(row.fotos);
+  return {
+    ...row,
+    fotos,
+    fotos_meta,
+  };
+};
 
 export const buscarPorId = async (id: string): Promise<EmpresaLead | null> => {
   const db = await getDb();

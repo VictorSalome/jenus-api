@@ -279,9 +279,11 @@ export const timeoutMiddleware = (timeout = 30000) => {
 export const contentTypeMiddleware = (allowedTypes = ['application/json']) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     // Métodos sem body não transportam Content-Type — DELETE sem payload
-    // (ex.: excluir experiência do perfil) chegava aqui sem header e era
-    // rejeitado com 400. GET/HEAD/DELETE/OPTIONS passam direto.
-    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'DELETE' || req.method === 'OPTIONS') {
+    // (ex.: excluir experiência do perfil) ou POST/PUT sem corpo (ex.: /stop, /pause)
+    // passam direto.
+    const contentLength = req.headers['content-length'];
+    const hasNoBody = contentLength === '0' || (!contentLength && !req.headers['content-type']);
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'DELETE' || req.method === 'OPTIONS' || hasNoBody) {
       next();
       return;
     }
