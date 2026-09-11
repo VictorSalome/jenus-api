@@ -29,7 +29,9 @@ export const cancel = async (req: any, res: any) => {
 
 export const future = async (req: any, res: any) => {
   const userId = getUserId(req);
-  const referenceMonth = req.query.month as string;
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const referenceMonth = (req.query.month as string) || currentMonth;
   const data = await service.futureCommitment(userId, referenceMonth);
   res.json({ success: true, data });
 };

@@ -162,42 +162,7 @@ export const processRawNotification = async (
   const matches = await findDuplicateTransactions(userId, fingerprint, date);
 
   const duplicate = matches.length > 0;
-  let finalStatus = duplicate ? "duplicate" : "parsed";
-
-  // Tentativa de importação automática caso não seja duplicada
-  if (!duplicate) {
-    try {
-      const accountId = await ensureDefaultAccount(userId);
-      await createTransaction(userId, {
-        accountId,
-        merchantName: parsed.data.merchantName,
-        description: parsed.data.description,
-        amountCents: parsed.data.amountCents,
-        transactionDate: date,
-        installmentsTotal: parsed.data.installmentsTotal ?? 1,
-        source: "NOTIFICATION",
-        notificationEventId: eventId,
-      });
-      finalStatus = "imported";
-    } catch (err: any) {
-      const isUniqueConstraint =
-        err?.code === "SQLITE_CONSTRAINT" ||
-        /UNIQUE constraint failed/i.test(err?.message || "");
-      if (isUniqueConstraint) {
-        // Já existe uma transação vinculada a este evento (corrida entre
-        // duas ingestões concorrentes do mesmo evento) — trata como duplicata
-        // em vez de erro, o banco já garantiu que não há dado duplicado.
-        console.warn(
-          "[processRawNotification] Transação já existente para este evento (constraint):",
-          err.message,
-        );
-        finalStatus = "duplicate";
-      } else {
-        console.error("[processRawNotification] Falha ao auto-importar:", err);
-        finalStatus = "error";
-      }
-    }
-  }
+  const finalStatus = duplicate ? "duplicate" : "parsed";
 
   await db.run(
     `UPDATE fin_notification_events
@@ -221,7 +186,7 @@ export const processRawNotification = async (
       amount: amountStr,
     },
     data: {
-      route: finalStatus === 'imported' ? '/(financas)' : '/(financas)/detected',
+      route: '/(financas)/detected',
       eventId,
       amountCents: parsed.data.amountCents,
       merchant,

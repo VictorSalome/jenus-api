@@ -130,11 +130,14 @@ export const cancelInstallment = async (userId: string, id: number) => {
  */
 export const futureCommitment = async (
   userId: string,
-  referenceMonth: string,
+  referenceMonth?: string,
   months = 12,
 ) => {
   const db = await getDb();
-  const [refYear, refMonth] = referenceMonth.split("-").map(Number);
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const ref = referenceMonth || defaultMonth;
+  const [refYear, refMonth] = ref.split("-").map(Number);
   const monthStart = new Date(refYear, refMonth, 1);
   const afterEnd = new Date(refYear, refMonth + 1, 0);
   const afterEndKey = afterEnd.toISOString().slice(0, 10);

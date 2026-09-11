@@ -49,32 +49,35 @@ export const sendTestPush = async (req: Request, res: Response): Promise<void> =
     }
   }
 
-  const pushData: Record<string, string> = {
-    screen: screen || "detected",
-  };
-  if (finalAmount !== undefined && finalAmount !== null) {
-    pushData.amount = String(finalAmount);
-  }
-  if (finalMerchant !== undefined && finalMerchant !== null) {
-    pushData.merchant = String(finalMerchant);
-  }
-  if (eventResult?.event?.id !== undefined && eventResult?.event?.id !== null) {
-    pushData.eventId = String(eventResult.event.id);
-  }
+  // Se o motor financeiro reconheceu e parseou o evento de compra,
+  // o próprio `processRawNotification` já disparou a notificação oficial do Jenus
+  // ("💳 [Estabelecimento]: Compra de R$ X identificada. Toque para categorizar.").
+  // Disparar outro push aqui imitando o banco geraria duas notificações duplicadas no celular.
+  let pushResult = { sent: 1, failed: 0 };
+  if (!eventResult?.parsed) {
+    const pushData: Record<string, string> = {
+      screen: screen || "detected",
+    };
+    if (finalAmount !== undefined && finalAmount !== null) {
+      pushData.amount = String(finalAmount);
+    }
+    if (finalMerchant !== undefined && finalMerchant !== null) {
+      pushData.merchant = String(finalMerchant);
+    }
 
-  // 2. Dispara o Push Notification (FCM, Expo ou Simulador) para o usuário ou token fornecido
-  let pushResult = { sent: 0, failed: 0 };
-  try {
-    pushResult = await sendPushNotification({
-      title: pushTitle,
-      body: pushBody,
-      data: pushData,
-      priority: "high",
-      token: token || undefined,
-      userId: token ? undefined : userId,
-    });
-  } catch (e) {
-    console.warn("Erro ao disparar push:", e);
+    // 2. Dispara o Push Notification genérico (para presets de Sistema, Currículo, etc.)
+    try {
+      pushResult = await sendPushNotification({
+        title: pushTitle,
+        body: pushBody,
+        data: pushData,
+        priority: "high",
+        token: token || undefined,
+        userId: token ? undefined : userId,
+      });
+    } catch (e) {
+      console.warn("Erro ao disparar push genérico:", e);
+    }
   }
 
   const delivered = pushResult.sent > 0;
