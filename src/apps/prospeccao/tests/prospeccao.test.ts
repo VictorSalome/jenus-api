@@ -261,23 +261,34 @@ async function runTests() {
     // ----------------------------------------------------
     console.log("▶ [4/6] Testando Disparador (dispatcher.service.ts)...");
 
-    // 4.1 Testar dispararParaEmpresa diretamente com WhatsApp
-    const leadWhatsAppApenas = {
+    // 4.1 Testar bloqueio de segurança: lead PENDING_REVIEW não pode ser disparado
+    const leadPendente = {
       ...buscadaPorSlug!,
       email: null,
       whatsapp: "+55 (11) 99999-8888",
+      status: StatusLead.PENDING_REVIEW,
     };
-    const resWa = await dispararParaEmpresa(leadWhatsAppApenas, { dryRun: true });
+    const resBloqueado = await dispararParaEmpresa(leadPendente, { dryRun: true });
+    assert.equal(resBloqueado.sucesso, false);
+    assert.ok(resBloqueado.motivo?.includes("BLOQUEADO_NAO_APROVADO"), "Lead pendente deve ser bloqueado");
+    console.log("  ✓ Trava de segurança validada: lead pendente não pode ser disparado.");
+
+    // 4.2 Testar dispararParaEmpresa após aprovação explícita
+    const leadAprovado = {
+      ...leadPendente,
+      status: StatusLead.APPROVED,
+    };
+    const resWa = await dispararParaEmpresa(leadAprovado, { dryRun: true });
     assert.equal(resWa.canal, "WHATSAPP");
     assert.equal(resWa.sucesso, true);
     assert.ok(resWa.waLink?.startsWith("https://wa.me/5511999998888"));
-    console.log("  ✓ Disparo WhatsApp individual gerou link wa.me válido.");
+    console.log("  ✓ Disparo WhatsApp de lead aprovado gerou link wa.me válido.");
 
-    // 4.2 Testar executarDisparador com dryRun: true
+    // 4.3 Testar executarDisparador com dryRun: true
     // Garantir que a empresa de teste está APROVADA com email preenchido
     await db.run(
       "UPDATE prospeccao_empresas SET status = ?, email = ? WHERE id = ?",
-      StatusLead.APROVADA,
+      StatusLead.APPROVED,
       "contato@barbeariaalpha.com.br",
       testCompanyId
     );
@@ -293,7 +304,7 @@ async function runTests() {
     assert.ok(resultadoTeste, "Empresa de teste deve ter sido processada no dryRun");
     assert.equal(resultadoTeste.canal, "EMAIL");
     assert.equal(resultadoTeste.sucesso, true);
-    assert.equal(resultadoTeste.statusFinal, StatusLead.ENVIADA);
+    assert.equal(resultadoTeste.statusFinal, StatusLead.SENT);
     console.log("  ✓ executarDisparador executado em dryRun com sucesso (email processado sem quebra).\n");
 
     // ----------------------------------------------------
@@ -437,8 +448,10 @@ async function runTests() {
     });
     assert.equal(resAprovarOk.status, 200, "POST /aprovar deve responder 200");
     assert.equal(resAprovarOk.data.success, true);
-    assert.equal(resAprovarOk.data.message, "Lead aprovado com sucesso");
-    assert.equal(resAprovarOk.data.data.status, StatusLead.APROVADA);
+    assert.equal(resAprovarOk.data.message, "Lead aprovado na esteira de qualidade e pronto para envio");
+    assert.equal(resAprovarOk.data.data.status, StatusLead.APPROVED);
+    assert.ok(resAprovarOk.data.data.approved_at, "approved_at deve ser gravado");
+    assert.equal(resAprovarOk.data.data.approved_by, "admin@test.com");
 
     // 5.5.2 ID inexistente (404)
     const resAprovarIdInexistente = await requestJson(`${apiBase}/empresa/00000000-0000-0000-0000-000000000000/aprovar`, {
@@ -447,10 +460,10 @@ async function runTests() {
     assert.equal(resAprovarIdInexistente.status, 404, "POST /aprovar com ID inexistente deve responder 404");
     assert.equal(resAprovarIdInexistente.data.success, false);
     assert.equal(resAprovarIdInexistente.data.message, "Lead não encontrado");
-    console.log("  ✓ [5/9] POST /empresa/:id/aprovar validado (200 aprovado e 404 para ID inexistente).");
+    console.log("  ✓ [5/10] POST /empresa/:id/aprovar validado (200 aprovado com approved_at/by e 404 para ID inexistente).");
 
     // 5.6 POST /api/prospeccao/empresa/:id/rejeitar
-    // 5.6.1 Rejeição com sucesso e motivo
+    // 5.6.1 Rejeição com sucesso, motivo e auditoria
     const resRejeitarOk = await requestJson(`${apiBase}/empresa/${testCompanyId}/rejeitar`, {
       method: "POST",
       body: JSON.stringify({ motivo: "TESTE_REJEICAO_INTEGRACAO" }),
@@ -458,8 +471,10 @@ async function runTests() {
     assert.equal(resRejeitarOk.status, 200, "POST /rejeitar deve responder 200");
     assert.equal(resRejeitarOk.data.success, true);
     assert.equal(resRejeitarOk.data.message, "Lead rejeitado com sucesso");
-    assert.equal(resRejeitarOk.data.data.status, StatusLead.REJEITADA);
-    assert.equal(resRejeitarOk.data.data.motivo_rejeicao, "TESTE_REJEICAO_INTEGRACAO");
+    assert.equal(resRejeitarOk.data.data.status, StatusLead.REJECTED);
+    assert.equal(resRejeitarOk.data.data.rejection_reason, "TESTE_REJEICAO_INTEGRACAO");
+    assert.ok(resRejeitarOk.data.data.rejected_at, "rejected_at deve ser gravado");
+    assert.equal(resRejeitarOk.data.data.rejected_by, "admin@test.com");
 
     // 5.6.2 ID inexistente (404)
     const resRejeitarIdInexistente = await requestJson(`${apiBase}/empresa/00000000-0000-0000-0000-000000000000/rejeitar`, {
@@ -469,24 +484,33 @@ async function runTests() {
     assert.equal(resRejeitarIdInexistente.status, 404, "POST /rejeitar com ID inexistente deve responder 404");
     assert.equal(resRejeitarIdInexistente.data.success, false);
     assert.equal(resRejeitarIdInexistente.data.message, "Lead não encontrado");
-    console.log("  ✓ [6/9] POST /empresa/:id/rejeitar validado (200 rejeitado com motivo e 404 para ID inexistente).");
+    console.log("  ✓ [6/10] POST /empresa/:id/rejeitar validado (200 rejeitado com rejected_at/by/reason e 404 para ID inexistente).");
 
-    // 5.7 POST /api/prospeccao/empresa/:id/disparar (com dryRun: true)
-    // 5.7.1 Primeiro re-aprovar para poder disparar
+    // 5.7 POST /api/prospeccao/empresa/:id/disparar
+    // 5.7.1 Bloqueio de segurança: lead rejeitado deve retornar 403 Forbidden
+    const resDispararRejeitado = await requestJson(`${apiBase}/empresa/${testCompanyId}/disparar`, {
+      method: "POST",
+      body: JSON.stringify({ dryRun: true }),
+    });
+    assert.equal(resDispararRejeitado.status, 403, "Disparo de lead rejeitado deve retornar 403 Forbidden");
+    assert.equal(resDispararRejeitado.data.success, false);
+    assert.ok(resDispararRejeitado.data.message?.includes("BLOQUEADO_NAO_APROVADO"));
+
+    // 5.7.2 Aprovar lead para liberar disparo
     await requestJson(`${apiBase}/empresa/${testCompanyId}/aprovar`, { method: "POST" });
 
-    // Disparo em dryRun
+    // Disparo em dryRun de lead aprovado
     const resDispararOk = await requestJson(`${apiBase}/empresa/${testCompanyId}/disparar`, {
       method: "POST",
       body: JSON.stringify({ dryRun: true }),
     });
-    assert.equal(resDispararOk.status, 200, "POST /disparar com dryRun: true deve responder 200");
+    assert.equal(resDispararOk.status, 200, "POST /disparar com dryRun: true de lead aprovado deve responder 200");
     assert.equal(resDispararOk.data.success, true);
     assert.ok(resDispararOk.data.data.sucesso, "Resultado do disparo deve indicar sucesso");
     assert.equal(resDispararOk.data.data.empresaId, testCompanyId);
     assert.equal(resDispararOk.data.data.canal, "EMAIL");
 
-    // 5.7.2 ID inexistente (404)
+    // 5.7.3 ID inexistente (404)
     const resDispararIdInexistente = await requestJson(`${apiBase}/empresa/00000000-0000-0000-0000-000000000000/disparar`, {
       method: "POST",
       body: JSON.stringify({ dryRun: true }),
@@ -494,28 +518,38 @@ async function runTests() {
     assert.equal(resDispararIdInexistente.status, 404, "POST /disparar com ID inexistente deve responder 404");
     assert.equal(resDispararIdInexistente.data.success, false);
     assert.equal(resDispararIdInexistente.data.message, "Lead não encontrado");
-    console.log("  ✓ [7/9] POST /empresa/:id/disparar validado (200 dryRun ok e 404 para ID inexistente).");
+    console.log("  ✓ [7/10] POST /empresa/:id/disparar validado (403 bloqueio não aprovado, 200 dryRun aprovado e 404 para ID inexistente).");
 
-    // 5.8 POST /api/prospeccao/empresa/:id/converter
-    // 5.8.1 Conversão com sucesso
+    // 5.8 POST /api/prospeccao/empresa/:id/responder
+    const resResponderOk = await requestJson(`${apiBase}/empresa/${testCompanyId}/responder`, {
+      method: "POST",
+    });
+    assert.equal(resResponderOk.status, 200, "POST /responder deve responder 200");
+    assert.equal(resResponderOk.data.success, true);
+    assert.equal(resResponderOk.data.message, "Lead marcado como respondido (em negociação)");
+    assert.equal(resResponderOk.data.data.status, StatusLead.REPLIED);
+    console.log("  ✓ [8/10] POST /empresa/:id/responder validado (200 marcado como REPLIED).");
+
+    // 5.9 POST /api/prospeccao/empresa/:id/converter
+    // 5.9.1 Conversão com sucesso
     const resConverterOk = await requestJson(`${apiBase}/empresa/${testCompanyId}/converter`, {
       method: "POST",
     });
     assert.equal(resConverterOk.status, 200, "POST /converter deve responder 200");
     assert.equal(resConverterOk.data.success, true);
-    assert.equal(resConverterOk.data.message, "Lead convertido com sucesso em cliente oficial");
-    assert.equal(resConverterOk.data.data.status, StatusLead.CONVERTIDA);
+    assert.equal(resConverterOk.data.message, "Lead convertido com sucesso em cliente oficial ativo");
+    assert.equal(resConverterOk.data.data.status, StatusLead.CONVERTED);
 
-    // 5.8.2 ID inexistente (404)
+    // 5.9.2 ID inexistente (404)
     const resConverterIdInexistente = await requestJson(`${apiBase}/empresa/00000000-0000-0000-0000-000000000000/converter`, {
       method: "POST",
     });
     assert.equal(resConverterIdInexistente.status, 404, "POST /converter com ID inexistente deve responder 404");
     assert.equal(resConverterIdInexistente.data.success, false);
     assert.equal(resConverterIdInexistente.data.message, "Lead não encontrado");
-    console.log("  ✓ [8/9] POST /empresa/:id/converter validado (200 convertido e 404 para ID inexistente).");
+    console.log("  ✓ [9/10] POST /empresa/:id/converter validado (200 convertido e 404 para ID inexistente).");
 
-    // 5.9 POST /api/prospeccao/executar (verificar resposta quando termo fornecido)
+    // 5.10 POST /api/prospeccao/executar (verificar resposta quando termo fornecido)
     // 5.9.1 Execução com termo fornecido (simulado de forma determinística)
     const mockTermo = "barbearia em osasco centro";
     setExecutarCicloOverride(async (termo, limite) => {

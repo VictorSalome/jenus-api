@@ -1,13 +1,16 @@
 import "dotenv/config";
 import { fileURLToPath } from "node:url";
-import { initDb } from "../../../core/database.js";
+import { randomUUID } from "node:crypto";
+import { initDb, getDb } from "../../../core/database.js";
 import {
   listarAprovadasParaEnvio,
   atualizarStatus,
 } from "../repositories/empresa.repository.js";
 import { sendMail } from "../../../shared/email/mailer.js";
-import { StatusLead, type EmpresaLead } from "../types.js";
+import { StatusLead, normalizeStatusLead, type EmpresaLead } from "../types.js";
 import { sanitizePhone } from "../scraper/utils/phoneSanitizer.js";
+
+export const REPLY_TO_COMERCIAL = "victorsalome41@hotmail.com";
 
 export interface DispatcherOptions {
   minDelayMs?: number;
@@ -15,6 +18,7 @@ export interface DispatcherOptions {
   baseUrl?: string;
   dryRun?: boolean;
   limite?: number;
+  force?: boolean;
 }
 
 export interface DispatchItemResult {
@@ -38,7 +42,7 @@ const escapeHtml = (val: unknown): string =>
 
 export const gerarTemplateEmail = (empresa: EmpresaLead, demoUrl: string): string => {
   const nomeEmpresa = escapeHtml(empresa.nome);
-  const segmento = escapeHtml(empresa.segmento || "Seu Segmento");
+  const segmento = escapeHtml(empresa.segmento || "Comércio Local");
   const localizacao = escapeHtml(
     [empresa.bairro, empresa.cidade].filter(Boolean).join(", ") || "sua região",
   );
@@ -51,7 +55,7 @@ export const gerarTemplateEmail = (empresa: EmpresaLead, demoUrl: string): strin
           <tr>
             <td style="padding-bottom:12px;">
               <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:#64748b;">
-                Imagens reais integradas no seu novo site:
+                Imagens reais do estabelecimento integradas na demonstração:
               </p>
             </td>
           </tr>
@@ -79,7 +83,7 @@ export const gerarTemplateEmail = (empresa: EmpresaLead, demoUrl: string): strin
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Apresentação Exclusiva - ${nomeEmpresa}</title>
+  <title>Demonstração Exclusiva - ${nomeEmpresa}</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0f172a;padding:32px 16px;">
@@ -92,10 +96,10 @@ export const gerarTemplateEmail = (empresa: EmpresaLead, demoUrl: string): strin
               <span style="display:inline-block;padding:4px 12px;background-color:rgba(99,102,241,0.2);border:1px solid rgba(165,180,252,0.3);border-radius:9999px;font-size:12px;font-weight:600;color:#c7d2fe;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:12px;">
                 Demonstração Interativa
               </span>
-              <h1 style="margin:8px 0 0 0;font-size:26px;line-height:32px;font-weight:700;color:#ffffff;">
-                Criamos um novo site para a <span style="color:#38bdf8;">${nomeEmpresa}</span>
+              <h1 style="margin:8px 0 0 0;font-size:24px;line-height:32px;font-weight:700;color:#ffffff;">
+                Nova presença digital para a <span style="color:#38bdf8;">${nomeEmpresa}</span>
               </h1>
-              <p style="margin:10px 0 0 0;font-size:14px;color:#94a3b8;line-height:20px;">
+              <p style="margin:8px 0 0 0;font-size:14px;color:#94a3b8;line-height:20px;">
                 ${segmento} em ${localizacao}
               </p>
             </td>
@@ -108,7 +112,10 @@ export const gerarTemplateEmail = (empresa: EmpresaLead, demoUrl: string): strin
                 Olá, equipe da <strong>${nomeEmpresa}</strong>,
               </p>
               <p style="margin:0 0 16px 0;font-size:15px;line-height:24px;color:#334155;">
-                Desenvolvemos uma versão preliminar e interativa do site da ${nomeEmpresa}, moderna, rápida para celular e já pré-configurada com botão direto para o seu WhatsApp.
+                Acompanho empresas em ${localizacao} e tomei a iniciativa de montar uma demonstração exclusiva de um novo site para a <strong>${nomeEmpresa}</strong>, estruturado com as fotos reais do seu negócio e otimizado para celulares e WhatsApp.
+              </p>
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:24px;color:#334155;">
+                Esta é uma demonstração cortesia para que vocês possam avaliar como uma presença digital moderna valoriza os atendimentos da empresa:
               </p>
 
               ${fotosHtml}
@@ -117,7 +124,7 @@ export const gerarTemplateEmail = (empresa: EmpresaLead, demoUrl: string): strin
                 <tr>
                   <td style="background-color:#f8fafc;border-left:4px solid #10b981;border-radius:0 8px 8px 0;padding:16px;">
                     <p style="margin:0;font-size:14px;line-height:22px;color:#475569;">
-                      ✨ <strong>O que preparamos na demo:</strong><br>
+                      ✨ <strong>O que preparamos na demonstração:</strong><br>
                       • Carregamento ultra-rápido otimizado para celulares<br>
                       • Fotos reais da sua empresa integradas ao layout<br>
                       • Botão de conversão direta para atendimento imediato
@@ -131,15 +138,19 @@ export const gerarTemplateEmail = (empresa: EmpresaLead, demoUrl: string): strin
                 <tr>
                   <td align="center">
                     <a href="${demoUrl}" target="_blank" style="display:inline-block;padding:16px 32px;background:linear-gradient(135deg,#4f46e5 0%,#4338ca 100%);color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;border-radius:10px;box-shadow:0 10px 15px -3px rgba(79,70,229,0.3);text-align:center;">
-                      Acessar Demonstração Exclusiva &rarr;
+                      Acessar Demonstração da ${nomeEmpresa} &rarr;
                     </a>
                   </td>
                 </tr>
               </table>
 
-              <p style="margin:0;font-size:13px;line-height:20px;color:#64748b;text-align:center;">
+              <p style="margin:0 0 20px 0;font-size:13px;line-height:20px;color:#64748b;text-align:center;">
                 Ou copie e cole o link no seu navegador: <br>
                 <a href="${demoUrl}" style="color:#4f46e5;word-break:break-all;">${demoUrl}</a>
+              </p>
+
+              <p style="margin:24px 0 0 0;font-size:14px;line-height:22px;color:#334155;">
+                Caso tenham interesse em conhecer a proposta e publicar este site no domínio oficial de vocês, basta responder diretamente a este e-mail.
               </p>
             </td>
           </tr>
@@ -148,8 +159,8 @@ export const gerarTemplateEmail = (empresa: EmpresaLead, demoUrl: string): strin
           <tr>
             <td style="padding:24px 36px;background-color:#f1f5f9;border-top:1px solid #e2e8f0;">
               <p style="margin:0;font-size:12px;line-height:18px;color:#64748b;text-align:center;">
-                Você recebeu esta demonstração exclusiva preparada especialmente para ${nomeEmpresa}.<br>
-                Se não tiver interesse ou preferir não receber atualizações, basta desconsiderar este e-mail.
+                Demonstração comercial independente preparada para ${nomeEmpresa}. Respostas são direcionadas a ${REPLY_TO_COMERCIAL}.<br>
+                Se não tiver interesse, basta desconsiderar este e-mail.
               </p>
             </td>
           </tr>
@@ -183,82 +194,239 @@ export const dispararParaEmpresa = async (
   empresa: EmpresaLead,
   options: DispatcherOptions = {},
 ): Promise<DispatchItemResult> => {
-  const baseUrl = options.baseUrl || process.env.DEMO_BASE_URL || "https://jenus.com.br";
-  const demoUrl = `${baseUrl.replace(/\/$/, "")}/demo/${empresa.slug}`;
+  await initDb();
+  const db = await getDb();
 
-  const temEmail = Boolean(empresa.email && empresa.email.trim());
-  const temWhatsapp = Boolean(empresa.whatsapp && empresa.whatsapp.trim());
-
-  if (!temEmail && !temWhatsapp) {
-    await atualizarStatus(empresa.id, StatusLead.REJEITADA, "SEM_CONTATO");
+  // 1. PROTEÇÃO CONTRA DUPLICIDADE: Impede disparo repetido se já estiver SENT
+  const statusNorm = normalizeStatusLead(empresa.status);
+  if (statusNorm === StatusLead.SENT && !options.force) {
     return {
       empresaId: empresa.id,
       nome: empresa.nome,
       canal: "NENHUM",
       sucesso: false,
-      statusFinal: StatusLead.REJEITADA,
+      statusFinal: StatusLead.SENT,
+      motivo: `BLOQUEADO_DUPLICIDADE: lead já enviado anteriormente em ${empresa.sent_at || "data registrada"}.`,
+    };
+  }
+
+  // 2. REGRA DE SEGURANÇA NO BACKEND: Lead DEVE estar APPROVED
+  if (statusNorm !== StatusLead.APPROVED) {
+    return {
+      empresaId: empresa.id,
+      nome: empresa.nome,
+      canal: "NENHUM",
+      sucesso: false,
+      statusFinal: empresa.status,
+      motivo: `BLOQUEADO_NAO_APROVADO: o lead precisa ser aprovado na esteira de qualidade antes do disparo (status atual: ${empresa.status}).`,
+    };
+  }
+
+  const baseUrl = options.baseUrl || process.env.DEMO_BASE_URL || "https://jenus-site.vercel.app";
+  const demoUrl = empresa.landing_page_url || `${baseUrl.replace(/\/$/, "")}/demo/${empresa.slug}`;
+
+  const temEmail = Boolean(empresa.email && empresa.email.trim());
+  const temWhatsapp = Boolean(empresa.whatsapp && empresa.whatsapp.trim());
+
+  if (!temEmail && !temWhatsapp) {
+    await atualizarStatus(empresa.id, StatusLead.REJECTED, "SEM_CONTATO");
+    return {
+      empresaId: empresa.id,
+      nome: empresa.nome,
+      canal: "NENHUM",
+      sucesso: false,
+      statusFinal: StatusLead.REJECTED,
       motivo: "SEM_CONTATO",
     };
   }
 
-  if (temEmail) {
-    if (options.dryRun) {
+  const canal = temEmail ? "EMAIL" : "WHATSAPP";
+  const destinatario = temEmail ? empresa.email!.trim() : (empresa.whatsapp || empresa.telefone || "").trim();
+  const replyTo = REPLY_TO_COMERCIAL;
+
+  // 3. RECUPERAÇÃO DE TIMEOUT DE 'PROCESSING' (registros abandonados após 5 minutos)
+  const timeoutSegundos = 300;
+  await db.run(
+    `UPDATE prospeccao_disparos
+     SET status = 'FAILED', error = 'TIMEOUT_EXECUCAO_ABANDONADA', updated_at = CURRENT_TIMESTAMP
+     WHERE lead_id = ? AND canal = ? AND status = 'PROCESSING'
+       AND (strftime('%s', 'now') - strftime('%s', created_at)) > ?`,
+    empresa.id,
+    canal,
+    timeoutSegundos
+  );
+
+  // 4. PROTEÇÃO CONTRA DISPARO CONCORRENTE ATIVO
+  const activeProc = await db.get(
+    `SELECT * FROM prospeccao_disparos WHERE lead_id = ? AND canal = ? AND status = 'PROCESSING'`,
+    empresa.id,
+    canal
+  );
+  if (activeProc) {
+    return {
+      empresaId: empresa.id,
+      nome: empresa.nome,
+      canal,
+      sucesso: false,
+      statusFinal: StatusLead.APPROVED,
+      motivo: "BLOQUEADO_EM_PROCESSAMENTO: existe um disparo em andamento iniciado recentemente para este lead.",
+    };
+  }
+
+  // 5. PROTEÇÃO NO BANCO CONTRA DISPARO DUPLICADO CONCLUÍDO
+  const alreadySent = await db.get(
+    `SELECT * FROM prospeccao_disparos WHERE lead_id = ? AND canal = ? AND status = 'SENT'`,
+    empresa.id,
+    canal
+  );
+  if (alreadySent && !options.force) {
+    return {
+      empresaId: empresa.id,
+      nome: empresa.nome,
+      canal,
+      sucesso: false,
+      statusFinal: StatusLead.SENT,
+      motivo: `BLOQUEADO_DUPLICIDADE_BANCO: disparo já concluído no banco em ${alreadySent.sent_at} (Message-ID: ${alreadySent.message_id || "N/A"}).`,
+    };
+  }
+
+  if (options.dryRun) {
+    return {
+      empresaId: empresa.id,
+      nome: empresa.nome,
+      canal,
+      sucesso: true,
+      statusFinal: StatusLead.SENT,
+      waLink: canal === "WHATSAPP" ? gerarMensagemWhatsapp(empresa, demoUrl).link : undefined,
+    };
+  }
+
+  // Inserção atômica com status PROCESSING protegida pelo índice de unicidade
+  const disparoId = randomUUID();
+  try {
+    await db.run(
+      `INSERT INTO prospeccao_disparos (
+         id, lead_id, canal, tipo_disparo, recipient, reply_to,
+         landing_page_url, status, created_at, updated_at
+       ) VALUES (?, ?, ?, 'PRIMEIRO_CONTATO', ?, ?, ?, 'PROCESSING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      disparoId,
+      empresa.id,
+      canal,
+      destinatario,
+      replyTo,
+      demoUrl
+    );
+  } catch (insertErr: any) {
+    if (insertErr?.message?.includes("UNIQUE constraint failed")) {
       return {
         empresaId: empresa.id,
         nome: empresa.nome,
-        canal: "EMAIL",
-        sucesso: true,
-        statusFinal: StatusLead.ENVIADA,
+        canal,
+        sucesso: false,
+        statusFinal: empresa.status,
+        motivo: "BLOQUEADO_CONCORRENCIA: disparo simultâneo travado pelo banco de dados.",
       };
     }
+    throw insertErr;
+  }
 
+  if (canal === "EMAIL") {
     try {
       const html = gerarTemplateEmail(empresa, demoUrl);
-      const emailDestino = empresa.email!.trim();
       const resultado = await sendMail({
         from: {
-          name: process.env.SENDER_NAME || "Equipe Jenus",
+          name: process.env.SENDER_NAME || "Victor Salomé | Jenus",
           address: process.env.EMAIL_FROM || process.env.SMTP_USER,
         },
-        to: emailDestino,
-        subject: `Apresentação exclusiva para ${empresa.nome} - Demonstração Interativa`,
+        to: destinatario,
+        replyTo: REPLY_TO_COMERCIAL,
+        subject: `Demonstração exclusiva: nova presença digital para ${empresa.nome}`,
         html,
       });
 
-      await atualizarStatus(empresa.id, StatusLead.ENVIADA);
+      const messageId = resultado?.messageId || null;
+
+      // Sucesso: atualiza tabela de auditoria
+      await db.run(
+        `UPDATE prospeccao_disparos
+         SET status = 'SENT', message_id = ?, sent_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        messageId,
+        disparoId
+      );
+
+      // Atualiza lead para SENT com metadata
+      await db.run(
+        `UPDATE prospeccao_empresas
+         SET status = ?, sent_at = CURRENT_TIMESTAMP, message_id = ?, reply_to = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        StatusLead.SENT,
+        messageId,
+        REPLY_TO_COMERCIAL,
+        empresa.id
+      );
+
       return {
         empresaId: empresa.id,
         nome: empresa.nome,
         canal: "EMAIL",
         sucesso: true,
-        statusFinal: StatusLead.ENVIADA,
-        messageId: resultado?.messageId,
+        statusFinal: StatusLead.SENT,
+        messageId,
       };
     } catch (error: any) {
-      await atualizarStatus(
-        empresa.id,
-        StatusLead.APROVADA,
-        `FALHA_ENVIO_EMAIL: ${error?.message || "Erro desconhecido"}`,
+      // Falha: registra erro no histórico e marca lead como FAILED (permite retry pelo usuário)
+      await db.run(
+        `UPDATE prospeccao_disparos
+         SET status = 'FAILED', error = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        error?.message || String(error),
+        disparoId
       );
+
+      await db.run(
+        `UPDATE prospeccao_empresas
+         SET status = ?, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        StatusLead.FAILED,
+        empresa.id
+      );
+
       return {
         empresaId: empresa.id,
         nome: empresa.nome,
         canal: "EMAIL",
         sucesso: false,
-        statusFinal: StatusLead.APROVADA,
-        motivo: "FALHA_ENVIO_EMAIL",
+        statusFinal: StatusLead.FAILED,
+        motivo: `FALHA_ENVIO_EMAIL: ${error?.message || "Erro desconhecido"}`,
       };
     }
   }
 
-  const { texto, link } = gerarMensagemWhatsapp(empresa, demoUrl);
-  await atualizarStatus(empresa.id, StatusLead.ENVIADA);
+  // Disparo via WhatsApp
+  const { link } = gerarMensagemWhatsapp(empresa, demoUrl);
+  await db.run(
+    `UPDATE prospeccao_disparos
+     SET status = 'SENT', sent_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    disparoId
+  );
+
+  await db.run(
+    `UPDATE prospeccao_empresas
+     SET status = ?, sent_at = CURRENT_TIMESTAMP, reply_to = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    StatusLead.SENT,
+    REPLY_TO_COMERCIAL,
+    empresa.id
+  );
+
   return {
     empresaId: empresa.id,
     nome: empresa.nome,
     canal: "WHATSAPP",
     sucesso: true,
-    statusFinal: StatusLead.ENVIADA,
+    statusFinal: StatusLead.SENT,
     waLink: link,
   };
 };

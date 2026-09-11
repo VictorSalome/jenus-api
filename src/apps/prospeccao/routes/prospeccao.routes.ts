@@ -11,6 +11,7 @@ import {
   aprovarLead,
   rejeitarLead,
   dispararLead,
+  responderLead,
   converterLead,
 } from "../controllers/prospeccao.controller.js";
 import { asyncHandler } from "../../../shared/http/index.js";
@@ -36,6 +37,7 @@ router.patch("/empresa/:id/status", asyncHandler(atualizarStatusLead));
 router.post("/empresa/:id/aprovar", asyncHandler(aprovarLead));
 router.post("/empresa/:id/rejeitar", asyncHandler(rejeitarLead));
 router.post("/empresa/:id/disparar", asyncHandler(dispararLead));
+router.post("/empresa/:id/responder", asyncHandler(responderLead));
 router.post("/empresa/:id/converter", asyncHandler(converterLead));
 
 export default router;

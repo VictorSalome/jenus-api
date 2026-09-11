@@ -88,7 +88,7 @@ export async function executarScraperMaps(
 
   const limite = opcoes?.limite ?? 10;
   const headless = opcoes?.headless ?? true;
-  const autoAprovar = opcoes?.autoAprovar ?? true;
+  const autoAprovar = opcoes?.autoAprovar ?? false;
   const onProgress = opcoes?.onProgress;
 
   const resumo: ResumoScraper = {
@@ -571,13 +571,14 @@ async function processarPainelAtual(
   let motivoRejeicao: string | null = null;
 
   if (!temTelefoneValido) {
-    status = StatusLead.REJEITADA;
+    status = StatusLead.REJECTED;
     motivoRejeicao = "SEM_CONTATO";
   } else if (!temMinimoFotos) {
-    status = StatusLead.REJEITADA;
+    status = StatusLead.REJECTED;
     motivoRejeicao = "POUCAS_FOTOS";
   } else {
-    status = autoAprovar ? StatusLead.APROVADA : StatusLead.PENDENTE;
+    // REGRA DE OURO: Lead entra OBRIGATORIAMENTE como PENDING_REVIEW para revisão humana
+    status = autoAprovar ? StatusLead.APPROVED : StatusLead.PENDING_REVIEW;
     motivoRejeicao = null;
   }
 
@@ -617,9 +618,9 @@ async function processarPainelAtual(
   console.log(`[ScraperMaps] 💾 Lead Salvo (${resumo.empresas.length + 1}): "${empresaSalva.nome}" | Status: ${status} | Fotos: ${fotos.length} | Fone: ${empresaSalva.telefone || "Sem fone"}`);
 
   resumo.totalProcessados++;
-  if (status === StatusLead.APROVADA) {
+  if (status === StatusLead.APPROVED || status === (StatusLead as any).APROVADA) {
     resumo.aprovadas++;
-  } else if (status === StatusLead.REJEITADA) {
+  } else if (status === StatusLead.REJECTED || status === (StatusLead as any).REJEITADA) {
     resumo.rejeitadas++;
     if (motivoRejeicao === "SEM_CONTATO") {
       resumo.rejeitadasSemContato++;

@@ -5,6 +5,10 @@ import {
   buscarPorSlug as buscarEmpresaPorSlug,
   buscarPorId as buscarEmpresaPorId,
   atualizarStatus,
+  aprovarLead as aprovarLeadRepo,
+  rejeitarLead as rejeitarLeadRepo,
+  marcarRespondido as marcarRespondidoRepo,
+  converterLead as converterLeadRepo,
 } from "../repositories/empresa.repository.js";
 import { StatusLead } from "../types.js";
 import { dispararParaEmpresa } from "../services/dispatcher.service.js";
@@ -182,12 +186,13 @@ export const atualizarStatusLead = async (req: Request, res: Response, next: Nex
 export const aprovarLead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const lead = await atualizarStatus(id, StatusLead.APROVADA);
+    const userId = (req as any).user?.email || (req as any).user?.id || "victor";
+    const lead = await aprovarLeadRepo(id, userId);
     if (!lead) {
       res.status(404).json({ success: false, message: "Lead não encontrado" });
       return;
     }
-    res.json({ success: true, message: "Lead aprovado com sucesso", data: lead });
+    res.json({ success: true, message: "Lead aprovado na esteira de qualidade e pronto para envio", data: lead });
   } catch (err: any) {
     next(err);
   }
@@ -197,7 +202,8 @@ export const rejeitarLead = async (req: Request, res: Response, next: NextFuncti
   try {
     const { id } = req.params;
     const { motivo } = req.body || {};
-    const lead = await atualizarStatus(id, StatusLead.REJEITADA, motivo || "REPROVADO_MANUAL");
+    const userId = (req as any).user?.email || (req as any).user?.id || "victor";
+    const lead = await rejeitarLeadRepo(id, motivo || "REPROVADO_MANUAL", userId);
     if (!lead) {
       res.status(404).json({ success: false, message: "Lead não encontrado" });
       return;
@@ -217,18 +223,49 @@ export const dispararLead = async (req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    const { dryRun, baseUrl } = req.body || {};
+    const { dryRun, baseUrl, force } = req.body || {};
     const resultado = await dispararParaEmpresa(empresa, {
       baseUrl: baseUrl || process.env.DEMO_BASE_URL || "https://jenus-site.vercel.app",
       dryRun: Boolean(dryRun),
+      force: Boolean(force),
     });
 
+    if (!resultado.sucesso) {
+      const isBlockedAuth = resultado.motivo?.includes("BLOQUEADO_NAO_APROVADO");
+      const isBlockedDup = resultado.motivo?.includes("BLOQUEADO_DUPLICIDADE");
+      const isBlockedProc = resultado.motivo?.includes("BLOQUEADO_EM_PROCESSAMENTO");
+      const statusHttp = isBlockedAuth ? 403 : isBlockedDup || isBlockedProc ? 409 : 400;
+
+      res.status(statusHttp).json({
+        success: false,
+        message: resultado.motivo || "Não foi possível disparar para este lead",
+        data: resultado,
+      });
+      return;
+    }
+
     res.json({
-      success: resultado.sucesso,
-      message: resultado.sucesso
-        ? `Disparo efetuado com sucesso via ${resultado.canal}`
-        : `Não foi possível disparar: ${resultado.motivo || "Erro desconhecido"}`,
+      success: true,
+      message: `Disparo efetuado com sucesso via ${resultado.canal}`,
       data: resultado,
+    });
+  } catch (err: any) {
+    next(err);
+  }
+};
+
+export const responderLead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const lead = await marcarRespondidoRepo(id);
+    if (!lead) {
+      res.status(404).json({ success: false, message: "Lead não encontrado" });
+      return;
+    }
+    res.json({
+      success: true,
+      message: "Lead marcado como respondido (em negociação)",
+      data: lead,
     });
   } catch (err: any) {
     next(err);
@@ -238,14 +275,14 @@ export const dispararLead = async (req: Request, res: Response, next: NextFuncti
 export const converterLead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const lead = await atualizarStatus(id, StatusLead.CONVERTIDA);
+    const lead = await converterLeadRepo(id);
     if (!lead) {
       res.status(404).json({ success: false, message: "Lead não encontrado" });
       return;
     }
     res.json({
       success: true,
-      message: "Lead convertido com sucesso em cliente oficial",
+      message: "Lead convertido com sucesso em cliente oficial ativo",
       data: lead,
     });
   } catch (err: any) {
