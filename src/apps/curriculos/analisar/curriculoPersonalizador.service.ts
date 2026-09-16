@@ -357,52 +357,61 @@ export const personalizarCurriculo = async (dadosVaga: Record<string, any>): Pro
     // Carregar perfil do candidato
     const perfilCandidato = await carregarPerfilCandidato();
 
-    // Gerar resumo profissional dinâmico baseado na descrição da vaga
-    const descricaoCompleta = `${dadosVaga.titulo || ""} ${dadosVaga.descricao || ""} ${dadosVaga.stackTecnologica?.join(" ") || ""} ${dadosVaga.responsabilidades?.join(" ") || ""} ${dadosVaga.requisitosObrigatorios?.join(" ") || ""} ${dadosVaga.diferenciaisDesejaveis?.join(" ") || ""}`;
-    const anosExperienciaCandidato = calcularAnosExperiencia(perfilCandidato.experiences || []);
-    const resumoDinamico = await gerarResumo(descricaoCompleta, anosExperienciaCandidato);
+    // Se modo semIa estiver ativo, utiliza o perfil oficial padrão sem alterações
+    const isSemIa = Boolean(dadosVaga.semIa);
 
-    // Personalizar título baseado na vaga
-    const skillsCandidatoFlat = Object.values(perfilCandidato.skills || {})
-      .filter((categoria) => Array.isArray(categoria))
-      .flat()
-      .filter((skill): skill is string => typeof skill === "string" && skill.trim().length > 0);
-    const tituloPersonalizado = personalizarTitulo(
-      perfilCandidato.personalInfo.title,
-      dadosVaga,
-      skillsCandidatoFlat,
-    );
+    let summaryFinal = perfilCandidato.personalInfo?.summary || "";
+    let tituloPersonalizado = perfilCandidato.personalInfo.title;
+
+    if (!isSemIa) {
+      // Gerar resumo profissional dinâmico baseado na descrição da vaga
+      const descricaoCompleta = `${dadosVaga.titulo || ""} ${dadosVaga.descricao || ""} ${dadosVaga.stackTecnologica?.join(" ") || ""} ${dadosVaga.responsabilidades?.join(" ") || ""} ${dadosVaga.requisitosObrigatorios?.join(" ") || ""} ${dadosVaga.diferenciaisDesejaveis?.join(" ") || ""}`;
+      const anosExperienciaCandidato = calcularAnosExperiencia(perfilCandidato.experiences || []);
+      const resumoDinamico = await gerarResumo(descricaoCompleta, anosExperienciaCandidato);
+
+      // Personalizar título baseado na vaga
+      const skillsCandidatoFlat = Object.values(perfilCandidato.skills || {})
+        .filter((categoria) => Array.isArray(categoria))
+        .flat()
+        .filter((skill): skill is string => typeof skill === "string" && skill.trim().length > 0);
+      tituloPersonalizado = personalizarTitulo(
+        perfilCandidato.personalInfo.title,
+        dadosVaga,
+        skillsCandidatoFlat,
+      );
+
+      summaryFinal = dadosVaga.customSummary ? dadosVaga.customSummary : resumoDinamico.resumo;
+    } else if (dadosVaga.customSummary) {
+      summaryFinal = dadosVaga.customSummary;
+    }
 
     // areasAtuacao e specializations sempre foram o mesmo dado — calculamos
     // uma vez só (o PDF já tem fallback pra usar um ou outro).
-    const areasAtuacaoRelevantes = filtrarEspecializacoesRelevantes(
-      perfilCandidato.specializations || [],
-      dadosVaga,
-    );
+    const areasAtuacaoRelevantes = isSemIa
+      ? (perfilCandidato.specializations || [])
+      : filtrarEspecializacoesRelevantes(
+          perfilCandidato.specializations || [],
+          dadosVaga,
+        );
 
-    // Resumo: se o app enviou um customSummary (da IA otimizada), usa ele diretamente.
-    // Se o usuário gerou no modo "Sem IA", usa o resumo oficial cadastrado no perfil.
-    // Caso contrário, usa o resumo dinâmico calculado por heurística.
-    const summaryFinal = dadosVaga.customSummary
-      ? dadosVaga.customSummary
-      : (dadosVaga.semIa
-          ? (perfilCandidato.personalInfo?.summary || resumoDinamico.resumo)
-          : resumoDinamico.resumo);
-
-    // Criar currículo personalizado
+    // Criar currículo
     const curriculoPersonalizado = {
       personalInfo: {
         ...perfilCandidato.personalInfo,
         title: tituloPersonalizado,
       },
       summary: summaryFinal,
-      experiences: filtrarExperienciasRelevantes(
-        perfilCandidato.experiences,
-        dadosVaga,
-      ),
+      experiences: isSemIa
+        ? (perfilCandidato.experiences || [])
+        : filtrarExperienciasRelevantes(
+            perfilCandidato.experiences,
+            dadosVaga,
+          ),
       education: perfilCandidato.education,
       certifications: perfilCandidato.certifications || [],
-      skills: organizarHabilidadesRelevantes(perfilCandidato.skills, dadosVaga),
+      skills: isSemIa
+        ? perfilCandidato.skills
+        : organizarHabilidadesRelevantes(perfilCandidato.skills, dadosVaga),
       languages: perfilCandidato.languages,
       areasAtuacao: areasAtuacaoRelevantes,
       specializations: areasAtuacaoRelevantes,
@@ -463,7 +472,7 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     }
     
     // Ler dados pessoais do banco
-    const personal = await db.get('SELECT * FROM curriculo_profile_personal WHERE id = 1');
+    const personal = await db.get('SELECT name, email, phone, linkedin, github, portfolio, location, title, summary FROM curriculo_profile_personal WHERE id = 1');
     const personalInfo = personal ? {
       name: personal.name || "",
       email: personal.email || "",
@@ -477,7 +486,7 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     } : { name: "Candidato", email: "", phone: "", linkedin: "", github: "", portfolio: "", location: "", title: "", summary: "" };
     
     // Ler experiências do banco
-    const expRows = await db.all("SELECT * FROM curriculo_profile_experiences ORDER BY start_date DESC");
+    const expRows = await db.all("SELECT company, position, start_date, end_date, location, description, keywords_json, achievements_json, technologies_json FROM curriculo_profile_experiences ORDER BY start_date DESC");
     const experiences = expRows.map((e: any) => {
       const dataInicio = e.start_date;
       const dataFim = !e.end_date || e.end_date === "present" || e.end_date === "Atual" ? "Atual" : e.end_date;
@@ -498,7 +507,7 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     });
     
     // Ler educação do banco
-    const eduRows = await db.all('SELECT * FROM curriculo_profile_education ORDER BY sort_order');
+    const eduRows = await db.all('SELECT institution, degree, start_date, end_date, location, gpa, description FROM curriculo_profile_education ORDER BY sort_order');
     const education = eduRows.map((e: any) => ({
       id: e.id, institution: e.institution, degree: e.degree,
       startDate: e.start_date, endDate: e.end_date, location: e.location,
@@ -506,7 +515,7 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     }));
     
     // Ler certificações do banco
-    const certRows = await db.all('SELECT * FROM curriculo_profile_certifications ORDER BY sort_order');
+    const certRows = await db.all('SELECT type, name, description, issuer, date, credential_id, url FROM curriculo_profile_certifications ORDER BY sort_order');
     const certifications = certRows.map((c: any) => ({
       id: c.id, type: c.type || 'certificado', name: c.name,
       description: c.description, issuer: c.issuer, date: c.date,
@@ -514,11 +523,11 @@ const carregarPerfilCandidato = async (): Promise<any> => {
     }));
     
     // Ler idiomas do banco
-    const langRows = await db.all('SELECT * FROM curriculo_profile_languages ORDER BY sort_order');
+    const langRows = await db.all('SELECT language, level FROM curriculo_profile_languages ORDER BY sort_order');
     const languages = langRows.map((l: any) => ({ language: l.language, level: l.level }));
     
     // Ler especializações do banco
-    const specRows = await db.all('SELECT * FROM curriculo_profile_specializations ORDER BY sort_order');
+    const specRows = await db.all('SELECT text FROM curriculo_profile_specializations ORDER BY sort_order');
     const specializations = specRows.map((s: any) => s.text);
     
     return {

@@ -60,6 +60,7 @@ async function sendFcmNotification(
     body: string;
     data?: Record<string, unknown>;
     priority?: 'normal' | 'high';
+    android?: any;
   }
 ): Promise<boolean> {
   const app = getFirebaseApp();
@@ -81,6 +82,17 @@ async function sendFcmNotification(
     }
 
     const messaging = getMessaging(app);
+    const androidPriority = payload.priority === 'normal' ? 'normal' : 'high';
+    const notificationPriority = payload.priority === 'normal' ? 'default' : 'high';
+
+    const androidData: Record<string, string> = { ...stringData };
+    if (payload.android?.data) {
+      for (const [k, v] of Object.entries(payload.android.data)) {
+        if (v === undefined || v === null) continue;
+        androidData[k] = typeof v === 'string' ? v : typeof v === 'object' ? JSON.stringify(v) : String(v);
+      }
+    }
+
     await messaging.send({
       token,
       notification: {
@@ -89,7 +101,17 @@ async function sendFcmNotification(
       },
       data: stringData,
       android: {
-        priority: payload.priority === 'normal' ? 'normal' : 'high',
+        priority: androidPriority,
+        ...(payload.android || {}),
+        data: androidData,
+        notification: {
+          channelId: DEFAULT_CHANNEL_ID,
+          sound: 'default',
+          priority: notificationPriority,
+          defaultSound: true,
+          defaultVibrateTimings: true,
+          ...(payload.android?.notification || {}),
+        },
       },
       apns: {
         payload: {
@@ -222,6 +244,7 @@ export async function sendPushNotification(payload: {
   priority?: 'normal' | 'high';
   token?: string;
   userId?: string;
+  android?: any;
 }): Promise<{ sent: number; failed: number }> {
   const activeTokens = await getActiveTokens(payload.userId);
   const rawTokens = payload.token ? [payload.token] : activeTokens;

@@ -131,6 +131,7 @@ export class NotificationDispatcher {
         body,
         data: payloadData,
         priority: priority === 'low' ? 'normal' : 'high',
+        userId,
       });
     } catch (err: any) {
       logger.error(`[Dispatcher] Erro ao enviar push para ${typeId}: ${err.message}`, 'Notifications');

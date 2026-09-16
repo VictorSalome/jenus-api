@@ -4,7 +4,7 @@ import { DiscordWebhookConfig } from "./discord-webhook-config.types.js";
 export const getConfig = async (): Promise<DiscordWebhookConfig | null> => {
   const db = await getDb();
   const row = await db.get(
-    "SELECT * FROM promo_discord_webhook_config WHERE id = 1",
+    "SELECT id, webhook_url, updated_at FROM promo_discord_webhook_config WHERE id = 1",
   );
   if (!row || !row.webhook_url) return null;
 

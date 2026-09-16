@@ -40,7 +40,7 @@ const findRecentDuplicateEvent = async (
   // as tentativas de reenvio da mesma notificação real.
   if (postTime) {
     const exactMatch = await db.get(
-      `SELECT * FROM fin_notification_events
+      `SELECT id, user_id, package_name, app_label, title, text, raw_json, parsed_json, fingerprint, status, created_at, post_time FROM fin_notification_events
         WHERE user_id = ? AND package_name IS ? AND post_time = ?
         ORDER BY id DESC
         LIMIT 1`,
@@ -52,7 +52,7 @@ const findRecentDuplicateEvent = async (
   }
 
   return db.get(
-    `SELECT * FROM fin_notification_events
+    `SELECT id, user_id, package_name, app_label, title, text, raw_json, parsed_json, fingerprint, status, created_at, post_time FROM fin_notification_events
       WHERE user_id = ?
         AND package_name IS ?
         AND title IS ?
@@ -78,6 +78,7 @@ const findRecentDuplicateEvent = async (
 export const processRawNotification = async (
   userId: string,
   raw: RawNotification,
+  options?: { skipDispatch?: boolean },
 ): Promise<CreateEventResult> => {
   const db = await getDb();
 
@@ -109,7 +110,7 @@ export const processRawNotification = async (
       raw.postTime || null,
     );
     const event = await db.get(
-      "SELECT * FROM fin_notification_events WHERE id = ?",
+      "SELECT id, user_id, package_name, app_label, title, text, raw_json, parsed_json, fingerprint, status, created_at, post_time FROM fin_notification_events WHERE id = ?",
       res.lastID,
     );
     return { event, duplicate: true, matches: [] };
@@ -150,7 +151,7 @@ export const processRawNotification = async (
       userId,
     );
     const event = await db.get(
-      "SELECT * FROM fin_notification_events WHERE id = ?",
+      "SELECT id, user_id, package_name, app_label, title, text, raw_json, parsed_json, fingerprint, status, created_at, post_time FROM fin_notification_events WHERE id = ?",
       eventId,
     );
     return { event, duplicate: false, matches: [] };
@@ -177,23 +178,26 @@ export const processRawNotification = async (
   );
 
   // Disparo automático via NotificationDispatcher central
-  const amountStr = (parsed.data.amountCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-  void notificationDispatcher.dispatch('financas.transaction_detected', {
-    userId,
-    fingerprint,
-    templateVars: {
-      merchant,
-      amount: amountStr,
-    },
-    data: {
-      route: '/(financas)/detected',
-      eventId,
-      amountCents: parsed.data.amountCents,
-      merchant,
-    },
-  });
+  if (!options?.skipDispatch) {
+    const amountStr = (parsed.data.amountCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    void notificationDispatcher.dispatch('financas.transaction_detected', {
+      userId,
+      fingerprint,
+      templateVars: {
+        merchant,
+        amount: amountStr,
+      },
+      data: {
+        screen: 'detected',
+        route: '/(financas)/detected',
+        eventId,
+        amountCents: parsed.data.amountCents,
+        merchant,
+      },
+    });
+  }
 
-  const event = await db.get("SELECT * FROM fin_notification_events WHERE id = ?", eventId);
+  const event = await db.get("SELECT id, user_id, package_name, app_label, title, text, raw_json, parsed_json, fingerprint, status, created_at, post_time FROM fin_notification_events WHERE id = ?", eventId);
   return { event, parsed: parsed.data, duplicate, matches };
 };
 
@@ -206,7 +210,7 @@ export const listEvents = async (userId: string, status?: string) => {
     params.push(status);
   }
   return db.all(
-    `SELECT * FROM fin_notification_events
+    `SELECT id, user_id, package_name, app_label, title, text, raw_json, parsed_json, fingerprint, status, created_at, post_time FROM fin_notification_events
       WHERE ${where.join(" AND ")}
       ORDER BY id DESC LIMIT 100`,
     ...params,
@@ -215,7 +219,7 @@ export const listEvents = async (userId: string, status?: string) => {
 
 export const getEvent = async (userId: string, id: number) => {
   const db = await getDb();
-  return db.get("SELECT * FROM fin_notification_events WHERE id = ? AND user_id = ?", id, userId);
+  return db.get("SELECT id, user_id, package_name, app_label, title, text, raw_json, parsed_json, fingerprint, status, created_at, post_time FROM fin_notification_events WHERE id = ? AND user_id = ?", id, userId);
 };
 
 /** Importa manualmente um evento ignorado/duplicado como transação. */
@@ -297,4 +301,54 @@ export const ignoreEvent = async (userId: string, id: number) => {
     userId,
   );
   return getEvent(userId, id);
+};
+
+/** Exclui o evento da fila de notificações. */
+export const removeEvent = async (userId: string, id: number) => {
+  const db = await getDb();
+  const event = await getEvent(userId, id);
+  if (!event) return false;
+  await db.run("DELETE FROM fin_notification_events WHERE id = ? AND user_id = ?", id, userId);
+  return true;
+};
+
+/** Exclui múltiplos eventos da fila. */
+export const batchRemoveEvents = async (userId: string, ids: number[]) => {
+  if (!ids || !ids.length) return 0;
+  const db = await getDb();
+  const placeholders = ids.map(() => "?").join(",");
+  const result = await db.run(
+    `DELETE FROM fin_notification_events WHERE user_id = ? AND id IN (${placeholders})`,
+    userId,
+    ...ids,
+  );
+  return result.changes ?? 0;
+};
+
+/** Importa múltiplos eventos da fila para transações. */
+export const batchImportEvents = async (userId: string, ids: number[]) => {
+  if (!ids || !ids.length) return 0;
+  let count = 0;
+  for (const id of ids) {
+    try {
+      const res = await importEvent(userId, id);
+      if (res) count++;
+    } catch (e) {
+      console.warn(`[batchImport] Falha no evento ${id}:`, e);
+    }
+  }
+  return count;
+};
+
+/** Marca múltiplos eventos da fila como ignorados. */
+export const batchIgnoreEvents = async (userId: string, ids: number[]) => {
+  if (!ids || !ids.length) return 0;
+  const db = await getDb();
+  const placeholders = ids.map(() => "?").join(",");
+  const result = await db.run(
+    `UPDATE fin_notification_events SET status = 'ignored' WHERE user_id = ? AND id IN (${placeholders})`,
+    userId,
+    ...ids,
+  );
+  return result.changes ?? 0;
 };

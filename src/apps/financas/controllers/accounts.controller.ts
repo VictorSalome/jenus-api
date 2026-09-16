@@ -1,23 +1,34 @@
-import { getUserId } from "../shared/errors.js";
+import { getHouseholdId, getUserId } from "../shared/errors.js";
 import * as service from "../services/accounts.service.js";
 import { ensureDefaultCategories } from "../services/categories.service.js";
 
 export const list = async (req: any, res: any) => {
-  const userId = getUserId(req);
-  const items = await service.listAccounts(userId);
+  const householdId = await getHouseholdId(req);
+  const items = await service.listAccounts(householdId);
   res.json({ success: true, data: items });
 };
 
 export const create = async (req: any, res: any) => {
+  const householdId = await getHouseholdId(req);
   const userId = getUserId(req);
-  await ensureDefaultCategories(userId);
-  const item = await service.createAccount(userId, req.body);
+  await ensureDefaultCategories(householdId, userId);
+  const item = await service.createAccount(householdId, req.body, userId);
   res.status(201).json({ success: true, data: item });
 };
 
+export const getOne = async (req: any, res: any) => {
+  const householdId = await getHouseholdId(req);
+  const item = await service.getAccount(householdId, Number(req.params.id));
+  if (!item) {
+    res.status(404).json({ success: false, message: "Conta não encontrada" });
+    return;
+  }
+  res.json({ success: true, data: item });
+};
+
 export const update = async (req: any, res: any) => {
-  const userId = getUserId(req);
-  const item = await service.updateAccount(userId, Number(req.params.id), req.body);
+  const householdId = await getHouseholdId(req);
+  const item = await service.updateAccount(householdId, Number(req.params.id), req.body);
   if (!item) {
     res.status(404).json({ success: false, message: "Conta não encontrada" });
     return;
@@ -26,7 +37,16 @@ export const update = async (req: any, res: any) => {
 };
 
 export const remove = async (req: any, res: any) => {
-  const userId = getUserId(req);
-  await service.deleteAccount(userId, Number(req.params.id));
+  const householdId = await getHouseholdId(req);
+  const account = await service.getAccount(householdId, Number(req.params.id));
+  if (!account) {
+    res.status(404).json({ success: false, message: "Conta não encontrada" });
+    return;
+  }
+  if (req.user?.role && req.user.role !== "admin") {
+    res.status(403).json({ success: false, message: "Apenas administradores podem excluir contas bancárias." });
+    return;
+  }
+  await service.deleteAccount(householdId, Number(req.params.id));
   res.json({ success: true });
 };

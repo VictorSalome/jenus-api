@@ -1,3 +1,6 @@
+import type { Database } from "sqlite";
+import type sqlite3 from "sqlite3";
+import bcrypt from "bcryptjs";
 import type { Migration } from "../../../core/migrations/runner.js";
 
 export const financasMigrations: Migration[] = [
@@ -238,7 +241,7 @@ export const financasMigrations: Migration[] = [
 
       INSERT OR IGNORE INTO notification_types (id, module, name, description, title_template, body_template, default_priority, default_enabled, sound_type)
       VALUES
-        ('financas.debt_due_soon', 'financas', 'Dívida Fixa Vence Hoje', 'Lembrete no dia de vencimento de dívidas como Aluguel ou Contas', '📌 Vencimento Hoje: {{debt_name}}', 'Sua dívida fixa de R$ {{amount}} vence hoje. Toque para registrar o pagamento.', 'high', 1, 'payment');
+        ('financas.debt_due_soon', 'financas', 'Dívida Fixa Vence Hoje', 'Lembrete no dia de vencimento de dívidas como Aluguel ou Contas', 'Vencimento Hoje: {{debt_name}}', 'Sua dívida fixa de R$ {{amount}} vence hoje. Toque para registrar o pagamento.', 'high', 1, 'payment');
     `,
   },
   {
@@ -252,4 +255,188 @@ export const financasMigrations: Migration[] = [
         WHERE notification_event_id IS NOT NULL;
     `,
   },
+  {
+    id: "financas_012_multiuser_household",
+    up: async (database: Database<sqlite3.Database, sqlite3.Statement>): Promise<void> => {
+      // 1. Tabelas users, financial_households, financial_household_members
+      await database.exec(`
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          username TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          name TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'user',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+
+        CREATE TABLE IF NOT EXISTS financial_households (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS financial_household_members (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          household_id TEXT NOT NULL,
+          user_id TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'member',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(household_id, user_id),
+          FOREIGN KEY(household_id) REFERENCES financial_households(id) ON DELETE CASCADE,
+          FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_fhm_household ON financial_household_members(household_id);
+        CREATE INDEX IF NOT EXISTS idx_fhm_user ON financial_household_members(user_id);
+      `);
+
+      // 2. Seed inicial idempotente
+      await seedHouseholdDatabase(database);
+
+      // 3. Adicionar coluna household_id em todas as tabelas financeiras existentes + índices
+      await addHouseholdIdToFinancialTables(database);
+    },
+  },
 ];
+
+/**
+ * Seed inicial idempotente do modelo multiusuário/household compartilhado
+ */
+export const seedHouseholdDatabase = async (
+  database: Database<sqlite3.Database, sqlite3.Statement>
+): Promise<void> => {
+  // Household 'household-principal'
+  await database.run(
+    `INSERT INTO financial_households (id, name)
+     VALUES ('household-principal', 'Financeiro do Casal')
+     ON CONFLICT(id) DO UPDATE SET name = excluded.name`
+  );
+
+  // Usuário 1: Victor (vssousa)
+  const existingVictor = await database.get(
+    "SELECT id, password_hash, role, name FROM users WHERE username = ?",
+    "vssousa"
+  );
+  const victorId = existingVictor?.id || "vssousa";
+
+  if (existingVictor) {
+    await database.run(
+      `UPDATE users SET name = 'Victor', role = 'admin' WHERE id = ?`,
+      victorId
+    );
+  } else {
+    const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH?.startsWith("$2")
+      ? process.env.ADMIN_PASSWORD_HASH
+      : await bcrypt.hash(process.env.ADMIN_PASSWORD_HASH || "victor123", 10);
+
+    await database.run(
+      `INSERT INTO users (id, username, password_hash, name, role)
+       VALUES (?, 'vssousa', ?, 'Victor', 'admin')`,
+      victorId,
+      adminPasswordHash
+    );
+  }
+
+  // Usuário 2: Esposa (rcoelhorss) - Rebeca, member
+  const existingRebeca = await database.get(
+    "SELECT id FROM users WHERE username = 'rcoelhorss' OR id = 'rcoelhorss'"
+  );
+  if (existingRebeca) {
+    // Preserva password_hash existente caso a usuária já tenha alterado a senha
+    await database.run(
+      `UPDATE users SET name = 'Rebeca', role = 'member' WHERE id = ?`,
+      existingRebeca.id
+    );
+  } else {
+    const rebecaPasswordHash = await bcrypt.hash("leandroreis", 10);
+    await database.run(
+      `INSERT INTO users (id, username, password_hash, name, role)
+       VALUES ('rcoelhorss', 'rcoelhorss', ?, 'Rebeca', 'member')`,
+      rebecaPasswordHash
+    );
+  }
+
+  // Vincular ambos na tabela financial_household_members com household_id 'household-principal'
+  await database.run(
+    `INSERT INTO financial_household_members (household_id, user_id, role)
+     VALUES ('household-principal', ?, 'admin')
+     ON CONFLICT(household_id, user_id) DO UPDATE SET role = excluded.role`,
+    victorId
+  );
+
+  await database.run(
+    `INSERT INTO financial_household_members (household_id, user_id, role)
+     VALUES ('household-principal', 'rcoelhorss', 'member')
+     ON CONFLICT(household_id, user_id) DO UPDATE SET role = excluded.role`
+  );
+
+  // Migrar e remover referências do antigo 'rcoelhors' para 'rcoelhorss' de forma segura
+  const tablesToMigrate = [
+    "fin_transactions",
+    "fin_categories",
+    "fin_merchants",
+    "fin_cards",
+    "fin_accounts",
+    "fin_debts",
+    "fin_debt_occurrences",
+    "fin_debt_payments",
+    "fin_notification_events",
+    "fin_installment_plans",
+    "fin_installments",
+    "auth_refresh_tokens",
+  ];
+
+  for (const table of tablesToMigrate) {
+    try {
+      await database.run(`UPDATE ${table} SET user_id = 'rcoelhorss' WHERE user_id = 'rcoelhors'`);
+    } catch {
+      // Ignora erro se a tabela não existir
+    }
+  }
+
+  // Remover 'rcoelhors' de financial_household_members e de users
+  await database.run("DELETE FROM financial_household_members WHERE user_id = 'rcoelhors'");
+  await database.run("DELETE FROM users WHERE username = 'rcoelhors' OR id = 'rcoelhors'");
+};
+
+/**
+ * Adiciona household_id TEXT NOT NULL DEFAULT 'household-principal' e índices
+ * de forma idempotente em todas as 11 tabelas financeiras existentes do cofre.
+ */
+export const addHouseholdIdToFinancialTables = async (
+  database: Database<sqlite3.Database, sqlite3.Statement>
+): Promise<void> => {
+  const financialTables = [
+    "fin_accounts",
+    "fin_cards",
+    "fin_categories",
+    "fin_merchants",
+    "fin_transactions",
+    "fin_installment_plans",
+    "fin_installments",
+    "fin_debts",
+    "fin_debt_occurrences",
+    "fin_debt_payments",
+    "fin_notification_events",
+  ];
+
+  for (const table of financialTables) {
+    try {
+      const columns: { name: string }[] = await database.all(`PRAGMA table_info(${table})`);
+      const hasHousehold = columns.some((col) => col.name === "household_id");
+      if (!hasHousehold) {
+        await database.exec(
+          `ALTER TABLE ${table} ADD COLUMN household_id TEXT NOT NULL DEFAULT 'household-principal'`
+        );
+      }
+    } catch (err: any) {
+      if (!err?.message?.includes("duplicate column")) {
+        throw err;
+      }
+    }
+
+    await database.exec(
+      `CREATE INDEX IF NOT EXISTS idx_${table}_household ON ${table}(household_id)`
+    );
+  }
+};

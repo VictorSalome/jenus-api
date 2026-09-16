@@ -14,12 +14,12 @@ router.get(
   asyncHandler(async (_req, res) => {
     const db = await getDb();
 
-    const personal = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
-    const experiences = await db.all("SELECT * FROM curriculo_profile_experiences ORDER BY sort_order");
-    const education = await db.all("SELECT * FROM curriculo_profile_education ORDER BY sort_order");
-    const certifications = await db.all("SELECT * FROM curriculo_profile_certifications ORDER BY sort_order");
-    const languages = await db.all("SELECT * FROM curriculo_profile_languages ORDER BY sort_order");
-    const specializations = await db.all("SELECT * FROM curriculo_profile_specializations ORDER BY sort_order");
+    const personal = await db.get("SELECT id, name, email, test_email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary, salary_pretension FROM curriculo_profile_personal WHERE id = 1");
+    const experiences = await db.all("SELECT id, company, position, start_date, end_date, location, description FROM curriculo_profile_experiences ORDER BY sort_order");
+    const education = await db.all("SELECT id, institution, degree, start_date, end_date, location, gpa, description FROM curriculo_profile_education ORDER BY sort_order");
+    const certifications = await db.all("SELECT id, type, name, description, issuer, date, credential_id, url FROM curriculo_profile_certifications ORDER BY sort_order");
+    const languages = await db.all("SELECT id, language, level FROM curriculo_profile_languages ORDER BY sort_order");
+    const specializations = await db.all("SELECT id, text FROM curriculo_profile_specializations ORDER BY sort_order");
     const skillsRows = await db.all("SELECT category, tech FROM curriculo_profile_skills ORDER BY category, tech");
 
     const skills: Record<string, string[]> = {};
@@ -42,9 +42,9 @@ router.get(
         endDate: e.end_date,
         location: e.location,
         description: e.description,
-        keywords: JSON.parse(e.keywords_json || "[]"),
-        achievements: JSON.parse(e.achievements_json || "[]"),
-        technologies: JSON.parse(e.technologies_json || "[]"),
+        keywords: [],
+        achievements: [],
+        technologies: [],
       })),
       education: education.map((e) => ({
         id: e.id,
@@ -81,7 +81,7 @@ router.get(
   "/profile/personal",
   asyncHandler(async (_req, res) => {
     const db = await getDb();
-    const personal = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
+    const personal = await db.get("SELECT id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary, salary_pretension, test_email, updated_at FROM curriculo_profile_personal WHERE id = 1");
     res.json({
       success: true,
       personalInfo: {
@@ -101,7 +101,7 @@ router.patch(
     const db = await getDb();
     const data = req.body;
 
-    const existing = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
+    const existing = await db.get("SELECT name, email, test_email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary, salary_pretension FROM curriculo_profile_personal WHERE id = 1");
     if (existing) {
       await db.run(`
         UPDATE curriculo_profile_personal SET name=?, email=?, test_email=?, phone=?, has_whatsapp=?, linkedin=?, github=?, portfolio=?, location=?, title=?, summary=?, salary_pretension=?, updated_at=CURRENT_TIMESTAMP
@@ -120,7 +120,7 @@ router.patch(
       `, data.name, data.email, data.testEmail || "victorsalome41@hotmail.com", data.phone, data.hasWhatsApp ? 1 : 0, data.linkedin, data.github, data.portfolio, data.location, data.title, data.summary, data.salaryPretension);
     }
 
-    const updated = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
+    const updated = await db.get("SELECT id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary, salary_pretension, test_email, updated_at FROM curriculo_profile_personal WHERE id = 1");
     logInfo("Dados pessoais atualizados");
     res.json({
       success: true,
@@ -141,11 +141,12 @@ const SECTIONS = {
     mapRow: (e: any) => ({
       id: e.id, company: e.company, position: e.position,
       startDate: e.start_date, endDate: e.end_date, location: e.location,
-      description: e.description, keywords: JSON.parse(e.keywords_json || "[]"),
-      achievements: JSON.parse(e.achievements_json || "[]"),
-      technologies: JSON.parse(e.technologies_json || "[]"),
+      description: e.description, keywords: e.keywords_json ? JSON.parse(e.keywords_json) : [],
+      achievements: e.achievements_json ? JSON.parse(e.achievements_json) : [],
+      technologies: e.technologies_json ? JSON.parse(e.technologies_json) : [],
     }),
     fields: ["id", "company", "position", "start_date", "end_date", "location", "description", "keywords_json", "achievements_json", "technologies_json", "sort_order"],
+    selectListFields: ["id", "company", "position", "start_date", "end_date", "location", "description", "sort_order"],
     insertFields: (data: any) => ({
       id: data.id || genId(), company: data.company, position: data.position,
       start_date: data.startDate, end_date: data.endDate, location: data.location,
@@ -162,6 +163,7 @@ const SECTIONS = {
       gpa: e.gpa, description: e.description,
     }),
     fields: ["id", "institution", "degree", "start_date", "end_date", "location", "gpa", "description", "sort_order"],
+    selectListFields: ["id", "institution", "degree", "start_date", "end_date", "location", "gpa", "description", "sort_order"],
     insertFields: (data: any) => ({
       id: data.id || genId(), institution: data.institution, degree: data.degree,
       start_date: data.startDate, end_date: data.endDate, location: data.location,
@@ -176,6 +178,7 @@ const SECTIONS = {
       credentialId: c.credential_id, url: c.url,
     }),
     fields: ["id", "type", "name", "description", "issuer", "date", "credential_id", "url", "sort_order"],
+    selectListFields: ["id", "type", "name", "description", "issuer", "date", "credential_id", "url", "sort_order"],
     insertFields: (data: any) => ({
       id: data.id || genId(), type: data.type || 'certificado', name: data.name,
       description: data.description, issuer: data.issuer,
@@ -186,12 +189,14 @@ const SECTIONS = {
     table: "curriculo_profile_languages",
     mapRow: (l: any) => ({ id: l.id, language: l.language, level: l.level }),
     fields: ["id", "language", "level", "sort_order"],
+    selectListFields: ["id", "language", "level", "sort_order"],
     insertFields: (data: any) => ({ ...(data.id ? { id: data.id } : {}), language: data.language, level: data.level }),
   },
   specializations: {
     table: "curriculo_profile_specializations",
     mapRow: (s: any) => ({ id: s.id, text: s.text }),
     fields: ["id", "text", "sort_order"],
+    selectListFields: ["id", "text", "sort_order"],
     insertFields: (data: any) => ({ ...(data.id ? { id: data.id } : {}), text: data.text || data.specialization }),
   },
 };
@@ -200,8 +205,13 @@ for (const [section, config] of Object.entries(SECTIONS)) {
   // GET
   router.get(`/profile/${section}`, asyncHandler(async (_req, res) => {
     const db = await getDb();
-    const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
-    res.json({ success: true, [section]: rows.map((row) => config.mapRow(row)) });
+    const rows = await db.all(`SELECT ${config.selectListFields.join(", ")} FROM ${config.table} ORDER BY sort_order`);
+    res.json({ success: true, [section]: rows.map((row) => {
+      return {
+        ...config.mapRow(row),
+        ...(section === 'experiences' ? { keywords: [], achievements: [], technologies: [] } : {})
+      };
+    }) });
   }));
 
   // POST (add)
@@ -221,14 +231,19 @@ for (const [section, config] of Object.entries(SECTIONS)) {
     await db.run(`UPDATE ${config.table} SET sort_order = ? WHERE sort_order = 0 AND id = ?`, maxOrder.next, insertedId);
 
     logInfo(`Item adicionado em ${section}`, { id: insertedId });
-    const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
-    res.json({ success: true, [section]: rows.map((row) => config.mapRow(row)) });
+    const rows = await db.all(`SELECT ${config.selectListFields.join(", ")} FROM ${config.table} ORDER BY sort_order`);
+    res.json({ success: true, [section]: rows.map((row) => {
+      return {
+        ...config.mapRow(row),
+        ...(section === 'experiences' ? { keywords: [], achievements: [], technologies: [] } : {})
+      };
+    }) });
   }));
 
   // PATCH (update)
   router.patch(`/profile/${section}/:id`, asyncHandler(async (req, res) => {
     const db = await getDb();
-    const existing = await db.get(`SELECT * FROM ${config.table} WHERE id = ?`, req.params.id);
+    const existing = await db.get(`SELECT ${config.fields.join(", ")} FROM ${config.table} WHERE id = ?`, req.params.id);
     if (!existing) throw new ValidationError(`Item não encontrado`);
 
     const fields = config.insertFields({ ...existing, ...req.body, id: req.params.id });
@@ -237,8 +252,13 @@ for (const [section, config] of Object.entries(SECTIONS)) {
     await db.run(`UPDATE ${config.table} SET ${sets} WHERE id = ?`, ...Object.values(fields), req.params.id);
 
     logInfo(`Item atualizado em ${section}`, { id: req.params.id });
-    const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
-    res.json({ success: true, [section]: rows.map((row) => config.mapRow(row)) });
+    const rows = await db.all(`SELECT ${config.selectListFields.join(", ")} FROM ${config.table} ORDER BY sort_order`);
+    res.json({ success: true, [section]: rows.map((row) => {
+      return {
+        ...config.mapRow(row),
+        ...(section === 'experiences' ? { keywords: [], achievements: [], technologies: [] } : {})
+      };
+    }) });
   }));
 
   // DELETE
@@ -246,8 +266,13 @@ for (const [section, config] of Object.entries(SECTIONS)) {
     const db = await getDb();
     await db.run(`DELETE FROM ${config.table} WHERE id = ?`, req.params.id);
     logInfo(`Item removido de ${section}`, { id: req.params.id });
-    const rows = await db.all(`SELECT * FROM ${config.table} ORDER BY sort_order`);
-    res.json({ success: true, [section]: rows.map((row) => config.mapRow(row)) });
+    const rows = await db.all(`SELECT ${config.selectListFields.join(", ")} FROM ${config.table} ORDER BY sort_order`);
+    res.json({ success: true, [section]: rows.map((row) => {
+      return {
+        ...config.mapRow(row),
+        ...(section === 'experiences' ? { keywords: [], achievements: [], technologies: [] } : {})
+      };
+    }) });
   }));
 }
 
@@ -260,7 +285,7 @@ router.patch(
     const data = req.body;
 
     if (data.personalInfo) {
-      const existing = await db.get("SELECT * FROM curriculo_profile_personal WHERE id = 1");
+      const existing = await db.get("SELECT name, email, test_email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary, salary_pretension FROM curriculo_profile_personal WHERE id = 1");
       if (existing) {
         await db.run(`UPDATE curriculo_profile_personal SET name=?, email=?, phone=?, linkedin=?, github=?, portfolio=?, location=?, title=?, summary=?, updated_at=CURRENT_TIMESTAMP WHERE id=1`,
           data.personalInfo.name ?? existing.name, data.personalInfo.email ?? existing.email,

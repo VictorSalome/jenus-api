@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as authController from './auth.controller.js';
 import { requireAuth } from './auth.middleware.js';
 import { asyncHandler } from '../http/index.js';
+import { authLimiter } from '../rate-limit/presets.js';
 
 const router = Router();
 
@@ -44,7 +45,7 @@ const router = Router();
  *       401:
  *         description: Credenciais inválidas.
  */
-router.post('/token', asyncHandler(authController.swaggerTokenLogin));
+router.post('/token', authLimiter, asyncHandler(authController.swaggerTokenLogin));
 
 /**
  * @swagger
@@ -76,7 +77,7 @@ router.post('/token', asyncHandler(authController.swaggerTokenLogin));
  *       401:
  *         description: Usuário ou senha incorretos.
  */
-router.post('/login', asyncHandler(authController.login));
+router.post('/login', authLimiter, asyncHandler(authController.login));
 
 /**
  * @swagger

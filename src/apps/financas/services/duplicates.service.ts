@@ -18,7 +18,7 @@ export const normalizeMerchant = (name: string): string =>
  * "data aproximada" sem quebrar em viradas de mês.
  */
 export const buildFingerprint = (
-  userId: string,
+  scopeId: string,
   merchant: string,
   amountCents: number,
   source: string,
@@ -26,16 +26,16 @@ export const buildFingerprint = (
   const normalized = normalizeMerchant(merchant);
   return crypto
     .createHash("sha256")
-    .update(`${userId}|${normalized}|${amountCents}|${source}`)
+    .update(`${scopeId}|${normalized}|${amountCents}|${source}`)
     .digest("hex");
 };
 
 /**
  * Busca transações potencialmente duplicadas nos ±7 dias, para o mesmo
- * usuário, com mesmo fingerprint (merchant normalizado + valor + mês + source).
+ * household/usuário, com mesmo fingerprint (merchant normalizado + valor + mês + source).
  */
 export const findDuplicateTransactions = async (
-  userId: string,
+  scopeId: string,
   fingerprint: string,
   date: string,
   windowDays = 7,
@@ -53,12 +53,13 @@ export const findDuplicateTransactions = async (
   return db.all(
     `SELECT id, description, amount_cents, transaction_date, source, status
        FROM fin_transactions
-      WHERE user_id = ? AND dup_hash = ?
+      WHERE (household_id = ? OR user_id = ?) AND dup_hash = ?
         AND transaction_date BETWEEN ? AND ?
         AND status != 'CANCELLED'
       ORDER BY transaction_date DESC
       LIMIT 10`,
-    userId,
+    scopeId,
+    scopeId,
     fingerprint,
     fromKey,
     toKey,
@@ -71,13 +72,13 @@ export const findDuplicateTransactions = async (
  * apenas como sugestão, sem bloquear — a decisão fica com o usuário.
  */
 export const isPossibleDuplicate = async (
-  userId: string,
+  scopeId: string,
   merchant: string,
   amountCents: number,
   date: string,
   source: string,
 ): Promise<{ duplicate: boolean; matches: any[] }> => {
-  const fingerprint = buildFingerprint(userId, merchant, amountCents, source);
-  const matches = await findDuplicateTransactions(userId, fingerprint, date);
+  const fingerprint = buildFingerprint(scopeId, merchant, amountCents, source);
+  const matches = await findDuplicateTransactions(scopeId, fingerprint, date);
   return { duplicate: matches.length > 0, matches };
 };

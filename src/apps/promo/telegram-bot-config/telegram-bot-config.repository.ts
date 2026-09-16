@@ -4,7 +4,7 @@ import { TelegramBotConfig } from "./telegram-bot-config.types.js";
 export const getConfig = async (): Promise<TelegramBotConfig | null> => {
   const db = await getDb();
   const row = await db.get(
-    "SELECT * FROM promo_telegram_bot_config WHERE id = 1",
+    "SELECT id, bot_token, group_id, updated_at FROM promo_telegram_bot_config WHERE id = 1",
   );
   if (!row || !row.bot_token) return null;
 

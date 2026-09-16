@@ -1,6 +1,6 @@
 import cron, { type ScheduledTask } from "node-cron";
 import prospeccaoConfig from "../config.js";
-import { executarScraperMaps } from "../scraper/mapsScraper.js";
+import { scraperWorkerManager } from "../scraper/workerManager.js";
 import { executarDisparador } from "./dispatcher.service.js";
 import type { ProgressoScraper } from "../types.js";
 import * as logger from "../../../core/logger.js";
@@ -138,7 +138,7 @@ export const executarCiclo = async (
 
   try {
     console.log(`[ProspeccaoScheduler] Executando scraper Google Maps para: "${termo}"...`);
-    const resumoScraper = await executarScraperMaps(termo, {
+    const resumoScraper = await scraperWorkerManager.enqueue(termo, {
       limite,
       onProgress: (etapa, atual, total) => {
         const pct = total > 0 ? Math.min(100, Math.round((atual / total) * 100)) : 0;

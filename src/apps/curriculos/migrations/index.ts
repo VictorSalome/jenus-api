@@ -54,7 +54,6 @@ export const curriculoMigrations: Migration[] = [
         name TEXT,
         email TEXT,
         phone TEXT,
-        has_whatsapp INTEGER DEFAULT 1,
         linkedin TEXT,
         github TEXT,
         portfolio TEXT,
@@ -283,6 +282,20 @@ export const curriculoMigrations: Migration[] = [
 
       ALTER TABLE curriculo_automacao_candidaturas ADD COLUMN run_id INTEGER;
       ALTER TABLE curriculo_automacao_candidaturas ADD COLUMN curriculo_snapshot_json TEXT;
+    `,
+  },
+  {
+    id: "curriculo_016_automacao_cadencia_30_hora",
+    up: `
+      ALTER TABLE curriculo_automacao_config ADD COLUMN hourly_limit INTEGER DEFAULT 30;
+      ALTER TABLE curriculo_automacao_runs ADD COLUMN hourly_limit INTEGER DEFAULT 30;
+
+      UPDATE curriculo_automacao_config
+      SET hourly_limit = 30,
+          daily_limit = 150,
+          min_delay_seconds = 90,
+          max_delay_seconds = 150
+      WHERE id = 1;
     `,
   },
 ];

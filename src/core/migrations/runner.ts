@@ -4,7 +4,7 @@ import * as logger from '../logger.js';
 
 export interface Migration {
   id: string;
-  up: string;
+  up: string | ((database: Database<sqlite3.Database, sqlite3.Statement>) => Promise<void>);
 }
 
 /**
@@ -33,7 +33,11 @@ export const runMigrations = async (
     );
     if (!executed) {
       logger.info(`Executando migration: ${migration.id}`, 'Database');
-      await database.exec(migration.up);
+      if (typeof migration.up === 'function') {
+        await migration.up(database);
+      } else {
+        await database.exec(migration.up);
+      }
       await database.run(
         'INSERT INTO schema_migrations (name) VALUES (?)',
         migration.id,

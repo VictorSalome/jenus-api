@@ -1,6 +1,6 @@
 import sqlite3 from "sqlite3";
 import { Database } from "sqlite";
-import { getDb } from "../../../core/database.js";
+import { getDb, runTransaction } from "../../../core/database.js";
 import { splitInstallments } from "./money.js";
 import { buildFingerprint, normalizeMerchant } from "./duplicates.service.js";
 import { getMerchantByNormalized, createMerchant } from "./merchants.service.js";
@@ -25,6 +25,21 @@ export interface CreateTransactionInput {
   installmentsTotal?: number;
   source?: TransactionSource;
   notificationEventId?: number;
+  status?: TransactionStatus;
+  dueDate?: string;
+  paidDate?: string;
+}
+
+export interface TransactionFilters {
+  userId?: string;
+  month?: string; // YYYY-MM
+  from?: string;
+  to?: string;
+  categoryId?: number;
+  cardId?: number;
+  accountId?: number;
+  status?: string;
+  type?: string;
 }
 
 /**
@@ -42,22 +57,17 @@ const addMonths = (date: string, months: number): string => {
 const todayKey = (): string => new Date().toISOString().slice(0, 10);
 
 export const listTransactions = async (
-  userId: string,
-  filters: {
-    month?: string; // YYYY-MM
-    from?: string;
-    to?: string;
-    categoryId?: number;
-    cardId?: number;
-    accountId?: number;
-    status?: string;
-    type?: string;
-  },
+  householdId: string,
+  filters: TransactionFilters = {},
 ) => {
   const db = await getDb();
-  const where: string[] = ["t.user_id = ?"];
-  const params: any[] = [userId];
+  const where: string[] = ["t.household_id = ?"];
+  const params: any[] = [householdId];
 
+  if (filters.userId) {
+    where.push("t.user_id = ?");
+    params.push(filters.userId);
+  }
   if (filters.month) {
     where.push("substr(t.transaction_date, 1, 7) = ?");
     params.push(filters.month);
@@ -92,7 +102,11 @@ export const listTransactions = async (
   }
 
   return db.all(
-    `SELECT t.*,
+    `SELECT t.id, t.household_id, t.user_id, t.account_id, t.card_id, t.merchant_id, t.category_id,
+            t.description, t.amount_cents, t.type, t.transaction_date, t.installments_total,
+            t.installment_number, t.due_date, t.paid_date, t.status, t.source,
+            t.notification_event_id, t.dup_hash, t.created_at, t.updated_at,
+            COALESCE(u.name, '') as user_name,
             COALESCE(c.name, '') as category_name,
             COALESCE(c.icon, '') as category_icon,
             COALESCE(c.color, '') as category_color,
@@ -100,6 +114,7 @@ export const listTransactions = async (
             COALESCE(ac.name, '') as account_name,
             COALESCE(cd.name, '') as card_name
        FROM fin_transactions t
+       LEFT JOIN users u ON u.id = t.user_id
        LEFT JOIN fin_categories c ON c.id = t.category_id
        LEFT JOIN fin_merchants m ON m.id = t.merchant_id
        LEFT JOIN fin_accounts ac ON ac.id = t.account_id
@@ -114,11 +129,39 @@ export const listTransactions = async (
  * Cria a transação principal. Se parcelada, cria também o plano e as
  * parcelas — tudo em uma única transação do banco (BEGIN/COMMIT/ROLLBACK).
  */
-export const createTransaction = async (
+export async function createTransaction(
+  householdId: string,
   userId: string,
   input: CreateTransactionInput,
-) => {
+): Promise<{ transaction: any; plan: any; installments: any[] }>;
+export async function createTransaction(
+  userId: string,
+  input: CreateTransactionInput,
+): Promise<{ transaction: any; plan: any; installments: any[] }>;
+export async function createTransaction(
+  arg1: string,
+  arg2: any,
+  arg3?: any,
+): Promise<{ transaction: any; plan: any; installments: any[] }> {
+  let householdId: string;
+  let userId: string;
+  let input: CreateTransactionInput;
+
   const db = await getDb();
+
+  if (typeof arg2 === "string" && arg3) {
+    householdId = arg1;
+    userId = arg2;
+    input = arg3;
+  } else {
+    userId = arg1;
+    input = arg2;
+    const member = await db.get<{ household_id: string }>(
+      "SELECT household_id FROM financial_household_members WHERE user_id = ? LIMIT 1",
+      userId,
+    );
+    householdId = member?.household_id || userId;
+  }
 
   // Valida entrada básica.
   if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
@@ -132,26 +175,29 @@ export const createTransaction = async (
     throw new AppError("Número de parcelas inválido (1-60)", 400);
   }
 
-  // Valida ownership: conta/cartão/categoria devem pertencer ao usuário.
+  // Valida ownership: conta/cartão/categoria devem pertencer ao household.
   const account = await db.get(
-    "SELECT id FROM fin_accounts WHERE id = ? AND user_id = ?",
+    "SELECT id FROM fin_accounts WHERE id = ? AND (household_id = ? OR user_id = ?)",
     input.accountId,
+    householdId,
     userId,
   );
   if (!account) throw new AppError("Conta não encontrada", 404);
 
   if (input.cardId) {
     const card = await db.get(
-      "SELECT id FROM fin_cards WHERE id = ? AND user_id = ?",
+      "SELECT id FROM fin_cards WHERE id = ? AND (household_id = ? OR user_id = ?)",
       input.cardId,
+      householdId,
       userId,
     );
     if (!card) throw new AppError("Cartão não encontrado", 404);
   }
   if (input.categoryId) {
     const cat = await db.get(
-      "SELECT id FROM fin_categories WHERE id = ? AND user_id = ?",
+      "SELECT id FROM fin_categories WHERE id = ? AND (household_id = ? OR user_id = ?)",
       input.categoryId,
+      householdId,
       userId,
     );
     if (!cat) throw new AppError("Categoria não encontrada", 404);
@@ -164,14 +210,14 @@ export const createTransaction = async (
 
   if (input.merchantName) {
     const nameNormalized = normalizeMerchant(input.merchantName);
-    const existing = await getMerchantByNormalized(userId, nameNormalized);
+    const existing = await getMerchantByNormalized(householdId, nameNormalized);
     if (existing) {
       merchantId = existing.id;
       if (!resolvedCategoryId && existing.category_id) {
         resolvedCategoryId = existing.category_id;
       }
     } else {
-      const merchant = await createMerchant(userId, { name: input.merchantName });
+      const merchant = await createMerchant(householdId, { name: input.merchantName }, userId);
       merchantId = merchant.id;
     }
   }
@@ -179,7 +225,7 @@ export const createTransaction = async (
   // Se categoria ainda vazia, auto-detecta por palavras-chave (Posto, Mercado, iFood, etc.)
   if (!resolvedCategoryId) {
     const guessedId = await guessCategoryForTransaction(
-      userId,
+      householdId,
       input.merchantName,
       input.description,
     );
@@ -194,17 +240,18 @@ export const createTransaction = async (
     input.source || "MANUAL",
   );
 
-  let transactionId: number;
-  let planId: number | null = null;
+  const status = input.status || "PENDING";
+  const dueDate = input.dueDate || input.transactionDate;
+  const paidDate = status === "PAID" ? (input.paidDate || input.transactionDate) : null;
 
-  await db.run("BEGIN");
-  try {
-    const txResult = await db.run(
+  const { transactionId, planId } = await runTransaction(async (database) => {
+    const txResult = await database.run(
       `INSERT INTO fin_transactions (
-        user_id, account_id, card_id, merchant_id, category_id, description,
+        household_id, user_id, account_id, card_id, merchant_id, category_id, description,
         amount_cents, type, transaction_date, installments_total, installment_number,
-        due_date, status, source, notification_event_id, dup_hash
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        due_date, paid_date, status, source, notification_event_id, dup_hash
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      householdId,
       userId,
       input.accountId,
       input.cardId || null,
@@ -216,89 +263,98 @@ export const createTransaction = async (
       input.transactionDate,
       installmentsTotal,
       1,
-      input.transactionDate,
-      "PENDING",
+      dueDate,
+      paidDate,
+      status,
       input.source || "MANUAL",
       input.notificationEventId || null,
       fingerprint,
     );
-    transactionId = txResult.lastID;
+    const txId = txResult.lastID;
+    let pId: number | null = null;
 
     if (installmentsTotal > 1) {
-      const planResult = await db.run(
+      const planResult = await database.run(
         `INSERT INTO fin_installment_plans (
-          user_id, transaction_id, total_installments, installment_amount_cents, start_month
-        ) VALUES (?, ?, ?, ?, ?)`,
+          household_id, user_id, transaction_id, total_installments, installment_amount_cents, start_month
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
+        householdId,
         userId,
-        transactionId,
+        txId,
         installmentsTotal,
         amounts[0],
         input.transactionDate.slice(0, 7),
       );
-      planId = planResult.lastID;
+      pId = planResult.lastID;
 
       for (let i = 0; i < installmentsTotal; i++) {
         const number = i + 1;
-        const dueDate = i === 0 ? input.transactionDate : addMonths(input.transactionDate, i);
-        await db.run(
+        const instDueDate = i === 0 ? input.transactionDate : addMonths(input.transactionDate, i);
+        await database.run(
           `INSERT INTO fin_installments (
-            user_id, plan_id, transaction_id, number, amount_cents, due_date, status
-          ) VALUES (?, ?, ?, ?, ?, ?, 'PENDING')`,
+            household_id, user_id, plan_id, transaction_id, number, amount_cents, due_date, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')`,
+          householdId,
           userId,
-          planId,
-          transactionId,
+          pId,
+          txId,
           number,
           amounts[i],
-          dueDate,
+          instDueDate,
         );
       }
     }
 
-    await db.run("COMMIT");
-  } catch (err) {
-    try {
-      await db.run("ROLLBACK");
-    } catch (rollbackErr) {
-      logger.warn(`Falha ao executar ROLLBACK em createTransaction: ${rollbackErr}`, "Transactions");
-    }
-    throw err;
-  }
+    return { transactionId: txId, planId: pId };
+  });
 
   const transaction = await db.get(
-    `SELECT * FROM fin_transactions WHERE id = ? AND user_id = ?`,
+    `SELECT id, household_id, user_id, account_id, card_id, merchant_id, category_id,
+            description, amount_cents, type, transaction_date, installments_total,
+            installment_number, due_date, paid_date, status, source,
+            notification_event_id, dup_hash, created_at, updated_at
+       FROM fin_transactions WHERE id = ? AND household_id = ?`,
     transactionId,
-    userId,
+    householdId,
   );
 
   let plan: any = null;
   let installments: any[] = [];
   if (planId) {
     plan = await db.get(
-      "SELECT * FROM fin_installment_plans WHERE id = ? AND user_id = ?",
+      `SELECT id, household_id, user_id, transaction_id, total_installments,
+              installment_amount_cents, start_month, status, created_at, updated_at
+         FROM fin_installment_plans WHERE id = ? AND household_id = ?`,
       planId,
-      userId,
+      householdId,
     );
     installments = await db.all(
-      "SELECT * FROM fin_installments WHERE plan_id = ? AND user_id = ? ORDER BY number",
+      `SELECT id, household_id, user_id, plan_id, transaction_id, number,
+              amount_cents, due_date, status, paid_date, created_at, updated_at
+         FROM fin_installments WHERE plan_id = ? AND household_id = ? ORDER BY number`,
       planId,
-      userId,
+      householdId,
     );
   }
 
   return { transaction, plan, installments };
-};
+}
 
-export const getTransaction = async (userId: string, id: number) => {
+export const getTransaction = async (householdId: string, id: number) => {
   const db = await getDb();
   return db.get(
-    "SELECT * FROM fin_transactions WHERE id = ? AND user_id = ?",
+    `SELECT id, household_id, user_id, account_id, card_id, merchant_id, category_id,
+            description, amount_cents, type, transaction_date, installments_total,
+            installment_number, due_date, paid_date, status, source,
+            notification_event_id, dup_hash, created_at, updated_at
+       FROM fin_transactions WHERE id = ? AND household_id = ?`,
     id,
-    userId,
+    householdId,
   );
 };
 
 export const updateTransaction = async (
-  userId: string,
+  householdId: string,
   id: number,
   data: {
     description?: string;
@@ -308,33 +364,34 @@ export const updateTransaction = async (
   },
 ) => {
   const db = await getDb();
-  const existing = await getTransaction(userId, id);
+  const existing = await getTransaction(householdId, id);
   if (!existing) return null;
 
-  // Valida ownership dos registros referenciados, igual createTransaction:
-  // impede que um accountId/categoryId/merchantId de outro usuário (ou
-  // inexistente) seja associado à transação via update.
+  // Valida ownership dos registros referenciados: pertencem ao household.
   if (data.accountId !== undefined) {
     const account = await db.get(
-      "SELECT id FROM fin_accounts WHERE id = ? AND user_id = ?",
+      "SELECT id FROM fin_accounts WHERE id = ? AND (household_id = ? OR user_id = ?)",
       data.accountId,
-      userId,
+      householdId,
+      existing.user_id,
     );
     if (!account) throw new AppError("Conta não encontrada", 400);
   }
   if (data.categoryId !== undefined && data.categoryId !== null) {
     const category = await db.get(
-      "SELECT id FROM fin_categories WHERE id = ? AND user_id = ?",
+      "SELECT id FROM fin_categories WHERE id = ? AND (household_id = ? OR user_id = ?)",
       data.categoryId,
-      userId,
+      householdId,
+      existing.user_id,
     );
     if (!category) throw new AppError("Categoria não encontrada", 400);
   }
   if (data.merchantId !== undefined && data.merchantId !== null) {
     const merchant = await db.get(
-      "SELECT id FROM fin_merchants WHERE id = ? AND user_id = ?",
+      "SELECT id FROM fin_merchants WHERE id = ? AND (household_id = ? OR user_id = ?)",
       data.merchantId,
-      userId,
+      householdId,
+      existing.user_id,
     );
     if (!merchant) throw new AppError("Estabelecimento não encontrado", 400);
   }
@@ -343,23 +400,23 @@ export const updateTransaction = async (
     `UPDATE fin_transactions
         SET description = ?, category_id = ?, merchant_id = ?, account_id = ?,
             updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND user_id = ?`,
+      WHERE id = ? AND household_id = ?`,
     data.description !== undefined ? data.description : existing.description,
     data.categoryId !== undefined ? data.categoryId : existing.category_id,
     data.merchantId !== undefined ? data.merchantId : existing.merchant_id,
     data.accountId ?? existing.account_id,
     id,
-    userId,
+    householdId,
   );
-  return getTransaction(userId, id);
+  return getTransaction(householdId, id);
 };
 
-export const deleteTransaction = async (userId: string, id: number) => {
+export const deleteTransaction = async (householdId: string, id: number) => {
   const db = await getDb();
   const result = await db.run(
-    "DELETE FROM fin_transactions WHERE id = ? AND user_id = ?",
+    "DELETE FROM fin_transactions WHERE id = ? AND household_id = ?",
     id,
-    userId,
+    householdId,
   );
   return result.changes > 0;
 };

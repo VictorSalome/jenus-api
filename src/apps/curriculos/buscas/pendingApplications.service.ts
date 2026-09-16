@@ -98,14 +98,80 @@ const carregarPersonalInfo = async () => {
  * mais atual, não uma versão congelada) e envia de fato o email.
  */
 export const aprovarEEnviar = async (id: number): Promise<PendingApplication> => {
-  const db = await getDb();
-  const pendente: PendingApplication = await db.get(
-    "SELECT * FROM curriculo_pending_applications WHERE id = ?",
-    id,
-  );
-  if (!pendente) throw new Error("Candidatura pendente não encontrada");
-  if (pendente.status !== "pending") {
-    throw new Error(`Candidatura já está com status "${pendente.status}"`);
+  const { runTransaction } = await import("../../../core/database.js");
+
+  // 1. Reserva atômica da candidatura sob controle rigoroso de cota (Rate Limit)
+  let pendente: PendingApplication;
+  try {
+    pendente = await runTransaction(async (db) => {
+    // Checar limite
+    const queryRate = `
+      SELECT 
+        (SELECT count(*) FROM curriculo_envios WHERE created_at >= datetime('now', '-60 minutes')) +
+        (SELECT count(*) FROM curriculo_automacao_candidaturas WHERE status = 'PROCESSING' AND envio_id IS NULL AND updated_at >= datetime('now', '-10 minutes')) +
+        (SELECT count(*) FROM curriculo_pending_applications WHERE status = 'approved' AND reviewed_at >= datetime('now', '-10 minutes'))
+      AS total
+    `;
+    const contagem = await db.get<{ total: number }>(queryRate);
+    
+    // Obtemos o limite configurado do banco (fallback 30)
+    const configRow = await db.get<{ hourly_limit: number }>("SELECT hourly_limit FROM curriculo_automacao_config WHERE id = 1");
+    const limit = configRow?.hourly_limit || 30;
+
+    if ((contagem?.total ?? 0) >= limit) {
+      throw new Error(`Limite de ${limit} envios por hora atingido. Aguarde a liberação da janela para aprovar manualmente.`);
+    }
+
+    // Validação da Regra de Negócio de 72h (Deduplicação de e-mail)
+    const pendenteRow = await db.get<PendingApplication>("SELECT email_destino FROM curriculo_pending_applications WHERE id = ?", id);
+    if (pendenteRow && pendenteRow.email_destino) {
+      const emailConflito = await db.get<{ total: number }>(
+        `SELECT (
+          (SELECT count(*) FROM curriculo_automacao_candidaturas
+           WHERE lower(trim(contact_email)) = lower(trim(?))
+             AND (
+               (status = 'SENT' AND sent_at >= datetime('now', '-72 hours'))
+               OR (status = 'PROCESSING' AND updated_at >= datetime('now', '-10 minutes'))
+             )
+          ) +
+          (SELECT count(*) FROM curriculo_envios
+           WHERE lower(trim(email_destino)) = lower(trim(?))
+             AND status = 'SENT'
+             AND created_at >= datetime('now', '-72 hours')
+          )
+        ) as total`,
+        pendenteRow.email_destino,
+        pendenteRow.email_destino
+      );
+      
+      if ((emailConflito?.total ?? 0) > 0) {
+        throw new Error("REJEITADO_72H");
+      }
+    }
+
+    const claimResult = await db.run(
+      "UPDATE curriculo_pending_applications SET status = 'approved', reviewed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'",
+      id,
+    );
+
+    if (claimResult.changes === 0) {
+      throw new Error("Candidatura já foi processada, está em andamento ou não foi encontrada.");
+    }
+
+    const row = await db.get<PendingApplication>("SELECT * FROM curriculo_pending_applications WHERE id = ?", id);
+    if (!row) throw new Error("Candidatura pendente não encontrada");
+    return row;
+  });
+  } catch (error: any) {
+    if (error.message === "REJEITADO_72H") {
+      const dbOut = await getDb();
+      await dbOut.run(
+        "UPDATE curriculo_pending_applications SET status = 'rejected', erro = 'Rejeitado automaticamente pela regra de duplicidade de 72h', reviewed_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'",
+        id
+      );
+      throw new Error("Um e-mail já foi enviado para esta empresa/recrutador nas últimas 72 horas. A candidatura foi descartada para evitar spam.");
+    }
+    throw error;
   }
 
   const startTime = Date.now();
@@ -118,7 +184,7 @@ export const aprovarEEnviar = async (id: number): Promise<PendingApplication> =>
     const { gerarPdfCurriculo } = await import(
       "../shared/pdf/pdfGenerator.service.js"
     );
-    const { enviarCurriculo } = await import(
+    const { enviarCurriculoComRegistro } = await import(
       "../shared/email/email.service.js"
     );
     const fs = await import("fs/promises");
@@ -128,18 +194,21 @@ export const aprovarEEnviar = async (id: number): Promise<PendingApplication> =>
     const pdfPath = await gerarPdfCurriculo(curriculo, dadosVaga);
     if (!pdfPath) throw new Error("Falha ao gerar PDF do currículo");
 
-    await enviarCurriculo(
-      pendente.email_destino,
-      pdfPath,
-      dadosVaga,
-      personalInfo,
-    );
+    await enviarCurriculoComRegistro({
+      emailDestino: pendente.email_destino,
+      caminhoArquivoPdf: pdfPath,
+      dadosVaga: dadosVaga,
+      candidato: personalInfo,
+      score: pendente.score,
+    });
 
     try {
       await fs.unlink(pdfPath);
     } catch {}
 
-    await db.run(
+    const { getDb } = await import("../../../core/database.js");
+    const dbOut = await getDb();
+    await dbOut.run(
       "UPDATE curriculo_pending_applications SET status = 'sent', reviewed_at = CURRENT_TIMESTAMP WHERE id = ?",
       id,
     );
@@ -148,7 +217,9 @@ export const aprovarEEnviar = async (id: number): Promise<PendingApplication> =>
 
     return { ...pendente, status: "sent" };
   } catch (err: any) {
-    await db.run(
+    const { getDb } = await import("../../../core/database.js");
+    const dbOut = await getDb();
+    await dbOut.run(
       "UPDATE curriculo_pending_applications SET status = 'error', erro = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?",
       err.message,
       id,

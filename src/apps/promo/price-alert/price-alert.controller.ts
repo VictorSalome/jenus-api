@@ -4,7 +4,7 @@ import { getDb } from '../../../core/database.js';
 export const list = async (_req: Request, res: Response): Promise<void> => {
   try {
     const db = await getDb();
-    const alerts = await db.all('SELECT * FROM promo_price_alerts ORDER BY created_at DESC');
+    const alerts = await db.all('SELECT id, product_name as productName, target_price as targetPrice, is_active as isActive, created_at as createdAt FROM promo_price_alerts ORDER BY created_at DESC');
     res.json({ success: true, data: alerts });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Erro ao listar alertas' });
@@ -24,7 +24,7 @@ export const create = async (req: Request, res: Response): Promise<void> => {
     
     // Verificar se já existe alerta para o mesmo produto+preço
     const existing = await db.get(
-      'SELECT * FROM promo_price_alerts WHERE product_name = ? AND target_price = ? AND is_active = 1',
+      'SELECT id, product_name, target_price, is_active, created_at FROM promo_price_alerts WHERE product_name = ? AND target_price = ? AND is_active = 1',
       productName, targetPrice
     );
     if (existing) {

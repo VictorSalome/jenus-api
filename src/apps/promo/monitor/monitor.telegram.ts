@@ -267,7 +267,16 @@ function setupRealtimeHandler(): void {
 
       const activeFiltersCount = await getActiveFiltersCount();
       const noFilterMode = activeFiltersCount === 0;
-      const filters = noFilterMode ? [] : await findAllFilters();
+    const rawFilters = noFilterMode ? [] : await findAllFilters();
+    const filters = rawFilters.map((f: any) => {
+      let parsedKeywords: string[] = [];
+      try {
+        parsedKeywords = JSON.parse(f.keywords).map((k: string) => k.toLowerCase().trim());
+      } catch {
+        parsedKeywords = f.keywords.toLowerCase().split(",").map((k: string) => k.trim());
+      }
+      return { ...f, parsedKeywords };
+    });
 
       await processMessage(message, channelUsername, filters, noFilterMode);
     } catch (err: any) {
@@ -399,15 +408,7 @@ async function processMessage(
     for (const filter of filters) {
       if (!filter.is_active) continue;
 
-      // As keywords estão armazenadas como JSON no banco
-      // Ex: '["galaxy","samsung"]' → precisa de JSON.parse()
-      let keywords: string[];
-      try {
-        keywords = JSON.parse(filter.keywords).map((k: string) => k.toLowerCase().trim());
-      } catch {
-        // Fallback para formato antigo separado por vírgula
-        keywords = filter.keywords.toLowerCase().split(",").map((k: string) => k.trim());
-      }
+      const keywords = filter.parsedKeywords || [];
       const matches =
         filter.type === "specific"
           ? keywords.every((k: string) => textLower.includes(k))
@@ -480,7 +481,7 @@ async function sendPromoMessage(
       const { isUrgent } = await import('../urgent/urgent.config.js');
       const urgent = isUrgent(text, originalPrice || 0, price || 0);
       await sendPushNotification({
-        title: urgent ? '🔥 URGENTE!' : '🏷️ Nova promo!',
+        title: urgent ? 'URGENTE!' : 'Nova promo!',
         body: `${product || 'Produto'} por ${price ? `R$${price}` : 'preço não informado'} — ${store || channelUsername}`,
         data: { screen: 'promo', product, price, store, link },
         priority: urgent ? 'high' : 'normal',
@@ -494,7 +495,7 @@ async function sendPromoMessage(
       const { getDb } = await import('../../../core/database.js');
       const db = await getDb();
       const alerts = await db.all(
-        'SELECT * FROM promo_price_alerts WHERE is_active = 1'
+        'SELECT id, product_name, target_price, is_active, created_at FROM promo_price_alerts WHERE is_active = 1'
       ) as any[];
 
       const normalizarProduto = (texto: string): string =>

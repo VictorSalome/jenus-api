@@ -44,7 +44,7 @@ export const isDuplicate = async (link?: string, product?: string, price?: numbe
 export const getRecentMessages = async (limit: number = 50): Promise<any[]> => {
   const db = await getDb();
   return db.all(
-    'SELECT * FROM promo_sent_messages ORDER BY sent_at DESC LIMIT ?',
+    'SELECT id, link, product, price, store, channel, message_text, matched_filters, sent_at FROM promo_sent_messages ORDER BY sent_at DESC LIMIT ?',
     limit
   );
 };

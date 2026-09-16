@@ -647,44 +647,46 @@ if (isDirectCli) {
 
   console.log(`[CLI] Iniciando busca no Maps: "${termo}" (limite: ${limit})...`);
 
-  executarScraperMaps(termo, {
-    limite: limit,
-    headless: !noHeadless,
-    autoAprovar: !noAutoAprovar,
-  })
-    .then((resultado) => {
-      console.log("\n====== RESUMO DO SCRAPER GOOGLE MAPS ======");
-      console.log(`Termo pesquisado:        ${resultado.termoBusca}`);
-      console.log(`Total processados:       ${resultado.totalProcessados}`);
-      console.log(`Ignorados (com website): ${resultado.ignoradasComSite}`);
-      console.log(`Salvos no SQLite:        ${resultado.empresas.length}`);
-      console.log(`- Aprovadas:             ${resultado.aprovadas}`);
-      console.log(`- Rejeitadas:            ${resultado.rejeitadas}`);
-      console.log(`  * Sem Contato:         ${resultado.rejeitadasSemContato}`);
-      console.log(`  * Poucas Fotos:        ${resultado.rejeitadasPoucasFotos}`);
-      console.log("==========================================\n");
-
-      if (resultado.empresas.length > 0) {
-        console.log("Exemplo de lead salvo no banco:");
-        const ex = resultado.empresas[0];
-        console.log({
-          id: ex.id,
-          nome: ex.nome,
-          slug: ex.slug,
-          segmento: ex.segmento,
-          cidade: ex.cidade,
-          bairro: ex.bairro,
-          telefone: ex.telefone,
-          whatsapp: ex.whatsapp,
-          total_fotos: ex.fotos?.length,
-          status: ex.status,
-          motivo_rejeicao: ex.motivo_rejeicao,
-        });
-      }
-      process.exit(0);
+  import("./workerManager.js").then(({ scraperWorkerManager }) => {
+    scraperWorkerManager.enqueue(termo, {
+      limite: limit,
+      headless: !noHeadless,
+      autoAprovar: !noAutoAprovar,
     })
-    .catch((err) => {
-      console.error("[CLI] Falha fatal no scraper:", err);
-      process.exit(1);
-    });
+      .then((resultado) => {
+        console.log("\n====== RESUMO DO SCRAPER GOOGLE MAPS ======");
+        console.log(`Termo pesquisado:        ${resultado.termoBusca}`);
+        console.log(`Total processados:       ${resultado.totalProcessados}`);
+        console.log(`Ignorados (com website): ${resultado.ignoradasComSite}`);
+        console.log(`Salvos no SQLite:        ${resultado.empresas.length}`);
+        console.log(`- Aprovadas:             ${resultado.aprovadas}`);
+        console.log(`- Rejeitadas:            ${resultado.rejeitadas}`);
+        console.log(`  * Sem Contato:         ${resultado.rejeitadasSemContato}`);
+        console.log(`  * Poucas Fotos:        ${resultado.rejeitadasPoucasFotos}`);
+        console.log("==========================================\n");
+
+        if (resultado.empresas.length > 0) {
+          console.log("Exemplo de lead salvo no banco:");
+          const ex = resultado.empresas[0];
+          console.log({
+            id: ex.id,
+            nome: ex.nome,
+            slug: ex.slug,
+            segmento: ex.segmento,
+            cidade: ex.cidade,
+            bairro: ex.bairro,
+            telefone: ex.telefone,
+            whatsapp: ex.whatsapp,
+            total_fotos: ex.fotos?.length,
+            status: ex.status,
+            motivo_rejeicao: ex.motivo_rejeicao,
+          });
+        }
+        process.exit(0);
+      })
+      .catch((err) => {
+        console.error("[CLI] Falha fatal no scraper:", err);
+        process.exit(1);
+      });
+  });
 }

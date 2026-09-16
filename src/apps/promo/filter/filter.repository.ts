@@ -2,32 +2,32 @@ import { getDb } from '../../../core/database.js';
 
 export const findAllCategories = async () => {
   const db = await getDb();
-  return db.all('SELECT * FROM promo_categories ORDER BY sort_order');
+  return db.all('SELECT id, name, color, icon, sort_order, is_active FROM promo_categories ORDER BY sort_order');
 };
 
 export const findAllFilters = async () => {
   const db = await getDb();
-  return db.all('SELECT * FROM promo_filters ORDER BY created_at DESC');
+  return db.all('SELECT id, category_id, name, type, keywords, is_active, match_count, created_at FROM promo_filters ORDER BY created_at DESC');
 };
 
 export const findFiltersByCategory = async (categoryId: number) => {
   const db = await getDb();
-  return db.all('SELECT * FROM promo_filters WHERE category_id = ?', categoryId);
+  return db.all('SELECT id, category_id, name, type, keywords, is_active, match_count, created_at FROM promo_filters WHERE category_id = ?', categoryId);
 };
 
 export const findCategoryByName = async (name: string) => {
   const db = await getDb();
-  return db.get('SELECT * FROM promo_categories WHERE name = ?', name);
+  return db.get('SELECT id, name, color, icon, sort_order, is_active, created_at FROM promo_categories WHERE name = ?', name);
 };
 
 export const findFilterByNameAndCategory = async (name: string, categoryId: number) => {
   const db = await getDb();
-  return db.get('SELECT * FROM promo_filters WHERE name = ? AND category_id = ?', name, categoryId);
+  return db.get('SELECT id, category_id, name, type, keywords, is_active, match_count, created_at FROM promo_filters WHERE name = ? AND category_id = ?', name, categoryId);
 };
 
 export const findFilterById = async (id: number) => {
   const db = await getDb();
-  return db.get('SELECT * FROM promo_filters WHERE id = ?', id);
+  return db.get('SELECT id, category_id, name, type, keywords, is_active, match_count, created_at FROM promo_filters WHERE id = ?', id);
 };
 
 export const createCategory = async (category: any) => {

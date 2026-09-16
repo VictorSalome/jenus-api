@@ -54,7 +54,7 @@ export async function loadMonitorState(): Promise<void> {
       consecutive_errors: number;
       current_interval_ms: number;
       messages_processed: number;
-    }>("SELECT * FROM promo_monitor_state WHERE id = 1");
+    }>("SELECT id, is_running, telegram_connected, last_check_at, last_error, consecutive_errors, current_interval_ms, messages_processed, updated_at FROM promo_monitor_state WHERE id = 1");
     if (row) {
       isRunning = row.is_running === 1;
       telegramConnected = row.telegram_connected === 1;

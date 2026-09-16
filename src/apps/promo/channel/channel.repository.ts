@@ -3,17 +3,24 @@ import { Channel } from './channel.types.js';
 
 export const findAll = async (): Promise<Channel[]> => {
   const db = await getDb();
-  return db.all('SELECT * FROM promo_channels ORDER BY created_at DESC');
+  const rows = await db.all('SELECT id, username, name, is_active as isActive, created_at as createdAt FROM promo_channels ORDER BY created_at DESC');
+  return rows.map((r: any) => ({
+    id: r.id,
+    username: r.username,
+    name: r.name,
+    isActive: Boolean(r.isActive),
+    createdAt: r.createdAt
+  }));
 };
 
 export const findById = async (id: number): Promise<Channel | undefined> => {
   const db = await getDb();
-  return db.get('SELECT * FROM promo_channels WHERE id = ?', id);
+  return db.get('SELECT id, username, name, is_active, created_at FROM promo_channels WHERE id = ?', id);
 };
 
 export const findByUsername = async (username: string): Promise<Channel | undefined> => {
   const db = await getDb();
-  return db.get('SELECT * FROM promo_channels WHERE username = ?', username);
+  return db.get('SELECT id, username, name, is_active, created_at FROM promo_channels WHERE username = ?', username);
 };
 
 export const create = async (channel: Omit<Channel, 'id' | 'createdAt'>): Promise<number> => {

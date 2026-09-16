@@ -41,6 +41,7 @@ const escapeHtml = (val: unknown): string =>
     .replace(/'/g, "&#39;");
 
 export const gerarTemplateEmail = (empresa: EmpresaLead, demoUrl: string): string => {
+  const safeDemoUrl = escapeHtml(demoUrl);
   const nomeEmpresa = escapeHtml(empresa.nome);
   const segmento = escapeHtml(empresa.segmento || "Comércio Local");
   const localizacao = escapeHtml(
@@ -137,7 +138,7 @@ export const gerarTemplateEmail = (empresa: EmpresaLead, demoUrl: string): strin
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:32px 0 24px 0;">
                 <tr>
                   <td align="center">
-                    <a href="${demoUrl}" target="_blank" style="display:inline-block;padding:16px 32px;background:linear-gradient(135deg,#4f46e5 0%,#4338ca 100%);color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;border-radius:10px;box-shadow:0 10px 15px -3px rgba(79,70,229,0.3);text-align:center;">
+                    <a href="${safeDemoUrl}" target="_blank" style="display:inline-block;padding:16px 32px;background:linear-gradient(135deg,#4f46e5 0%,#4338ca 100%);color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;border-radius:10px;box-shadow:0 10px 15px -3px rgba(79,70,229,0.3);text-align:center;">
                       Acessar Demonstração da ${nomeEmpresa} &rarr;
                     </a>
                   </td>
@@ -146,7 +147,7 @@ export const gerarTemplateEmail = (empresa: EmpresaLead, demoUrl: string): strin
 
               <p style="margin:0 0 20px 0;font-size:13px;line-height:20px;color:#64748b;text-align:center;">
                 Ou copie e cole o link no seu navegador: <br>
-                <a href="${demoUrl}" style="color:#4f46e5;word-break:break-all;">${demoUrl}</a>
+                <a href="${safeDemoUrl}" style="color:#4f46e5;word-break:break-all;">${safeDemoUrl}</a>
               </p>
 
               <p style="margin:24px 0 0 0;font-size:14px;line-height:22px;color:#334155;">
@@ -258,7 +259,7 @@ export const dispararParaEmpresa = async (
 
   // 4. PROTEÇÃO CONTRA DISPARO CONCORRENTE ATIVO
   const activeProc = await db.get(
-    `SELECT * FROM prospeccao_disparos WHERE lead_id = ? AND canal = ? AND status = 'PROCESSING'`,
+    `SELECT id, lead_id, canal, tipo_disparo, recipient, reply_to, landing_page_url, message_id, status, error, sent_at, created_at, updated_at FROM prospeccao_disparos WHERE lead_id = ? AND canal = ? AND status = 'PROCESSING'`,
     empresa.id,
     canal
   );
@@ -275,7 +276,7 @@ export const dispararParaEmpresa = async (
 
   // 5. PROTEÇÃO NO BANCO CONTRA DISPARO DUPLICADO CONCLUÍDO
   const alreadySent = await db.get(
-    `SELECT * FROM prospeccao_disparos WHERE lead_id = ? AND canal = ? AND status = 'SENT'`,
+    `SELECT id, lead_id, canal, tipo_disparo, recipient, reply_to, landing_page_url, message_id, status, error, sent_at, created_at, updated_at FROM prospeccao_disparos WHERE lead_id = ? AND canal = ? AND status = 'SENT'`,
     empresa.id,
     canal
   );

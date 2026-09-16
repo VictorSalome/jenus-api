@@ -1,4 +1,5 @@
 import { getDb } from "../../../core/database.js";
+import { AppError } from "../shared/errors.js";
 
 export interface CreateDebtInput {
   name: string;
@@ -40,22 +41,25 @@ function getDueDateForMonth(month: string, dueDay: number): string {
 
 /**
  * Garante que para o mês requisitado existam ocorrências criadas
- * para todas as dívidas fixas ativas do usuário.
+ * para todas as dívidas fixas ativas do household.
  */
 export const ensureMonthlyOccurrences = async (
-  userId: string,
+  householdId: string,
   month: string,
+  userId?: string,
 ): Promise<void> => {
   const db = await getDb();
+  const effectiveUser = userId || householdId;
 
   const debts: any[] = await db.all(
     `SELECT id, amount_cents, due_day, start_month, end_month
        FROM fin_debts
-      WHERE user_id = ?
+      WHERE (household_id = ? OR user_id = ?)
         AND active = 1
         AND start_month <= ?
         AND (end_month IS NULL OR end_month = '' OR end_month >= ?)`,
-    userId,
+    householdId,
+    householdId,
     month,
     month,
   );
@@ -64,9 +68,10 @@ export const ensureMonthlyOccurrences = async (
     const dueDate = getDueDateForMonth(month, debt.due_day);
     await db.run(
       `INSERT OR IGNORE INTO fin_debt_occurrences
-        (user_id, debt_id, month, due_date, expected_amount_cents, paid_amount_cents, status)
-       VALUES (?, ?, ?, ?, ?, 0, 'PENDING')`,
-      userId,
+        (household_id, user_id, debt_id, month, due_date, expected_amount_cents, paid_amount_cents, status)
+       VALUES (?, ?, ?, ?, ?, ?, 0, 'PENDING')`,
+      householdId,
+      effectiveUser,
       debt.id,
       month,
       dueDate,
@@ -75,12 +80,13 @@ export const ensureMonthlyOccurrences = async (
   }
 };
 
-export const listOccurrences = async (userId: string, month: string) => {
+export const listOccurrences = async (householdId: string, month: string, userId?: string) => {
   const db = await getDb();
-  await ensureMonthlyOccurrences(userId, month);
+  await ensureMonthlyOccurrences(householdId, month, userId);
 
   const occurrences = await db.all<any[]>(
-    `SELECT o.*,
+    `SELECT o.id, o.household_id, o.user_id, o.debt_id, o.month, o.due_date, o.expected_amount_cents,
+            o.paid_amount_cents, o.status, o.created_at, o.updated_at,
             d.name as debt_name,
             d.due_day as debt_due_day,
             d.notes as debt_notes,
@@ -94,20 +100,26 @@ export const listOccurrences = async (userId: string, month: string) => {
        JOIN fin_debts d ON d.id = o.debt_id
        LEFT JOIN fin_categories c ON c.id = d.category_id
        LEFT JOIN fin_accounts a ON a.id = d.account_id
-      WHERE o.user_id = ? AND o.month = ?
+      WHERE (o.household_id = ? OR o.user_id = ?) AND o.month = ?
       ORDER BY o.due_date ASC, d.name COLLATE NOCASE ASC`,
-    userId,
+    householdId,
+    householdId,
     month,
   );
 
   for (const occ of occurrences) {
     const payments = await db.all(
-      `SELECT * FROM fin_debt_payments
-        WHERE occurrence_id = ? AND user_id = ?
-        ORDER BY paid_date DESC, id DESC`,
+      `SELECT p.id, p.household_id, p.user_id, p.occurrence_id, p.amount_cents, p.paid_date, p.notes, p.created_at,
+              COALESCE(u.name, 'Sem identificação') AS paid_by_name
+         FROM fin_debt_payments p
+         LEFT JOIN users u ON u.id = p.user_id
+        WHERE p.occurrence_id = ? AND (p.household_id = ? OR p.user_id = ?)
+        ORDER BY p.paid_date DESC, p.id DESC`,
       occ.id,
-      userId,
+      householdId,
+      householdId,
     );
+    occ.paid_by_name = payments.length > 0 ? payments[0].paid_by_name : null;
     occ.payments = payments;
   }
 
@@ -140,10 +152,12 @@ export const listOccurrences = async (userId: string, month: string) => {
   };
 };
 
-export const listDebts = async (userId: string) => {
+export const listDebts = async (householdId: string) => {
   const db = await getDb();
   return db.all(
-    `SELECT d.*,
+    `SELECT d.id, d.household_id, d.user_id, d.name, d.amount_cents, d.due_day,
+            d.category_id, d.account_id, d.start_month, d.end_month, d.active,
+            d.notes, d.created_at, d.updated_at,
             c.name as category_name,
             c.color as category_color,
             c.icon as category_icon,
@@ -151,16 +165,19 @@ export const listDebts = async (userId: string) => {
        FROM fin_debts d
        LEFT JOIN fin_categories c ON c.id = d.category_id
        LEFT JOIN fin_accounts a ON a.id = d.account_id
-      WHERE d.user_id = ?
+      WHERE d.household_id = ? OR d.user_id = ?
       ORDER BY d.active DESC, d.due_day ASC, d.name COLLATE NOCASE ASC`,
-    userId,
+    householdId,
+    householdId,
   );
 };
 
-export const getDebt = async (userId: string, id: number) => {
+export const getDebt = async (householdId: string, id: number) => {
   const db = await getDb();
   return db.get(
-    `SELECT d.*,
+    `SELECT d.id, d.household_id, d.user_id, d.name, d.amount_cents, d.due_day,
+            d.category_id, d.account_id, d.start_month, d.end_month, d.active,
+            d.notes, d.created_at, d.updated_at,
             c.name as category_name,
             c.color as category_color,
             c.icon as category_icon,
@@ -168,13 +185,18 @@ export const getDebt = async (userId: string, id: number) => {
        FROM fin_debts d
        LEFT JOIN fin_categories c ON c.id = d.category_id
        LEFT JOIN fin_accounts a ON a.id = d.account_id
-      WHERE d.id = ? AND d.user_id = ?`,
+      WHERE d.id = ? AND (d.household_id = ? OR d.user_id = ?)`,
     id,
-    userId,
+    householdId,
+    householdId,
   );
 };
 
-export const createDebt = async (userId: string, data: CreateDebtInput) => {
+export const createDebt = async (
+  householdId: string,
+  data: CreateDebtInput,
+  userId?: string,
+) => {
   if (!Number.isInteger(data.amountCents) || data.amountCents <= 0) {
     throw new Error("Valor da dívida deve ser um número inteiro de centavos maior que zero");
   }
@@ -182,12 +204,14 @@ export const createDebt = async (userId: string, data: CreateDebtInput) => {
   const db = await getDb();
   const startMonth = data.startMonth || currentMonthKey();
   const dueDay = Math.max(1, Math.min(31, data.dueDay || 10));
+  const effectiveUser = userId || householdId;
 
   const result = await db.run(
     `INSERT INTO fin_debts
-      (user_id, name, amount_cents, due_day, category_id, account_id, start_month, end_month, notes, active)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    userId,
+      (household_id, user_id, name, amount_cents, due_day, category_id, account_id, start_month, end_month, notes, active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    householdId,
+    effectiveUser,
     data.name.trim(),
     data.amountCents,
     dueDay,
@@ -201,19 +225,19 @@ export const createDebt = async (userId: string, data: CreateDebtInput) => {
   const debtId = result.lastID;
 
   // Cria ocorrência imediatamente para o startMonth
-  await ensureMonthlyOccurrences(userId, startMonth);
+  await ensureMonthlyOccurrences(householdId, startMonth, effectiveUser);
 
   // Se o mês atual for posterior a startMonth, garante também o mês atual
   const curMonth = currentMonthKey();
   if (curMonth > startMonth) {
-    await ensureMonthlyOccurrences(userId, curMonth);
+    await ensureMonthlyOccurrences(householdId, curMonth, effectiveUser);
   }
 
-  return getDebt(userId, debtId);
+  return getDebt(householdId, debtId);
 };
 
 export const updateDebt = async (
-  userId: string,
+  householdId: string,
   id: number,
   data: UpdateDebtInput,
 ) => {
@@ -225,7 +249,7 @@ export const updateDebt = async (
   }
 
   const db = await getDb();
-  const existing = await getDebt(userId, id);
+  const existing = await getDebt(householdId, id);
   if (!existing) return null;
 
   const dueDay =
@@ -244,7 +268,7 @@ export const updateDebt = async (
             end_month = ?,
             notes = ?,
             updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND user_id = ?`,
+      WHERE id = ? AND (household_id = ? OR user_id = ?)`,
     data.name !== undefined ? data.name.trim() : existing.name,
     data.amountCents !== undefined ? data.amountCents : existing.amount_cents,
     dueDay,
@@ -254,21 +278,24 @@ export const updateDebt = async (
     data.endMonth !== undefined ? data.endMonth : existing.end_month,
     data.notes !== undefined ? data.notes?.trim() || null : existing.notes,
     id,
-    userId,
+    householdId,
+    householdId,
   );
 
-  return getDebt(userId, id);
+  return getDebt(householdId, id);
 };
 
-export const deleteDebt = async (userId: string, id: number) => {
+export const deleteDebt = async (householdId: string, id: number) => {
   const db = await getDb();
-  await db.run("DELETE FROM fin_debts WHERE id = ? AND user_id = ?", id, userId);
+  const res = await db.run("DELETE FROM fin_debts WHERE id = ? AND (household_id = ? OR user_id = ?)", id, householdId, householdId);
+  return (res?.changes ?? 0) > 0;
 };
 
 export const addPayment = async (
-  userId: string,
+  householdId: string,
   occurrenceId: number,
   data: AddDebtPaymentInput,
+  userId?: string,
 ) => {
   const db = await getDb();
   const occurrence = await db.get<{
@@ -279,25 +306,28 @@ export const addPayment = async (
     paid_amount_cents: number;
     status: string;
   }>(
-    "SELECT * FROM fin_debt_occurrences WHERE id = ? AND user_id = ?",
+    "SELECT id, household_id, user_id, debt_id, month, due_date, expected_amount_cents, paid_amount_cents, status, created_at, updated_at FROM fin_debt_occurrences WHERE id = ? AND (household_id = ? OR user_id = ?)",
     occurrenceId,
-    userId,
+    householdId,
+    householdId,
   );
 
   if (!occurrence) {
-    throw new Error("Ocorrência de dívida não encontrada");
+    throw new AppError("Ocorrência de dívida não encontrada", 404);
   }
 
   if (data.amountCents <= 0 || !Number.isInteger(data.amountCents)) {
-    throw new Error("Valor do pagamento deve ser um número inteiro de centavos maior que zero");
+    throw new AppError("Valor do pagamento deve ser um número inteiro de centavos maior que zero", 400);
   }
 
   const paidDate = data.paidDate || todayDateKey();
+  const effectiveUser = userId || householdId;
 
   await db.run(
-    `INSERT INTO fin_debt_payments (user_id, occurrence_id, amount_cents, paid_date, notes)
-     VALUES (?, ?, ?, ?, ?)`,
-    userId,
+    `INSERT INTO fin_debt_payments (household_id, user_id, occurrence_id, amount_cents, paid_date, notes)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    householdId,
+    effectiveUser,
     occurrenceId,
     data.amountCents,
     paidDate,
@@ -329,15 +359,17 @@ export const addPayment = async (
   );
 
   const payments = await db.all(
-    `SELECT * FROM fin_debt_payments
-      WHERE occurrence_id = ? AND user_id = ?
+    `SELECT id, household_id, user_id, occurrence_id, amount_cents, paid_date, notes, created_at FROM fin_debt_payments
+      WHERE occurrence_id = ? AND (household_id = ? OR user_id = ?)
       ORDER BY paid_date DESC, id DESC`,
     occurrenceId,
-    userId,
+    householdId,
+    householdId,
   );
 
   const updatedOcc = await db.get<any>(
-    `SELECT o.*,
+    `SELECT o.id, o.household_id, o.user_id, o.debt_id, o.month, o.due_date, o.expected_amount_cents,
+            o.paid_amount_cents, o.status, o.created_at, o.updated_at,
             d.name as debt_name,
             d.due_day as debt_due_day,
             d.notes as debt_notes,
@@ -352,19 +384,20 @@ export const addPayment = async (
   return updatedOcc;
 };
 
-export const deletePayment = async (userId: string, paymentId: number) => {
+export const deletePayment = async (householdId: string, paymentId: number) => {
   const db = await getDb();
   const payment = await db.get<{ occurrence_id: number }>(
-    "SELECT occurrence_id FROM fin_debt_payments WHERE id = ? AND user_id = ?",
+    "SELECT occurrence_id FROM fin_debt_payments WHERE id = ? AND (household_id = ? OR user_id = ?)",
     paymentId,
-    userId,
+    householdId,
+    householdId,
   );
 
   if (!payment) {
-    throw new Error("Pagamento não encontrado");
+    throw new AppError("Pagamento não encontrado", 404);
   }
 
-  await db.run("DELETE FROM fin_debt_payments WHERE id = ? AND user_id = ?", paymentId, userId);
+  await db.run("DELETE FROM fin_debt_payments WHERE id = ? AND (household_id = ? OR user_id = ?)", paymentId, householdId, householdId);
 
   const occurrenceId = payment.occurrence_id;
   const occurrence = await db.get<{ expected_amount_cents: number }>(
@@ -408,12 +441,13 @@ export interface DebtSuggestion {
   category_id?: number | null;
 }
 
-export const getRecurringSuggestions = async (userId: string): Promise<DebtSuggestion[]> => {
+export const getRecurringSuggestions = async (householdId: string): Promise<DebtSuggestion[]> => {
   const db = await getDb();
 
   const existingDebts = await db.all<any[]>(
-    "SELECT name FROM fin_debts WHERE user_id = ? AND active = 1",
-    userId,
+    "SELECT name FROM fin_debts WHERE (household_id = ? OR user_id = ?) AND active = 1",
+    householdId,
+    householdId,
   );
   const existingNames = new Set((existingDebts || []).map((d) => d.name.toLowerCase().trim()));
 
@@ -424,7 +458,7 @@ export const getRecurringSuggestions = async (userId: string): Promise<DebtSugge
               SELECT t2.category_id
                 FROM fin_transactions t2
                 LEFT JOIN fin_merchants m2 ON m2.id = t2.merchant_id
-               WHERE t2.user_id = t.user_id
+               WHERE (t2.household_id = t.household_id OR t2.user_id = t.user_id)
                  AND t2.amount_cents = t.amount_cents
                  AND COALESCE(m2.name, t2.description, 'Despesa') = COALESCE(m.name, t.description, 'Despesa')
                ORDER BY t2.transaction_date DESC, t2.id DESC
@@ -435,7 +469,7 @@ export const getRecurringSuggestions = async (userId: string): Promise<DebtSugge
             COUNT(*) as total_count
        FROM fin_transactions t
        LEFT JOIN fin_merchants m ON m.id = t.merchant_id
-      WHERE t.user_id = ?
+      WHERE (t.household_id = ? OR t.user_id = ?)
         AND (t.type = 'debit' OR t.type = 'credit')
         AND t.status != 'CANCELLED'
         AND t.installments_total = 1
@@ -443,7 +477,8 @@ export const getRecurringSuggestions = async (userId: string): Promise<DebtSugge
       HAVING total_count >= 2 OR distinct_months >= 2
       ORDER BY total_count DESC
       LIMIT 10`,
-    userId,
+    householdId,
+    householdId,
   );
 
   const KNOWN_SUBSCRIPTIONS = [
@@ -475,4 +510,3 @@ export const getRecurringSuggestions = async (userId: string): Promise<DebtSugge
 
   return suggestions;
 };
-

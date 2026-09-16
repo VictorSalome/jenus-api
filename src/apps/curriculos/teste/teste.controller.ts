@@ -24,12 +24,12 @@ const carregarDadosCandidato = async () => {
     const { getDb } = await import("../../../core/database.js");
     const db = await getDb();
     
-    const personal = await db.get('SELECT * FROM curriculo_profile_personal WHERE id = 1');
-    const expRows = await db.all('SELECT * FROM curriculo_profile_experiences ORDER BY sort_order');
-    const eduRows = await db.all('SELECT * FROM curriculo_profile_education ORDER BY sort_order');
-    const certRows = await db.all('SELECT * FROM curriculo_profile_certifications ORDER BY sort_order');
-    const langRows = await db.all('SELECT * FROM curriculo_profile_languages ORDER BY sort_order');
-    const specRows = await db.all('SELECT * FROM curriculo_profile_specializations ORDER BY sort_order');
+    const personal = await db.get('SELECT name, email, phone, linkedin, github, portfolio, location, title, summary FROM curriculo_profile_personal WHERE id = 1');
+    const expRows = await db.all('SELECT company, position, start_date, end_date, location, description, keywords_json, achievements_json, technologies_json FROM curriculo_profile_experiences ORDER BY sort_order');
+    const eduRows = await db.all('SELECT institution, degree, start_date, end_date, location, gpa, description FROM curriculo_profile_education ORDER BY sort_order');
+    const certRows = await db.all('SELECT type, name, description, issuer, date, credential_id, url FROM curriculo_profile_certifications ORDER BY sort_order');
+    const langRows = await db.all('SELECT language, level FROM curriculo_profile_languages ORDER BY sort_order');
+    const specRows = await db.all('SELECT text FROM curriculo_profile_specializations ORDER BY sort_order');
     const skillsRows = await db.all('SELECT category, tech FROM curriculo_profile_skills');
     
     const skills: Record<string, string[]> = {};

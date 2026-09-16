@@ -3,7 +3,7 @@ import { getDb } from '../../../core/database.js';
 
 export const getConfig = async (): Promise<TelegramConfig | null | undefined> => {
   const db = await getDb();
-  const row = await db.get('SELECT * FROM promo_telegram_config WHERE id = 1');
+  const row = await db.get('SELECT id, api_id, api_hash, phone, session_string, is_connected, created_at, updated_at FROM promo_telegram_config WHERE id = 1');
   
   if (!row) return null;
   

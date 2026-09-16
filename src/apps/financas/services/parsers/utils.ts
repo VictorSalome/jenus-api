@@ -49,14 +49,26 @@ export const extractInstallments = (text: string): number | null => {
 
 /** Extrai o nome do estabelecimento após "na | em | no | na loja | compra". */
 export const extractMerchant = (text: string): string | null => {
-  const m = text.match(
-    /(?:na|em|no|nas|nos|para)\s+(?:loja\s+|estabelecimento\s+)?([A-Za-zÀ-ÿ0-9 .'&-]{2,60})/i,
-  );
-  if (m && m[1].trim()) return m[1].trim();
+  const clean = (val: string) =>
+    val
+      .replace(/\s+(?:aprovad[ao]|confirmad[ao]|realizad[ao]|com sucesso|recusad[ao]|autorizad[ao]|pendente)$/i, "")
+      .trim();
+
+  const ignoredTerms = /^(?:seu |sua |o |a )?(?:cartão|cartao|conta|fatura|débito|debito|crédito|credito|limite|banco)\b/i;
+
+  const matches = [...text.matchAll(/(?:na|em|no|nas|nos|para)\s+(?:loja\s+|estabelecimento\s+)?([A-Za-zÀ-ÿ0-9 .'&-]{2,60})/gi)];
+  for (const m of matches) {
+    const candidate = m[1]?.trim();
+    if (candidate && !ignoredTerms.test(candidate)) {
+      return clean(candidate);
+    }
+  }
 
   // Tenta capturar palavra após "compra" (ex.: "compra colchao")
   const m2 = text.match(/(?:compra|gasto)\s+([A-Za-zÀ-ÿ0-9 .'&-]{2,50})/i);
-  if (m2 && m2[1].trim()) return m2[1].trim();
+  if (m2 && m2[1].trim() && !ignoredTerms.test(m2[1].trim())) {
+    return clean(m2[1]);
+  }
 
   return null;
 };

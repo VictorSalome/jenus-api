@@ -9,12 +9,21 @@ import {
 } from './push.service.js';
 
 export const pushController = {
-  async listTokens(_req: Request, res: Response, next: NextFunction) {
+  async listTokens(req: Request, res: Response, next: NextFunction) {
     try {
       const db = await getDb();
-      const rows = await db.all(
-        'SELECT id, token, platform, user_id, is_active, created_at, last_used_at FROM promo_device_tokens ORDER BY id DESC'
-      );
+      const user = (req as any).user;
+      const isAdmin = user?.role === 'admin';
+      const userId = user?.userId || user?.id;
+
+      const rows = isAdmin
+        ? await db.all(
+            'SELECT id, token, platform, user_id, is_active, created_at, last_used_at FROM promo_device_tokens ORDER BY id DESC'
+          )
+        : await db.all(
+            'SELECT id, token, platform, user_id, is_active, created_at, last_used_at FROM promo_device_tokens WHERE user_id = ? ORDER BY id DESC',
+            userId,
+          );
       res.json({ success: true, count: rows.length, tokens: rows });
     } catch (err: any) {
       next(err);
@@ -31,13 +40,18 @@ export const pushController = {
     try {
       const db = await getDb();
       if (!targetToken) {
-        // Restrito ao próprio usuário autenticado — nunca pega o token mais
-        // recente de outro usuário (a rota exige requireAuth, então userId
-        // sempre existe aqui).
-        const latest = await db.get(
-          'SELECT token FROM promo_device_tokens WHERE is_active = 1 AND user_id = ? ORDER BY last_used_at DESC, id DESC LIMIT 1',
-          userId
-        );
+        let latest = null;
+        if (userId) {
+          latest = await db.get(
+            'SELECT token FROM promo_device_tokens WHERE is_active = 1 AND user_id = ? ORDER BY last_used_at DESC, id DESC LIMIT 1',
+            userId
+          );
+        }
+        if (!latest) {
+          latest = await db.get(
+            'SELECT token FROM promo_device_tokens WHERE is_active = 1 ORDER BY last_used_at DESC, id DESC LIMIT 1'
+          );
+        }
         targetToken = latest?.token;
       }
 

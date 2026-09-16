@@ -1,25 +1,26 @@
-import { getUserId } from "../shared/errors.js";
+import { getHouseholdId, getUserId } from "../shared/errors.js";
 import * as service from "../services/debts.service.js";
 
 const currentMonthKey = (): string => new Date().toISOString().slice(0, 7);
 
 export const listOccurrences = async (req: any, res: any) => {
+  const householdId = await getHouseholdId(req);
   const userId = getUserId(req);
   const month = typeof req.query.month === "string" ? req.query.month : currentMonthKey();
-  const data = await service.listOccurrences(userId, month);
+  const data = await service.listOccurrences(householdId, month, userId);
   res.json({ success: true, data });
 };
 
 export const listDebts = async (req: any, res: any) => {
-  const userId = getUserId(req);
-  const data = await service.listDebts(userId);
+  const householdId = await getHouseholdId(req);
+  const data = await service.listDebts(householdId);
   res.json({ success: true, data });
 };
 
 export const getDebt = async (req: any, res: any) => {
-  const userId = getUserId(req);
+  const householdId = await getHouseholdId(req);
   const id = Number(req.params.id);
-  const data = await service.getDebt(userId, id);
+  const data = await service.getDebt(householdId, id);
   if (!data) {
     res.status(404).json({ success: false, message: "Dívida não encontrada" });
     return;
@@ -28,13 +29,14 @@ export const getDebt = async (req: any, res: any) => {
 };
 
 export const createDebt = async (req: any, res: any) => {
+  const householdId = await getHouseholdId(req);
   const userId = getUserId(req);
   const { name, amountCents, dueDay, categoryId, accountId, startMonth, endMonth, notes } = req.body;
   if (!name || !amountCents || !dueDay) {
     res.status(400).json({ success: false, message: "Nome, valor e dia do vencimento são obrigatórios" });
     return;
   }
-  const data = await service.createDebt(userId, {
+  const data = await service.createDebt(householdId, {
     name,
     amountCents: Number(amountCents),
     dueDay: Number(dueDay),
@@ -43,14 +45,14 @@ export const createDebt = async (req: any, res: any) => {
     startMonth,
     endMonth,
     notes,
-  });
+  }, userId);
   res.status(201).json({ success: true, data });
 };
 
 export const updateDebt = async (req: any, res: any) => {
-  const userId = getUserId(req);
+  const householdId = await getHouseholdId(req);
   const id = Number(req.params.id);
-  const data = await service.updateDebt(userId, id, req.body);
+  const data = await service.updateDebt(householdId, id, req.body);
   if (!data) {
     res.status(404).json({ success: false, message: "Dívida não encontrada" });
     return;
@@ -59,13 +61,23 @@ export const updateDebt = async (req: any, res: any) => {
 };
 
 export const removeDebt = async (req: any, res: any) => {
-  const userId = getUserId(req);
+  const householdId = await getHouseholdId(req);
   const id = Number(req.params.id);
-  await service.deleteDebt(userId, id);
+  const debt = await service.getDebt(householdId, id);
+  if (!debt) {
+    res.status(404).json({ success: false, message: "Dívida não encontrada" });
+    return;
+  }
+  if (req.user?.role && req.user.role !== "admin") {
+    res.status(403).json({ success: false, message: "Apenas administradores podem excluir dívidas fixas." });
+    return;
+  }
+  await service.deleteDebt(householdId, id);
   res.json({ success: true });
 };
 
 export const addPayment = async (req: any, res: any) => {
+  const householdId = await getHouseholdId(req);
   const userId = getUserId(req);
   const occurrenceId = Number(req.params.id);
   const { amountCents, paidDate, notes } = req.body;
@@ -73,18 +85,18 @@ export const addPayment = async (req: any, res: any) => {
     res.status(400).json({ success: false, message: "Valor pago deve ser maior que zero" });
     return;
   }
-  const data = await service.addPayment(userId, occurrenceId, {
+  const data = await service.addPayment(householdId, occurrenceId, {
     amountCents: Number(amountCents),
     paidDate,
     notes,
-  });
+  }, userId);
   res.status(201).json({ success: true, data });
 };
 
 export const removePayment = async (req: any, res: any) => {
-  const userId = getUserId(req);
+  const householdId = await getHouseholdId(req);
   const paymentId = Number(req.params.paymentId);
-  const data = await service.deletePayment(userId, paymentId);
+  const data = await service.deletePayment(householdId, paymentId);
   res.json({ success: true, data });
 };
 
@@ -96,7 +108,7 @@ export const checkReminders = async (req: any, res: any) => {
 };
 
 export const listSuggestions = async (req: any, res: any) => {
-  const userId = getUserId(req);
-  const data = await service.getRecurringSuggestions(userId);
+  const householdId = await getHouseholdId(req);
+  const data = await service.getRecurringSuggestions(householdId);
   res.json({ success: true, data });
 };

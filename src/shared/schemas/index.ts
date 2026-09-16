@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+export const IdParamSchema = z.object({
+  id: z.coerce.number().int().positive("ID deve ser um número positivo"),
+});
+
+export const UuidParamSchema = z.object({
+  id: z.string().uuid("ID deve ser um UUID válido"),
+});
+
+export const PaginationQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().max(100).default(50),
+  offset: z.coerce.number().int().nonnegative().default(0),
+});
+
 export const LoginInputSchema = z.object({
   username: z.string().min(1, "Username é obrigatório"),
   password: z.string().min(1, "Password é obrigatório"),
@@ -54,7 +67,7 @@ export const CardSchema = z.object({
   type: z.enum(["credit", "debit", "prepaid"]).default("credit"),
   closingDay: z.number().int().min(1).max(31),
   dueDay: z.number().int().min(1).max(31),
-  limitCents: z.number().int().default(0),
+  creditLimitCents: z.number().int().default(0),
   color: z.string().default("#3B82F6"),
 });
 
@@ -79,6 +92,17 @@ export const InstallmentActionSchema = z.object({
   amountCents: z.number().int().optional(),
 });
 
+export const DebtSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório"),
+  amountCents: z.number().int().min(1, "Valor deve ser maior que 0"),
+  dueDay: z.number().int().min(1).max(31),
+  categoryId: z.number().int().optional().nullable(),
+  accountId: z.number().int().optional().nullable(),
+  startMonth: z.string().optional().nullable(),
+  endMonth: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
 export const NotificationEventImportSchema = z.object({
   amountCents: z.number().int().min(1),
   description: z.string().min(1),
@@ -88,6 +112,31 @@ export const NotificationEventImportSchema = z.object({
   cardId: z.number().int().optional().nullable(),
   accountId: z.number().int().min(1),
   installmentsTotal: z.number().int().min(1).default(1),
+});
+
+export const NotificationEventRawSchema = z.object({
+  packageName: z.string().optional(),
+  appLabel: z.string().optional(),
+  title: z.string().optional(),
+  text: z.string().optional(),
+  postTime: z.number().optional(),
+});
+
+export const AutomacaoConfigSchema = z.object({
+  minScore: z.coerce.number().optional(),
+  hourlyLimit: z.coerce.number().optional(),
+  dailyLimit: z.coerce.number().optional(),
+  minDelaySeconds: z.coerce.number().optional(),
+  maxDelaySeconds: z.coerce.number().optional(),
+  windowHours: z.coerce.number().optional(),
+  feedUrl: z.string().url().optional(),
+  overrideEmail: z.string().email().optional().nullable(),
+});
+
+export const EmptyBodySchema = z.object({}).strict().optional().or(z.object({}));
+
+export const BatchIdsSchema = z.object({
+  ids: z.array(z.coerce.number().int()).min(1, "Lista de IDs inválida ou vazia"),
 });
 
 export type LoginInput = z.infer<typeof LoginInputSchema>;
@@ -145,6 +194,22 @@ export type Education = z.infer<typeof EducationSchema>;
 export type Certification = z.infer<typeof CertificationSchema>;
 export type Language = z.infer<typeof LanguageSchema>;
 export type Specialization = z.infer<typeof SpecializationSchema>;
+
+// ── Prospeccao ──
+export const ProspeccaoStatusBodySchema = z.object({
+  status: z.string().min(1, "Status é obrigatório"),
+  motivo_rejeicao: z.string().optional(),
+});
+
+export const ProspeccaoRejeitarBodySchema = z.object({
+  motivo: z.string().optional(),
+});
+
+export const ProspeccaoDispararBodySchema = z.object({
+  dryRun: z.boolean().optional(),
+  baseUrl: z.string().url().optional(),
+  force: z.boolean().optional(),
+});
 
 // ── Promo (monitor de promoções) ──
 

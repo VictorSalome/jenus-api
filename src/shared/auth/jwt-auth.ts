@@ -30,17 +30,20 @@ const REFRESH_TOKEN_EXPIRY = '7d';
 // memória, e qualquer restart do processo (deploy, crash, pm2 reload)
 // derrubava todas as sessões ativas mesmo com "lembrar-me" marcado.
 
-interface JwtPayload {
+export interface JwtPayload {
   userId: string;
   email: string;
   role: string;
+  name?: string;
+  householdId?: string;
 }
 
-interface User {
+export interface User {
   id: string;
   email: string;
   name?: string;
   role: string;
+  householdId?: string;
 }
 
 /**
@@ -51,23 +54,35 @@ export function generateAccessToken(user: User): string {
     userId: user.id,
     email: user.email,
     role: user.role,
+    name: user.name,
+    householdId: user.householdId,
   };
-  
+
   return jwt.sign(payload, ACCESS_TOKEN_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
 }
 
 /**
- * Gera token de teste permanente (válido por 100 anos) para testes automatizados, scripts e cURL.
- * Não expira e é assinado pelo secret oficial do servidor com permissão admin.
+ * Gera token efêmero para execução de testes locais e scripts.
+ * Proibido e bloqueado em ambiente de produção (NODE_ENV === 'production').
  */
-export function generatePermanentTestToken(customEmail = 'test-runner@jenus.local'): string {
+export function generateTestToken(customEmail = 'test-runner@jenus.local'): string {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Geração de tokens de teste é estritamente proibida em ambiente de produção');
+  }
+
   const payload: JwtPayload = {
     userId: 'test-admin',
     email: customEmail,
     role: 'admin',
+    name: 'Test Admin',
+    householdId: 'household-principal',
   };
-  return jwt.sign(payload, ACCESS_TOKEN_SECRET, { expiresIn: '100y' });
+
+  return jwt.sign(payload, ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
 }
+
+// Retrocompatibilidade para scripts de teste existentes, mantendo proteção de produção
+export const generatePermanentTestToken = generateTestToken;
 
 /**
  * Gera refresh token (7 dias) com fingerprint único
@@ -102,7 +117,7 @@ export async function generateRefreshToken(userId: string, fingerprint: string =
  */
 export function verifyAccessToken(token: string): JwtPayload | null {
   try {
-    return jwt.verify(token, ACCESS_TOKEN_SECRET) as JwtPayload;
+    return jwt.verify(token, ACCESS_TOKEN_SECRET, { algorithms: ['HS256'] }) as JwtPayload;
   } catch (error) {
     return null;
   }
@@ -113,7 +128,7 @@ export function verifyAccessToken(token: string): JwtPayload | null {
  */
 export function verifyRefreshToken(token: string): JwtPayload | null {
   try {
-    return jwt.verify(token, REFRESH_TOKEN_SECRET) as JwtPayload;
+    return jwt.verify(token, REFRESH_TOKEN_SECRET, { algorithms: ['HS256'] }) as JwtPayload;
   } catch (error) {
     return null;
   }
@@ -177,15 +192,24 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // O payload do refresh token só carrega {userId, tokenId, fingerprint} —
-    // nunca teve email/role, então não podemos confiar em decoded.email/role
-    // (sempre undefined). Sistema é single-admin (ver auth.controller.ts),
-    // então reconstruímos o user do mesmo jeito que o login faz.
     const userId = (decoded as any).userId;
-    const user = {
-      id: userId,
-      email: userId,
-      role: 'admin',
+    const userRow = await db.get(
+      'SELECT u.id, u.username, u.name, u.role, fhm.household_id as householdId FROM users u LEFT JOIN financial_household_members fhm ON fhm.user_id = u.id WHERE u.id = ?',
+      userId,
+    );
+
+    if (!userRow) {
+      await revokeRefreshToken(tokenId);
+      res.status(401).json({ success: false, message: 'Usuário não encontrado ou inativo', needsLogin: true });
+      return;
+    }
+
+    const user: User = {
+      id: userRow.id,
+      email: userRow.username,
+      name: userRow.name,
+      role: userRow.role,
+      householdId: userRow.householdId || 'household-principal',
     };
 
     // Revoga o refresh token antigo para que a rotação seja real — sem isso,

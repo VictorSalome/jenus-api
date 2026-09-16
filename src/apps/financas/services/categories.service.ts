@@ -13,89 +13,117 @@ const DEFAULT_CATEGORIES = [
   { name: "Outros", icon: "tag", color: "#64748b", kind: "expense" },
 ];
 
-export const ensureDefaultCategories = async (userId: string): Promise<void> => {
+export const ensureDefaultCategories = async (
+  householdId: string,
+  userId?: string,
+): Promise<void> => {
   const db = await getDb();
   const row = await db.get<{ count: number }>(
-    "SELECT COUNT(*) as count FROM fin_categories WHERE user_id = ?",
-    userId,
+    "SELECT COUNT(*) as count FROM fin_categories WHERE household_id = ? OR user_id = ?",
+    householdId,
+    householdId,
   );
   if (row && row.count > 0) return;
 
+  const effectiveUser = userId || householdId;
   const stmt = await db.prepare(
-    "INSERT INTO fin_categories (user_id, name, icon, color, kind, is_default) VALUES (?, ?, ?, ?, ?, 1)",
+    "INSERT INTO fin_categories (household_id, user_id, name, icon, color, kind, is_default) VALUES (?, ?, ?, ?, ?, ?, 1)",
   );
   for (const cat of DEFAULT_CATEGORIES) {
-    await stmt.run(userId, cat.name, cat.icon, cat.color, cat.kind);
+    await stmt.run(householdId, effectiveUser, cat.name, cat.icon, cat.color, cat.kind);
   }
   await stmt.finalize();
 };
 
-export const listCategories = async (userId: string) => {
+export const listCategories = async (householdId: string) => {
   const db = await getDb();
   return db.all(
-    "SELECT * FROM fin_categories WHERE user_id = ? ORDER BY kind, name COLLATE NOCASE",
-    userId,
+    `SELECT id, household_id, user_id, name, icon, color, kind, is_default, created_at, updated_at
+       FROM fin_categories WHERE household_id = ? OR user_id = ? ORDER BY kind, name COLLATE NOCASE`,
+    householdId,
+    householdId,
   );
 };
 
-export const getCategory = async (userId: string, id: number) => {
+export const getCategory = async (householdId: string, id: number) => {
   const db = await getDb();
-  return db.get("SELECT * FROM fin_categories WHERE id = ? AND user_id = ?", id, userId);
+  return db.get(
+    `SELECT id, household_id, user_id, name, icon, color, kind, is_default, created_at, updated_at
+       FROM fin_categories WHERE id = ? AND (household_id = ? OR user_id = ?)`,
+    id,
+    householdId,
+    householdId,
+  );
 };
 
 export const createCategory = async (
-  userId: string,
+  householdId: string,
   data: { name: string; icon?: string; color?: string; kind?: string },
+  userId?: string,
 ) => {
   const db = await getDb();
+  const effectiveUser = userId || householdId;
   const result = await db.run(
-    `INSERT INTO fin_categories (user_id, name, icon, color, kind)
-     VALUES (?, ?, ?, ?, ?)`,
-    userId,
+    `INSERT INTO fin_categories (household_id, user_id, name, icon, color, kind)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    householdId,
+    effectiveUser,
     data.name,
     data.icon || "tag",
     data.color || "#64748b",
     data.kind || "expense",
   );
-  return getCategory(userId, result.lastID);
+  return getCategory(householdId, result.lastID);
 };
 
 export const updateCategory = async (
-  userId: string,
+  householdId: string,
   id: number,
   data: { name?: string; icon?: string; color?: string; kind?: string },
 ) => {
   const db = await getDb();
-  const existing = await getCategory(userId, id);
+  const existing = await getCategory(householdId, id);
   if (!existing) return null;
 
   await db.run(
     `UPDATE fin_categories
         SET name = ?, icon = ?, color = ?, kind = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND user_id = ?`,
+      WHERE id = ? AND (household_id = ? OR user_id = ?)`,
     data.name ?? existing.name,
     data.icon ?? existing.icon,
     data.color ?? existing.color,
     data.kind ?? existing.kind,
     id,
-    userId,
+    householdId,
+    householdId,
   );
-  return getCategory(userId, id);
+  return getCategory(householdId, id);
 };
 
-export const deleteCategory = async (userId: string, id: number) => {
+export const deleteCategory = async (householdId: string, id: number) => {
   const db = await getDb();
+  const existing = await getCategory(householdId, id);
+  if (!existing) return false;
+
   await db.run(
-    "UPDATE fin_transactions SET category_id = NULL WHERE category_id = ? AND user_id = ?",
+    "UPDATE fin_transactions SET category_id = NULL WHERE category_id = ? AND (household_id = ? OR user_id = ?)",
     id,
-    userId,
+    householdId,
+    householdId,
   );
   await db.run(
-    "UPDATE fin_merchants SET category_id = NULL WHERE category_id = ? AND user_id = ?",
+    "UPDATE fin_merchants SET category_id = NULL WHERE category_id = ? AND (household_id = ? OR user_id = ?)",
     id,
-    userId,
+    householdId,
+    householdId,
   );
-  await db.run("DELETE FROM fin_categories WHERE id = ? AND user_id = ?", id, userId);
+  const res = await db.run(
+    "DELETE FROM fin_categories WHERE id = ? AND (household_id = ? OR user_id = ?)",
+    id,
+    householdId,
+    householdId,
+  );
+  return (res?.changes ?? 0) > 0;
 };
 
 /**
@@ -104,12 +132,12 @@ export const deleteCategory = async (userId: string, id: number) => {
  * 2. Por heurística de palavras-chave inteligentes (posto, combustível, mercado, uber, ifood, farmácia, etc.)
  */
 export const guessCategoryForTransaction = async (
-  userId: string,
+  householdId: string,
   merchantName?: string,
   description?: string,
 ): Promise<number | null> => {
   const db = await getDb();
-  await ensureDefaultCategories(userId);
+  await ensureDefaultCategories(householdId);
 
   const text = `${merchantName || ''} ${description || ''}`.toLowerCase();
 
@@ -117,8 +145,9 @@ export const guessCategoryForTransaction = async (
   if (merchantName) {
     const row = await db.get<{ category_id: number | null }>(
       `SELECT category_id FROM fin_merchants
-        WHERE user_id = ? AND name_normalized = ? AND category_id IS NOT NULL`,
-      userId,
+        WHERE (household_id = ? OR user_id = ?) AND name_normalized = ? AND category_id IS NOT NULL`,
+      householdId,
+      householdId,
       merchantName.trim().toLowerCase(),
     );
     if (row?.category_id) return row.category_id;
@@ -145,8 +174,9 @@ export const guessCategoryForTransaction = async (
 
   if (targetCategoryName) {
     const cat = await db.get<{ id: number }>(
-      `SELECT id FROM fin_categories WHERE user_id = ? AND name = ? COLLATE NOCASE LIMIT 1`,
-      userId,
+      `SELECT id FROM fin_categories WHERE (household_id = ? OR user_id = ?) AND name = ? COLLATE NOCASE LIMIT 1`,
+      householdId,
+      householdId,
       targetCategoryName,
     );
     if (cat) return cat.id;

@@ -5,10 +5,12 @@ process.on("unhandledRejection", (reason, _promise) => {
 });
 process.on("uncaughtException", (err) => {
   logger.error(`[Uncaught Exception] ${err?.stack || err?.message || String(err)}`, "Process");
+  process.exit(1);
 });
 
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import { config } from "./core/config.js";
 import { initDb } from "./core/database.js";
 
@@ -21,7 +23,7 @@ import systemModule from "./apps/system/index.js";
 import prospeccaoModule from "./apps/prospeccao/index.js";
 import notificationsModule from "./shared/notifications/index.js";
 import { registerApp, globalErrorHandler, asyncHandler } from "./shared/http/index.js";
-import { defaultLimiter, authLimiter } from "./shared/rate-limit/presets.js";
+import { defaultLimiter } from "./shared/rate-limit/presets.js";
 import { mountSwagger } from "./shared/docs/swagger.js";
 
 const app = express();
@@ -30,22 +32,33 @@ const app = express();
 // para o express-rate-limit e req.ip refletirem o IP real do cliente.
 app.set("trust proxy", 1);
 
+// Headers de segurança HTTP essenciais (HSTS, noSniff, xssFilter, frameguard)
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Mantém Swagger UI e previews funcionais
+    crossOriginEmbedderPolicy: false,
+  }),
+);
+
 const allowedOrigins = config.CORS_ORIGINS
-  ? config.CORS_ORIGINS.split(',').map((o) => o.trim())
-  : null;
+  ? config.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+  : [];
 
 app.use(
   cors({
     origin: (origin, callback) => {
       // Permite requisições de apps mobile, cURL ou sem header Origin
       if (!origin) return callback(null, true);
-      if (allowedOrigins && allowedOrigins.length > 0) {
+      if (allowedOrigins.length > 0) {
         if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
           return callback(null, true);
         }
-        return callback(new Error('Origem não autorizada por política de CORS'));
+        return callback(new Error('Origem não autorizada por política de CORS'), false);
       }
-      return callback(null, true);
+      if (config.NODE_ENV === 'development') {
+        return callback(null, true);
+      }
+      return callback(new Error('Origem não autorizada por política de CORS'), false);
     },
     credentials: true,
   }),
@@ -55,8 +68,19 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(defaultLimiter);
 
+// ── HTTP Request Logger ──
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    if (req.originalUrl === "/api/health" && res.statusCode === 200) return;
+    const duration = Date.now() - start;
+    logger.info(`${req.method} ${req.originalUrl} -> ${res.statusCode} (${duration}ms)`, "HTTP");
+  });
+  next();
+});
+
 // ── Apps ──
-app.use("/api/auth", authLimiter, authApp);
+app.use("/api/auth", authApp);
 registerApp(app, promoModule);
 registerApp(app, curriculosModule);
 registerApp(app, gmailModule);
@@ -238,7 +262,7 @@ const startServer = async (): Promise<void> => {
     const { startDebtsScheduler } = await import("./apps/financas/services/debts-scheduler.service.js");
     startDebtsScheduler();
 
-    app.listen(config.PORT, () => {
+    const server = app.listen(config.PORT, () => {
       logger.info(`🚀 Jenus API rodando na porta ${config.PORT}`, "Server");
       logger.info(`📑 Swagger UI: http://192.168.1.16:${config.PORT}/api/docs`, "Server");
       logger.info(`📑 Swagger Local: http://localhost:${config.PORT}/api/docs`, "Server");
@@ -246,6 +270,29 @@ const startServer = async (): Promise<void> => {
       logger.info(`💾 Banco: ${config.DATABASE_PATH}`, "Server");
       logger.info(`👤 Admin: ${config.ADMIN_USERNAME}`, "Server");
     });
+
+    // ── Graceful Shutdown ──
+    const handleShutdown = async (signal: string) => {
+      logger.info(`Recebido ${signal}. Encerrando conexões com segurança...`, "Server");
+      server.close(async () => {
+        try {
+          const db = await initDb();
+          await db.close();
+          logger.info("Banco de dados fechado de forma limpa.", "Database");
+        } catch (dbCloseErr) {
+          logger.warn(`Erro ao fechar banco: ${dbCloseErr}`, "Database");
+        }
+        process.exit(0);
+      });
+
+      setTimeout(() => {
+        logger.error("Timeout de encerramento excedido (10s), forçando parada.", "Server");
+        process.exit(1);
+      }, 10000).unref();
+    };
+
+    process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+    process.on("SIGINT", () => handleShutdown("SIGINT"));
   } catch (err) {
     logger.error(`Falha ao iniciar servidor: ${err}`, "Server");
     process.exit(1);

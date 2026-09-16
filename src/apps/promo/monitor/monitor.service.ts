@@ -36,7 +36,7 @@ export const stopMonitor = async (): Promise<void> => {
   try {
     const { sendPushNotification } = await import('../push/push.service.js');
     await sendPushNotification({
-      title: '⚠️ Monitor parou',
+      title: 'Monitor parou',
       body: 'O monitor de promoções foi desligado',
       data: { screen: 'monitor' },
     });

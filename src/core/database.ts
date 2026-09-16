@@ -9,7 +9,7 @@ import { curriculoMigrations } from '../apps/curriculos/migrations/index.js';
 import { seedCurriculoProfileFromJson } from '../apps/curriculos/migrations/seed.js';
 import { promoMigrations } from '../apps/promo/migrations/index.js';
 import { gmailMigrations } from '../apps/gmail/migrations/index.js';
-import { financasMigrations } from '../apps/financas/migrations/index.js';
+import { financasMigrations, seedHouseholdDatabase } from '../apps/financas/migrations/index.js';
 import { prospeccaoMigrations } from '../apps/prospeccao/migrations/index.js';
 import { authMigrations } from '../shared/auth/migrations.js';
 import { notificationMigrations } from '../shared/notifications/index.js';
@@ -53,17 +53,49 @@ export const initDb = async (): Promise<Database<sqlite3.Database, sqlite3.State
     ...curriculoMigrations,
     ...promoMigrations,
     ...gmailMigrations,
-    ...financasMigrations,
-    ...prospeccaoMigrations,
     ...authMigrations,
     ...notificationMigrations,
+    ...financasMigrations,
+    ...prospeccaoMigrations,
   ]);
 
   await seedPromoDatabase(database);
   await seedCurriculoProfileFromJson(database);
+  await seedHouseholdDatabase(database);
 
   logger.info('Banco de dados inicializado!', 'Database');
   return database;
+};
+
+let txQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Executa uma transação atômica serializada no SQLite via fila assíncrona sequencial,
+ * prevenindo colisões concorrentes de BEGIN na conexão singleton.
+ */
+export const runTransaction = async <T>(
+  action: (database: Database<sqlite3.Database, sqlite3.Statement>) => Promise<T>,
+): Promise<T> => {
+  const run = async (): Promise<T> => {
+    const database = await getDb();
+    await database.exec("BEGIN IMMEDIATE;");
+    try {
+      const result = await action(database);
+      await database.exec("COMMIT;");
+      return result;
+    } catch (error) {
+      try {
+        await database.exec("ROLLBACK;");
+      } catch (rollbackErr) {
+        logger.warn(`Falha ao reverter transação (ROLLBACK): ${rollbackErr}`, "Database");
+      }
+      throw error;
+    }
+  };
+
+  const next = txQueue.then(run, run);
+  txQueue = next.then(() => {}, () => {});
+  return next;
 };
 
 // Exporta db já inicializado para uso síncrono (depois de initDb)

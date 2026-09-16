@@ -27,9 +27,13 @@ export const obterPreviewController = async (
     const dailyLimit = req.query.dailyLimit
       ? Number(req.query.dailyLimit)
       : undefined;
+    const hourlyLimit = req.query.hourlyLimit
+      ? Number(req.query.hourlyLimit)
+      : undefined;
 
     const preview = await vagasEmailWorker.gerarPreview({
       ...(minScore !== undefined ? { minScore } : {}),
+      ...(hourlyLimit !== undefined ? { hourlyLimit } : {}),
       ...(dailyLimit !== undefined ? { dailyLimit } : {}),
     });
 
@@ -78,6 +82,7 @@ export const iniciarAutomacaoController = async (
   try {
     const {
       minScore,
+      hourlyLimit,
       dailyLimit,
       minDelaySeconds,
       maxDelaySeconds,
@@ -88,6 +93,7 @@ export const iniciarAutomacaoController = async (
 
     const status = await vagasEmailWorker.iniciar({
       ...(minScore !== undefined ? { minScore: Number(minScore) } : {}),
+      ...(hourlyLimit !== undefined ? { hourlyLimit: Number(hourlyLimit) } : {}),
       ...(dailyLimit !== undefined ? { dailyLimit: Number(dailyLimit) } : {}),
       ...(minDelaySeconds !== undefined
         ? { minDelaySeconds: Number(minDelaySeconds) }

@@ -18,6 +18,13 @@ export interface DashboardData {
   gastosPorCartao: { cardId: number | null; name: string; totalCents: number }[];
   /** Gastos por conta */
   gastosPorConta: { accountId: number; name: string; totalCents: number }[];
+  /** Gastos por membro */
+  gastosPorMembro: {
+    user_id: string;
+    name: string;
+    total_cents: number;
+    percentage: number;
+  }[];
   /** Evolução mensal (últimos 6 meses) */
   evolucaoMensal: { month: string; totalCents: number }[];
   /** Faturas atuais (detalhadas) */
@@ -43,7 +50,7 @@ export interface DashboardData {
  * - comprometimentoFuturo → parcelas PENDING com due_date > fim do mês
  */
 export const getDashboard = async (
-  userId: string,
+  householdId: string,
   referenceMonth?: string,
 ): Promise<DashboardData> => {
   const db = await getDb();
@@ -58,9 +65,9 @@ export const getDashboard = async (
   const gastoMesRow = await db.get<{ total: number }>(
     `SELECT COALESCE(SUM(amount_cents), 0) as total
        FROM fin_transactions
-      WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
+      WHERE household_id = ? AND transaction_date BETWEEN ? AND ?
         AND status != 'CANCELLED' AND type = 'debit'`,
-    userId,
+    householdId,
     monthStart,
     monthEnd,
   );
@@ -70,9 +77,9 @@ export const getDashboard = async (
   const gastoParceladoRow = await db.get<{ total: number }>(
     `SELECT COALESCE(SUM(amount_cents), 0) as total
        FROM fin_transactions
-      WHERE user_id = ? AND transaction_date BETWEEN ? AND ?
+      WHERE household_id = ? AND transaction_date BETWEEN ? AND ?
         AND status != 'CANCELLED' AND type = 'debit' AND installments_total > 1`,
-    userId,
+    householdId,
     monthStart,
     monthEnd,
   );
@@ -80,8 +87,8 @@ export const getDashboard = async (
 
   // 2. Faturas abertas (por cartão, ciclo atual)
   const cards = await db.all(
-    "SELECT * FROM fin_cards WHERE user_id = ? ORDER BY name",
-    userId,
+    "SELECT id, household_id, user_id, account_id, name, last4, brand, closing_day, due_day, credit_limit_cents, created_at, updated_at FROM fin_cards WHERE household_id = ? ORDER BY name",
+    householdId,
   );
   const faturasAbertas: DashboardData["faturasAbertas"] = [];
 
@@ -90,17 +97,17 @@ export const getDashboard = async (
       `SELECT i.amount_cents, i.due_date, i.status
          FROM fin_installments i
          JOIN fin_transactions t ON t.id = i.transaction_id
-        WHERE i.user_id = ? AND t.card_id = ? AND i.status != 'CANCELLED'`,
-      userId,
+        WHERE i.household_id = ? AND t.card_id = ? AND i.status != 'CANCELLED'`,
+      householdId,
       card.id,
     );
 
     const cashPurchases = await db.all(
       `SELECT amount_cents, transaction_date as due_date, status
          FROM fin_transactions
-        WHERE user_id = ? AND card_id = ? AND installments_total = 1
+        WHERE household_id = ? AND card_id = ? AND installments_total = 1
           AND status != 'CANCELLED'`,
-      userId,
+      householdId,
       card.id,
     );
 
@@ -134,11 +141,11 @@ export const getDashboard = async (
   const futureRaws = await db.all(
     `SELECT due_date, SUM(amount_cents) as total
        FROM fin_installments
-      WHERE user_id = ? AND status = 'PENDING' AND due_date > ?
+      WHERE household_id = ? AND status = 'PENDING' AND due_date > ?
       GROUP BY due_date
       ORDER BY due_date ASC
       LIMIT 365`,
-    userId,
+    householdId,
     monthEnd,
   );
 
@@ -164,11 +171,11 @@ export const getDashboard = async (
             SUM(t.amount_cents) as totalCents
        FROM fin_transactions t
        LEFT JOIN fin_categories c ON c.id = t.category_id
-      WHERE t.user_id = ? AND t.type = 'debit' AND t.status != 'CANCELLED'
+      WHERE t.household_id = ? AND t.type = 'debit' AND t.status != 'CANCELLED'
         AND t.transaction_date BETWEEN ? AND ?
       GROUP BY t.category_id
       ORDER BY totalCents DESC`,
-    userId,
+    householdId,
     monthStart,
     monthEnd,
   );
@@ -180,11 +187,11 @@ export const getDashboard = async (
             SUM(t.amount_cents) as totalCents
        FROM fin_transactions t
        LEFT JOIN fin_cards c ON c.id = t.card_id
-      WHERE t.user_id = ? AND t.type = 'debit' AND t.status != 'CANCELLED'
+      WHERE t.household_id = ? AND t.type = 'debit' AND t.status != 'CANCELLED'
         AND t.transaction_date BETWEEN ? AND ?
       GROUP BY t.card_id
       ORDER BY totalCents DESC`,
-    userId,
+    householdId,
     monthStart,
     monthEnd,
   );
@@ -194,14 +201,44 @@ export const getDashboard = async (
     `SELECT t.account_id as accountId, a.name, SUM(t.amount_cents) as totalCents
        FROM fin_transactions t
        LEFT JOIN fin_accounts a ON a.id = t.account_id
-      WHERE t.user_id = ? AND t.type = 'debit' AND t.status != 'CANCELLED'
+      WHERE t.household_id = ? AND t.type = 'debit' AND t.status != 'CANCELLED'
         AND t.transaction_date BETWEEN ? AND ?
       GROUP BY t.account_id
       ORDER BY totalCents DESC`,
-    userId,
+    householdId,
     monthStart,
     monthEnd,
   );
+
+  // 6b. Gastos por membro
+  const gastosPorMembroRows = await db.all<{ user_id: string; name: string; total_cents: number }[]>(
+    `SELECT t.user_id,
+            COALESCE(u.name, 'Sem identificação') as name,
+            SUM(t.amount_cents) as total_cents
+       FROM fin_transactions t
+       LEFT JOIN users u ON u.id = t.user_id
+      WHERE t.household_id = ? AND t.type = 'debit' AND t.status != 'CANCELLED'
+        AND t.transaction_date BETWEEN ? AND ?
+      GROUP BY t.user_id
+      ORDER BY total_cents DESC`,
+    householdId,
+    monthStart,
+    monthEnd,
+  );
+
+  const totalGastosMembros = gastosPorMembroRows.reduce(
+    (acc, r) => acc + (r.total_cents || 0),
+    0,
+  );
+
+  const gastosPorMembro = gastosPorMembroRows.map((r) => ({
+    user_id: r.user_id || "",
+    name: r.name,
+    total_cents: r.total_cents || 0,
+    percentage: totalGastosMembros > 0
+      ? Math.round(((r.total_cents || 0) / totalGastosMembros) * 100)
+      : 0,
+  }));
 
   // 7. Evolução mensal (últimos 6 meses)
   const evolucaoMensal: DashboardData["evolucaoMensal"] = [];
@@ -213,9 +250,9 @@ export const getDashboard = async (
     const row = await db.get<{ total: number }>(
       `SELECT COALESCE(SUM(amount_cents), 0) as total
          FROM fin_transactions
-        WHERE user_id = ? AND type = 'debit' AND status != 'CANCELLED'
+        WHERE household_id = ? AND type = 'debit' AND status != 'CANCELLED'
           AND transaction_date BETWEEN ? AND ?`,
-      userId,
+      householdId,
       start,
       end,
     );
@@ -224,11 +261,11 @@ export const getDashboard = async (
 
   // 8. Faturas atuais (detalhadas)
   const faturasModule = await import("./invoices.service.js");
-  const faturasAtuais = await faturasModule.currentOpenInvoices(userId);
+  const faturasAtuais = await faturasModule.currentOpenInvoices(householdId);
 
   // 9. Parcelas futuras (detalhadas)
   const installmentsModule = await import("./installments.service.js");
-  const parcelasFuturas = await installmentsModule.listInstallments(userId, {
+  const parcelasFuturas = await installmentsModule.listInstallments(householdId, {
     from: nextMonthStart,
   });
 
@@ -236,13 +273,13 @@ export const getDashboard = async (
   let dividasMes = { previstoCents: 0, pagoCents: 0, restanteCents: 0 };
   try {
     const debtsModule = await import("./debts.service.js");
-    await debtsModule.ensureMonthlyOccurrences(userId, ref);
+    await debtsModule.ensureMonthlyOccurrences(householdId, ref);
     const debtsRow = await db.get<{ previsto: number; pago: number }>(
       `SELECT COALESCE(SUM(expected_amount_cents), 0) as previsto,
               COALESCE(SUM(paid_amount_cents), 0) as pago
          FROM fin_debt_occurrences
-        WHERE user_id = ? AND month = ? AND status != 'CANCELLED'`,
-      userId,
+        WHERE household_id = ? AND month = ? AND status != 'CANCELLED'`,
+      householdId,
       ref,
     );
     const previsto = debtsRow?.previsto ?? 0;
@@ -278,6 +315,7 @@ export const getDashboard = async (
     gastosPorCategoria,
     gastosPorCartao,
     gastosPorConta,
+    gastosPorMembro,
     evolucaoMensal,
     faturasAtuais,
     parcelasFuturas,

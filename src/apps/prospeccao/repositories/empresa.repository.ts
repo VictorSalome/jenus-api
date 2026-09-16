@@ -81,7 +81,7 @@ const mapRowToLead = (row: EmpresaLeadRaw): EmpresaLead => {
 export const buscarPorId = async (id: string): Promise<EmpresaLead | null> => {
   const db = await getDb();
   const row = await db.get<EmpresaLeadRaw>(
-    "SELECT * FROM prospeccao_empresas WHERE id = ?",
+    "SELECT id, nome, slug, segmento, cidade, bairro, endereco, telefone, whatsapp, email, maps_url, avaliacao, total_avaliacoes, fotos, landing_page_url, landing_page_snapshot, snapshot_version, status, motivo_rejeicao, approved_at, approved_by, rejected_at, rejected_by, rejection_reason, sent_at, message_id, reply_to, replied_at, converted_at, created_at, updated_at FROM prospeccao_empresas WHERE id = ?",
     id
   );
   return row ? mapRowToLead(row) : null;
@@ -90,7 +90,7 @@ export const buscarPorId = async (id: string): Promise<EmpresaLead | null> => {
 export const buscarPorSlug = async (slug: string): Promise<EmpresaLead | null> => {
   const db = await getDb();
   const row = await db.get<EmpresaLeadRaw>(
-    "SELECT * FROM prospeccao_empresas WHERE slug = ?",
+    "SELECT id, nome, slug, segmento, cidade, bairro, endereco, telefone, whatsapp, email, maps_url, avaliacao, total_avaliacoes, fotos, landing_page_url, landing_page_snapshot, snapshot_version, status, motivo_rejeicao, approved_at, approved_by, rejected_at, rejected_by, rejection_reason, sent_at, message_id, reply_to, replied_at, converted_at, created_at, updated_at FROM prospeccao_empresas WHERE slug = ?",
     slug
   );
   return row ? mapRowToLead(row) : null;
@@ -105,14 +105,14 @@ export const salvarEmpresa = async (
 
   if (dados.id) {
     existing = await db.get<EmpresaLeadRaw>(
-      "SELECT * FROM prospeccao_empresas WHERE id = ?",
+      "SELECT id, nome, slug, segmento, cidade, bairro, endereco, telefone, whatsapp, email, maps_url, avaliacao, total_avaliacoes, fotos, landing_page_url, landing_page_snapshot, snapshot_version, status, motivo_rejeicao, approved_at, approved_by, rejected_at, rejected_by, rejection_reason, sent_at, message_id, reply_to, replied_at, converted_at, created_at, updated_at FROM prospeccao_empresas WHERE id = ?",
       dados.id
     );
   }
 
   if (!existing && dados.slug) {
     existing = await db.get<EmpresaLeadRaw>(
-      "SELECT * FROM prospeccao_empresas WHERE slug = ?",
+      "SELECT id, nome, slug, segmento, cidade, bairro, endereco, telefone, whatsapp, email, maps_url, avaliacao, total_avaliacoes, fotos, landing_page_url, landing_page_snapshot, snapshot_version, status, motivo_rejeicao, approved_at, approved_by, rejected_at, rejected_by, rejection_reason, sent_at, message_id, reply_to, replied_at, converted_at, created_at, updated_at FROM prospeccao_empresas WHERE slug = ?",
       dados.slug
     );
   }
@@ -120,7 +120,7 @@ export const salvarEmpresa = async (
   const telTrim = dados.telefone?.trim();
   if (!existing && telTrim) {
     existing = await db.get<EmpresaLeadRaw>(
-      "SELECT * FROM prospeccao_empresas WHERE telefone = ? LIMIT 1",
+      "SELECT id, nome, slug, segmento, cidade, bairro, endereco, telefone, whatsapp, email, maps_url, avaliacao, total_avaliacoes, fotos, landing_page_url, landing_page_snapshot, snapshot_version, status, motivo_rejeicao, approved_at, approved_by, rejected_at, rejected_by, rejection_reason, sent_at, message_id, reply_to, replied_at, converted_at, created_at, updated_at FROM prospeccao_empresas WHERE telefone = ? LIMIT 1",
       telTrim
     );
   }
@@ -252,11 +252,21 @@ export const salvarEmpresa = async (
   return (await buscarPorId(id))!;
 };
 
+const mapListRowToLead = (row: any): EmpresaLead => {
+  return {
+    ...row,
+    status: normalizeStatusLead(row.status),
+    fotos: [],
+    fotos_meta: [],
+    landing_page_snapshot: null,
+  };
+};
+
 export const listarEmpresas = async (
   filtro?: { status?: string; limit?: number }
 ): Promise<EmpresaLead[]> => {
   const db = await getDb();
-  let query = "SELECT * FROM prospeccao_empresas";
+  let query = "SELECT id, nome, slug, segmento, cidade, bairro, endereco, telefone, whatsapp, email, maps_url, avaliacao, total_avaliacoes, status, motivo_rejeicao, created_at, updated_at FROM prospeccao_empresas";
   const params: any[] = [];
 
   if (filtro?.status) {
@@ -286,8 +296,8 @@ export const listarEmpresas = async (
     params.push(filtro.limit);
   }
 
-  const rows = await db.all<EmpresaLeadRaw[]>(query, ...params);
-  return rows.map(mapRowToLead);
+  const rows = await db.all<any[]>(query, ...params);
+  return rows.map(mapListRowToLead);
 };
 
 export const listarPorStatus = async (

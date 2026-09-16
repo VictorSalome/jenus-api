@@ -133,9 +133,13 @@ export const enviarCurriculo = async (
       previewUrl: resultado.previewUrl || null,
       arquivo: nomeArquivo,
     };
-  } catch (error) {
+  } catch (error: any) {
     logError("Erro no envio de e-mail", error);
-    throw new Error(`Falha no envio do e-mail: ${error.message}`);
+    const err = new Error(`Falha no envio do e-mail: ${error?.message || error}`);
+    (err as any).code = error?.code;
+    (err as any).responseCode = error?.responseCode;
+    (err as any).response = error?.response;
+    throw err;
   }
 };
 
@@ -208,25 +212,28 @@ const gerarCorpoEmail = (dadosVaga, candidato, pretensaoSalarial = null, pretens
   }
   if (candidato.phone && candidato.phone.trim()) {
     const digitos = candidato.phone.replace(/\D/g, "");
+    const waHref = candidato.whatsapp
+      ? escapeHtml(normalizarUrl(candidato.whatsapp))
+      : `https://wa.me/55${escapeHtml(digitos)}`;
     linhasContato.push(
       candidato.hasWhatsApp !== false
-        ? `WhatsApp: <a href="https://wa.me/55${digitos}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(candidato.phone)}</a>`
+        ? `WhatsApp: <a href="${waHref}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(candidato.phone)}</a>`
         : `Telefone: ${escapeHtml(candidato.phone)}`,
     );
   }
   if (candidato.linkedin && candidato.linkedin.trim()) {
     linhasContato.push(
-      `LinkedIn: <a href="${normalizarUrl(candidato.linkedin)}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(candidato.linkedin)}</a>`,
+      `LinkedIn: <a href="${escapeHtml(normalizarUrl(candidato.linkedin))}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(candidato.linkedin)}</a>`,
     );
   }
   if (candidato.github && candidato.github.trim()) {
     linhasContato.push(
-      `GitHub: <a href="${normalizarUrl(candidato.github)}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(candidato.github)}</a>`,
+      `GitHub: <a href="${escapeHtml(normalizarUrl(candidato.github))}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(candidato.github)}</a>`,
     );
   }
   if (candidato.portfolio && candidato.portfolio.trim()) {
     linhasContato.push(
-      `Portfólio: <a href="${normalizarUrl(candidato.portfolio)}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(candidato.portfolio)}</a>`,
+      `Portfólio: <a href="${escapeHtml(normalizarUrl(candidato.portfolio))}" style="color:${CORES.destaque};text-decoration:none;">${escapeHtml(candidato.portfolio)}</a>`,
     );
   }
 
@@ -236,13 +243,17 @@ const gerarCorpoEmail = (dadosVaga, candidato, pretensaoSalarial = null, pretens
     .join("\n");
 
   const pontosHtml = gerarPontosRelevantes(dadosVaga, candidato);
-  const activePretensao = pretensaoSalarial !== null ? pretensaoSalarial : (candidato.salaryPretension || candidato.salary_pretension || "");
+  
+  // Regra de Negócio: Salário pretendido somente deve ser incluído quando detectado/mencionado na vaga.
+  const vagaMencionaSalario = Boolean(dadosVaga.salario || dadosVaga.salary);
+  const activePretensao = vagaMencionaSalario ? (pretensaoSalarial !== null ? pretensaoSalarial : (candidato.salaryPretension || candidato.salary_pretension || "")) : "";
+  
   const pretensaoSalarialHtml = activePretensao ? `
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">
   <tr>
     <td style="padding:14px 16px;background-color:${CORES.fundo};border:1px solid ${CORES.borda};border-radius:6px;">
       <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:${CORES.textoSecundario};">Pretensão salarial</p>
-      <p style="margin:4px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:${CORES.texto};">${pretensaoNegociavel ? "A negociar" : activePretensao}</p>
+      <p style="margin:4px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:${CORES.texto};">${pretensaoNegociavel ? "A negociar" : escapeHtml(activePretensao)}</p>
     </td>
   </tr>
 </table>` : "";
@@ -483,6 +494,7 @@ export const enviarCurriculoComRegistro = async ({
   dadosVaga,
   candidato,
   vagaId = null,
+  automacaoJobId = null,
   curriculoSnapshot = null,
   salaryPretension = null,
   salaryPretensionNegotiable = 0,
@@ -493,38 +505,49 @@ export const enviarCurriculoComRegistro = async ({
   dadosVaga: any;
   candidato: any;
   vagaId?: number | null;
+  automacaoJobId?: string | null;
   curriculoSnapshot?: string | null;
   salaryPretension?: string | null;
   salaryPretensionNegotiable?: number | boolean;
   score?: number;
 }) => {
+  const { runTransaction } = await import("../../../../core/database.js");
+  
+  const { getDb } = await import("../../../../core/database.js");
   const db = await getDb();
   
-  // 1. Criar registro como PENDING (transação atômica)
   let envioId = null;
   try {
-    await db.exec("BEGIN TRANSACTION");
-    const result = await db.run(
-      `INSERT INTO curriculo_envios (vaga_id, filename, email_destino, vaga_titulo, status, salary_pretension, salary_pretension_negotiable, curriculo_snapshot, score)
-       VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?)`,
-      vagaId,
-      path.basename(caminhoArquivoPdf),
-      emailDestino,
-      dadosVaga.titulo || "Vaga não identificada",
-      salaryPretension,
-      salaryPretensionNegotiable ? 1 : 0,
-      curriculoSnapshot,
-      score || 0,
-    );
-    envioId = result.lastID;
-    await db.exec("COMMIT");
+    envioId = await runTransaction(async (dbTx) => {
+      const result = await dbTx.run(
+        `INSERT INTO curriculo_envios (vaga_id, filename, email_destino, vaga_titulo, status, salary_pretension, salary_pretension_negotiable, curriculo_snapshot, score)
+         VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?)`,
+        vagaId,
+        path.basename(caminhoArquivoPdf),
+        emailDestino,
+        dadosVaga.titulo || "Vaga não identificada",
+        salaryPretension,
+        salaryPretensionNegotiable ? 1 : 0,
+        curriculoSnapshot,
+        score || 0,
+      );
+      const newEnvioId = result.lastID;
+
+      if (automacaoJobId) {
+        const claimCheck = await dbTx.run(
+          `UPDATE curriculo_automacao_candidaturas SET envio_id = ? WHERE job_id = ? AND status = 'PROCESSING' AND envio_id IS NULL`,
+          newEnvioId,
+          automacaoJobId
+        );
+        if (claimCheck.changes === 0) {
+          throw new Error("Candidatura foi assumida por outro worker (timeout) ou já não está mais em processamento. Envio abortado para prevenir duplicidade.");
+        }
+      }
+      return newEnvioId;
+    });
+
     logInfo("Envio registrado como PENDING", { envioId, emailDestino });
   } catch (error: any) {
-    try {
-      await db.exec("ROLLBACK");
-    } catch (rollbackErr) {
-      logError("Falha ao executar ROLLBACK em envio PENDING", rollbackErr);
-    }
     logError("Erro ao registrar envio PENDING", error);
     throw new Error(`Falha ao registrar envio: ${error?.message || error}`);
   }

@@ -1,3 +1,5 @@
+import { getDb } from "../../../core/database.js";
+
 export class AppError extends Error {
   statusCode: number;
 
@@ -23,6 +25,37 @@ export const asyncHandler = (
 };
 
 export const getUserId = (req: any): string => {
-  const user = req.user;
+  const user = req?.user;
   return user?.userId ? String(user.userId) : "";
+};
+
+export const getUserName = (req: any): string => {
+  const user = req?.user;
+  return user?.name || user?.username || user?.email || "";
+};
+
+export const getHouseholdId = async (req: any): Promise<string> => {
+  const user = req?.user;
+  if (user?.householdId) {
+    return String(user.householdId);
+  }
+
+  const userId = getUserId(req);
+  if (userId) {
+    try {
+      const db = await getDb();
+      const member = await db.get<{ household_id: string }>(
+        "SELECT household_id FROM financial_household_members WHERE user_id = ? LIMIT 1",
+        userId,
+      );
+      if (member?.household_id) {
+        if (req.user) req.user.householdId = member.household_id;
+        return member.household_id;
+      }
+    } catch {
+      // fallback abaixo
+    }
+  }
+
+  throw new AppError("Acesso negado: usuário não vinculado a nenhum ambiente financeiro", 403);
 };

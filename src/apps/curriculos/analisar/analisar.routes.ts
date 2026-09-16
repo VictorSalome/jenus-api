@@ -27,9 +27,13 @@ const requirePdfPreviewToken = (req: any, res: any, next: any) => {
     });
   }
 
+  if (!process.env.JWT_ACCESS_SECRET) {
+    throw new Error("JWT_ACCESS_SECRET is not defined");
+  }
+
   jwt.verify(
     token,
-    process.env.JWT_ACCESS_SECRET || 'your-access-token-secret-change-me',
+    process.env.JWT_ACCESS_SECRET,
     (err: any, decoded: any) => {
       if (err) {
         return res.status(401).json({
@@ -126,7 +130,7 @@ router.post("/envios/:id/regerar-pdf", requireAuth, asyncHandler(async (req: any
   try {
     const envioId = req.params.id;
     const db = await getDb();
-    const envio = await db.get("SELECT * FROM curriculo_envios WHERE id = ?", envioId);
+    const envio = await db.get("SELECT email_destino, curriculo_snapshot, vaga_id, vaga_titulo FROM curriculo_envios WHERE id = ?", envioId);
 
     if (!envio) {
       return res.status(404).json({ success: false, error: { message: "Envio não encontrado" } });
@@ -143,7 +147,7 @@ router.post("/envios/:id/regerar-pdf", requireAuth, asyncHandler(async (req: any
     }
 
     const snapshot = JSON.parse(envio.curriculo_snapshot);
-    const vaga = await db.get("SELECT * FROM curriculo_vagas WHERE id = ?", envio.vaga_id);
+    const vaga = await db.get("SELECT company, skills_json FROM curriculo_vagas WHERE id = ?", envio.vaga_id);
 
     const dadosVaga = {
       titulo: envio.vaga_titulo,
@@ -198,12 +202,16 @@ router.post('/temp/:filename/token', requireAuth, asyncHandler(async (req: any, 
       });
     }
 
+    if (!process.env.JWT_ACCESS_SECRET) {
+      throw new Error("JWT_ACCESS_SECRET is not defined");
+    }
+
     const expirySeconds = 300; // 5 minutos
     const token = jwt.sign({
       type: 'pdf-preview',
       filename: safeFilename,
       userId: user.userId,
-    }, process.env.JWT_ACCESS_SECRET || 'your-access-token-secret-change-me', {
+    }, process.env.JWT_ACCESS_SECRET, {
       expiresIn: expirySeconds,
     });
 

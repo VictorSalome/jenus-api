@@ -479,7 +479,7 @@ export const enviarCurriculoController = asyncHandler(async (req, res) => {
   let personalInfo = { name: "Candidato", email: process.env.SMTP_USER || "", phone: "", hasWhatsApp: true, linkedin: "", github: "", portfolio: "", title: "", salaryPretension: "" };
   try {
     const db = await getDb();
-    const personal = await db.get('SELECT * FROM curriculo_profile_personal WHERE id = 1');
+    const personal = await db.get('SELECT name, email, phone, linkedin, github, portfolio, location, title, summary FROM curriculo_profile_personal WHERE id = 1');
     if (personal) {
       personalInfo = {
         name: personal.name || "Candidato",

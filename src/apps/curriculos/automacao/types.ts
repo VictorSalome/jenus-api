@@ -35,18 +35,23 @@ export type SkipReason =
   | 'DUPLICATE_JOB_ID'
   | 'DUPLICATE_COMPANY_EMAIL_72H'
   | 'DUPLICATE_COMPANY_LOWER_SCORE'
+  | 'HOURLY_LIMIT_REACHED'
   | 'DAILY_LIMIT_REACHED'
   | 'INVALID_DATA'
-  | 'ALREADY_SENT';
+  | 'ALREADY_SENT'
+  | 'ALREADY_PROCESSING';
 
 export interface AutomacaoConfig {
   minScore: number;
+  hourlyLimit: number;
   dailyLimit: number;
   minDelaySeconds: number;
   maxDelaySeconds: number;
   windowHours: number;
   feedUrl: string;
   overrideEmail?: string | null;
+  semIa?: boolean;
+  maxBackoffAttempts?: number;
 }
 
 export interface VagaNormalizada {
@@ -76,6 +81,8 @@ export interface AutomacaoStatus {
   totalVagas: number;
   processadas: number;
   enviadas: number;
+  enviadasNestaHora: number;
+  hourlyLimit: number;
   aguardando: number;
   puladas: number;
   falhas: number;
@@ -87,11 +94,14 @@ export interface AutomacaoStatus {
     score: number;
   } | null;
   proximoEnvioEmSegundos: number | null;
+  proximaJanelaEmSegundos: number | null;
   delayAtualSegundos: number | null;
   iniciadoEm: string | null;
   ultimoDisparoEm: string | null;
   config: AutomacaoConfig;
   mensagem: string;
+  pauseReason?: string | null;
+  backoffAttempt?: number;
 }
 
 export interface AutomacaoLog {

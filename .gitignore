@@ -9,10 +9,12 @@ dist/
 .env.production
 
 # Database
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
 data/*.db
-data/*.db-wal
-data/*.db-shm
-data/*.db-journal
+data/*.db*
 data/backups/
 *.sqlite
 *.sqlite3
@@ -23,6 +25,11 @@ logs/
 
 # Temp (preview de currículos)
 temp/
+*.tmp
+
+# Vagas e Scraper
+data/vagas-email.json
+candidate-profile.json
 
 # OS
 .DS_Store
@@ -37,6 +44,11 @@ Thumbs.db
 # Session
 session.session
 session.session-journal
+*linkedin-session*.json
+*storageState*.json
+data/*.session.json
+data/*history*.json
+scraper/linkedin_cookies.txt
 
 # Vercel
 .vercel

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import * as authService from './auth.service.js';
-import { generateAccessToken, generateRefreshToken } from './jwt-auth.js';
+import { generateAccessToken, generateRefreshToken, revokeRefreshToken, verifyRefreshToken } from './jwt-auth.js';
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -13,14 +13,20 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     const result = await authService.login({ username, password });
 
-    if (result.success) {
-      const user = { id: username, email: username, role: 'admin' };
+    if (result.success && result.user) {
+      const user = {
+        id: result.user.id || username,
+        email: result.user.username,
+        name: result.user.name,
+        role: result.user.role || 'user',
+        householdId: result.user.householdId,
+      };
       const accessToken = generateAccessToken(user);
       const refreshToken = await generateRefreshToken(user.id);
 
       res.json({
         success: true,
-        message: result.message,
+        message: result.message || 'Login realizado com sucesso',
         user: result.user,
         accessToken,
         refreshToken,
@@ -33,14 +39,34 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const logout = (_req: Request, res: Response): void => {
+export const logout = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const refreshToken = req.body?.refreshToken || req.headers['x-refresh-token'];
+    if (refreshToken && typeof refreshToken === 'string') {
+      const decoded = verifyRefreshToken(refreshToken);
+      if ((decoded as any)?.tokenId) {
+        await revokeRefreshToken((decoded as any).tokenId);
+      }
+    }
+  } catch {
+    // Falha silenciosa na revogação para não bloquear logout do cliente
+  }
   res.json(authService.logout());
 };
 
 export const me = (req: Request, res: Response): void => {
   const user = (req as any).user;
   if (user) {
-    res.json({ success: true, user: { username: user.email || user.userId } });
+    res.json({
+      success: true,
+      user: {
+        id: user.userId,
+        username: user.email || user.userId,
+        name: user.name,
+        role: user.role,
+        householdId: user.householdId,
+      },
+    });
   } else {
     res.status(401).json({ success: false, message: 'Não autenticado' });
   }
@@ -65,8 +91,14 @@ export const swaggerTokenLogin = async (req: Request, res: Response): Promise<vo
 
     const result = await authService.login({ username, password });
 
-    if (result.success) {
-      const user = { id: username, email: username, role: 'admin' };
+    if (result.success && result.user) {
+      const user = {
+        id: result.user.id || username,
+        email: result.user.username,
+        name: result.user.name,
+        role: result.user.role || 'user',
+        householdId: result.user.householdId,
+      };
       const accessToken = generateAccessToken(user);
 
       // Formato padrão OAuth2 esperado pelo Swagger UI

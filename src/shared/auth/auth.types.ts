@@ -1,5 +1,9 @@
 export interface User {
+  id?: string;
   username: string;
+  name?: string;
+  role?: string;
+  householdId?: string;
 }
 
 export interface LoginInput {
@@ -9,6 +13,6 @@ export interface LoginInput {
 
 export interface AuthResponse {
   success: boolean;
-  message: string;
+  message?: string;
   user?: User;
 }

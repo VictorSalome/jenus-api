@@ -11,13 +11,17 @@ const effectiveStatus = (row: any): string => {
 };
 
 export const listInstallments = async (
-  userId: string,
-  filters: { planId?: number; status?: string; from?: string; to?: string } = {},
+  householdId: string,
+  filters: { planId?: number; status?: string; from?: string; to?: string; userId?: string } = {},
 ) => {
   const db = await getDb();
-  const where: string[] = ["i.user_id = ?"];
-  const params: any[] = [userId];
+  const where: string[] = ["(i.household_id = ? OR i.user_id = ?)"];
+  const params: any[] = [householdId, householdId];
 
+  if (filters.userId) {
+    where.push("i.user_id = ?");
+    params.push(filters.userId);
+  }
   if (filters.planId) {
     where.push("i.plan_id = ?");
     params.push(filters.planId);
@@ -52,7 +56,7 @@ export const listInstallments = async (
   return rows.map((r) => ({ ...r, status: effectiveStatus(r) }));
 };
 
-export const getInstallment = async (userId: string, id: number) => {
+export const getInstallment = async (householdId: string, id: number) => {
   const db = await getDb();
   const row = await db.get(
     `SELECT i.*, p.total_installments, t.description, t.merchant_id,
@@ -61,34 +65,37 @@ export const getInstallment = async (userId: string, id: number) => {
        LEFT JOIN fin_installment_plans p ON p.id = i.plan_id
        LEFT JOIN fin_transactions t ON t.id = i.transaction_id
        LEFT JOIN fin_merchants m ON m.id = t.merchant_id
-      WHERE i.id = ? AND i.user_id = ?`,
+      WHERE i.id = ? AND (i.household_id = ? OR i.user_id = ?)`,
     id,
-    userId,
+    householdId,
+    householdId,
   );
   if (!row) return null;
   return { ...row, status: effectiveStatus(row) };
 };
 
 /** Marca a parcela individual como paga (confirmação manual). */
-export const payInstallment = async (userId: string, id: number) => {
+export const payInstallment = async (householdId: string, id: number) => {
   const db = await getDb();
   const existing = await db.get(
-    "SELECT * FROM fin_installments WHERE id = ? AND user_id = ?",
+    "SELECT id, household_id, user_id, plan_id, transaction_id, number, amount_cents, due_date, status, paid_date, created_at, updated_at FROM fin_installments WHERE id = ? AND (household_id = ? OR user_id = ?)",
     id,
-    userId,
+    householdId,
+    householdId,
   );
   if (!existing) return null;
   if (existing.status !== "PENDING" && existing.status !== "OVERDUE") {
-    return getInstallment(userId, id);
+    return getInstallment(householdId, id);
   }
 
   await db.run(
     `UPDATE fin_installments
         SET status = 'PAID', paid_date = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND user_id = ?`,
+      WHERE id = ? AND (household_id = ? OR user_id = ?)`,
     todayKey(),
     id,
-    userId,
+    householdId,
+    householdId,
   );
 
   // Se todas as parcelas do plano foram pagas, marca o plano como COMPLETED.
@@ -104,24 +111,26 @@ export const payInstallment = async (userId: string, id: number) => {
     );
   }
 
-  return getInstallment(userId, id);
+  return getInstallment(householdId, id);
 };
 
-export const cancelInstallment = async (userId: string, id: number) => {
+export const cancelInstallment = async (householdId: string, id: number) => {
   const db = await getDb();
   const existing = await db.get(
-    "SELECT * FROM fin_installments WHERE id = ? AND user_id = ?",
+    "SELECT id, household_id, user_id, plan_id, transaction_id, number, amount_cents, due_date, status, paid_date, created_at, updated_at FROM fin_installments WHERE id = ? AND (household_id = ? OR user_id = ?)",
     id,
-    userId,
+    householdId,
+    householdId,
   );
   if (!existing) return null;
 
   await db.run(
-    "UPDATE fin_installments SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
+    "UPDATE fin_installments SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND (household_id = ? OR user_id = ?)",
     id,
-    userId,
+    householdId,
+    householdId,
   );
-  return getInstallment(userId, id);
+  return getInstallment(householdId, id);
 };
 
 /**
@@ -129,7 +138,7 @@ export const cancelInstallment = async (userId: string, id: number) => {
  * selecionado, agrupadas por mês (próximos 12 meses).
  */
 export const futureCommitment = async (
-  userId: string,
+  householdId: string,
   referenceMonth?: string,
   months = 12,
 ) => {
@@ -138,17 +147,17 @@ export const futureCommitment = async (
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const ref = referenceMonth || defaultMonth;
   const [refYear, refMonth] = ref.split("-").map(Number);
-  const monthStart = new Date(refYear, refMonth, 1);
-  const afterEnd = new Date(refYear, refMonth + 1, 0);
+  const afterEnd = new Date(refYear, refMonth, 0);
   const afterEndKey = afterEnd.toISOString().slice(0, 10);
 
   const rows = await db.all(
     `SELECT due_date, SUM(amount_cents) as total
        FROM fin_installments
-      WHERE user_id = ? AND status = 'PENDING' AND due_date > ?
+      WHERE (household_id = ? OR user_id = ?) AND status = 'PENDING' AND due_date > ?
       GROUP BY due_date
       ORDER BY due_date ASC`,
-    userId,
+    householdId,
+    householdId,
     afterEndKey,
   );
 

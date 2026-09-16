@@ -32,3 +32,17 @@ export const optionalAuth = (req: Request, _res: Response, next: NextFunction): 
   }
   next();
 };
+
+export const requireRole = (role: string) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const user = (req as any).user;
+    if (!user || user.role !== role) {
+      res.status(403).json({
+        success: false,
+        message: `Acesso negado: privilégio '${role}' obrigatório para esta operação.`,
+      });
+      return;
+    }
+    next();
+  };
+};
