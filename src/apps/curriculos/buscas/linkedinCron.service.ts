@@ -1,47 +1,62 @@
 import cron, { type ScheduledTask } from "node-cron";
+import { exec } from "child_process";
+import { promisify } from "util";
+import path from "path";
 import { getDb } from "../../../core/database.js";
 import { logInfo, logError } from "../shared/utils/logger.js";
-import { executarScraperVagas } from "../scraper/scraper.service.js";
+import config from "../config/index.js";
+
+const execAsync = promisify(exec);
 
 let tarefaAtiva: ScheduledTask | null = null;
 let cronExprAtiva: string | null = null;
 let ultimaExecucao: any = null;
 
+const SCRAPER_PATH = path.resolve(config.paths.root, "scraper", "linkedin_scraper.py");
+
 /**
- * Executa o scraper de vagas do LinkedIn (Playwright, scraper.service.ts) diretamente
- * no processo Node, sem depender do script Python legado (jenus-api/scraper/linkedin_scraper.py).
+ * Executa o scraper Python do LinkedIn (requests, sem browser — leve o suficiente
+ * para a VM Oracle de 956MB de RAM). A fonte oficial de vagas hoje é o feed remoto
+ * (https://devagas-liard.vercel.app/vagas-email.json); este cron é um complemento
+ * opcional e não deve depender do scraper Playwright (scraper.service.ts), que exige
+ * baixar o browser Chromium — pesado demais para essa VM.
  */
 const executarScraper = async () => {
   const inicio = Date.now();
   logInfo("Iniciando scraper LinkedIn...");
 
   try {
-    const relatorio = await executarScraperVagas();
-    const duracao = Date.now() - inicio;
+    const { stdout } = await execAsync(`python3 ${SCRAPER_PATH}`, {
+      timeout: 300000, // 5 min max
+      env: {
+        ...process.env,
+        API_URL: "http://localhost:3001",
+      },
+    });
 
+    const duracao = Date.now() - inicio;
     ultimaExecucao = {
       timestamp: new Date().toISOString(),
       duracao: `${duracao}ms`,
-      status: relatorio.erros.length > 0 && relatorio.vagasFinais === 0 ? "erro" : "ok",
-      output: `${relatorio.vagasFinais} vaga(s) finais de ${relatorio.postsEncontrados} post(s) (${relatorio.buscasExecutadas} busca(s))`,
-      relatorio,
+      status: "ok",
+      output:
+        stdout
+          .split("\n")
+          .filter((l) => l.includes("📊") || l.includes("📤") || l.includes("✅"))[0] ||
+        "Concluído",
     };
 
-    logInfo(
-      `Scraper LinkedIn finalizado em ${duracao}ms: ${relatorio.vagasFinais} vaga(s) finais, ${relatorio.erros.length} erro(s)`,
-    );
-    if (relatorio.erros.length > 0) {
-      logError(`Erros no scraper LinkedIn: ${relatorio.erros.join(" | ")}`);
-    }
+    logInfo(`Scraper LinkedIn finalizado em ${duracao}ms`);
+    if (stdout) logInfo(`Scraper output: ${stdout.split("\n").slice(-5).join(" | ")}`);
   } catch (err: any) {
     const duracao = Date.now() - inicio;
     ultimaExecucao = {
       timestamp: new Date().toISOString(),
       duracao: `${duracao}ms`,
       status: "erro",
-      output: String(err?.message || err).substring(0, 200),
+      output: err.message.substring(0, 200),
     };
-    logError(`Erro no scraper LinkedIn: ${err?.message || err}`);
+    logError(`Erro no scraper LinkedIn: ${err.message}`);
   }
 };
 

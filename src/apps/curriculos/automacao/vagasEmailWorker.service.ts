@@ -11,7 +11,6 @@ import {
 } from "../analisar/curriculoPersonalizador.service.js";
 import { gerarPdfCurriculo } from "../shared/pdf/pdfGenerator.service.js";
 import { enviarCurriculoComRegistro } from "../shared/email/email.service.js";
-import { executarScraperVagas } from "../scraper/scraper.service.js";
 import type {
   VagaEmailRaw,
   VagaNormalizada,
@@ -441,6 +440,7 @@ class VagasEmailWorkerService {
           `Formato inválido no arquivo local de vagas: esperado array em ${caminhoFinal}`,
         );
       }
+      logInfo(`[Worker] Arquivo local de vagas lido: ${dados.length} vaga(s) em ${caminhoFinal}`);
       return dados;
     } catch (parseErr: any) {
       throw new Error(
@@ -982,18 +982,6 @@ class VagasEmailWorkerService {
         await this.salvarConfiguracao(configCustom);
       } else {
         await this.carregarConfiguracaoSalva();
-      }
-
-      // Atualiza o feed local via scraper antes do ciclo. Se o scraper falhar (ex: sessão
-      // do LinkedIn expirada, rede indisponível), não interrompe a automação — segue com
-      // o que já houver em disco, apenas registra o erro.
-      try {
-        logInfo("[Worker] Atualizando feed de vagas via scraper antes de iniciar o ciclo...");
-        await executarScraperVagas();
-      } catch (err: any) {
-        logWarn(
-          `[Worker] Scraper falhou ao atualizar o feed, prosseguindo com os dados já existentes em disco: ${err?.message || err}`,
-        );
       }
 
       // Proteção atômica do limite diário de segurança (se configurado) antes de iniciar

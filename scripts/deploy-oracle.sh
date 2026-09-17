@@ -72,8 +72,6 @@ ssh -4 -i "$SSH_KEY" \
     git reset --hard origin/main
     echo '📦 Instalando dependências...'
     npm install
-    echo '🎭 Verificando browser Playwright Chromium...'
-    node node_modules/playwright-core/cli.js install chromium
     echo '🔄 Sincronizando dados do perfil no banco SQLite...'
     node scripts/sync-profile.js
   "
