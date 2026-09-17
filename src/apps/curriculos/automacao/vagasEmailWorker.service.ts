@@ -169,11 +169,7 @@ class VagasEmailWorkerService {
         "SELECT min_score, daily_limit, min_delay_seconds, max_delay_seconds, window_hours, feed_url FROM curriculo_automacao_config WHERE id = 1",
       );
       if (row) {
-        const feedUrlSalva = row.feed_url;
-        const feedUrlFinal =
-          feedUrlSalva && feedUrlSalva !== "https://devagas-liard.vercel.app/vagas-email.json"
-            ? feedUrlSalva
-            : "./data/vagas-email.json";
+        const feedUrlFinal = row.feed_url || "./data/vagas-email.json";
 
         this.config = {
           minScore: Number(row.min_score) || 70,
