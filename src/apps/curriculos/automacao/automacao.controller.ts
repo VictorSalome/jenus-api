@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { vagasEmailWorker } from "./vagasEmailWorker.service.js";
-import { logError } from "../shared/utils/logger.js";
+import { logError, logInfo } from "../shared/utils/logger.js";
 
 /**
  * GET /automacao/status
@@ -80,6 +80,7 @@ export const iniciarAutomacaoController = async (
   next: NextFunction,
 ) => {
   try {
+    logInfo("=> POST /automacao/start acessado. Body: " + JSON.stringify(req.body));
     const {
       minScore,
       hourlyLimit,
@@ -105,12 +106,15 @@ export const iniciarAutomacaoController = async (
       ...(feedUrl ? { feedUrl: String(feedUrl) } : {}),
       ...(overrideEmail !== undefined ? { overrideEmail: overrideEmail ? String(overrideEmail) : null } : {}),
     });
+    
+    logInfo("=> Worker iniciado com sucesso. Status: " + JSON.stringify(status));
 
     res.json({
       ok: true,
       ...status,
     });
   } catch (err: any) {
+    console.error("=> Erro no iniciarAutomacaoController:", err.message);
     if (
       err.message?.includes("já está em execução") ||
       err.message?.includes("já foi atingido")

@@ -10,7 +10,7 @@ import {
   timeoutMiddleware,
   contentTypeMiddleware,
 } from './shared/middleware/errorHandler.js';
-import { loggerMiddleware } from './shared/utils/logger.js';
+import { loggerMiddleware, logInfo, logError } from './shared/utils/logger.js';
 
 import analisarRoutes, { pdfPreviewRouter } from './analisar/analisar.routes.js';
 import testeRoutes from './teste/teste.routes.js';
@@ -26,12 +26,37 @@ import compatibilidadeRoutes from './compatibilidade.routes.js';
 import emailTestRoutes from './shared/email/emailTest.routes.js';
 import analyticsRoutes from './analytics/analytics.routes.js';
 import automacaoRoutes from './automacao/automacao.routes.js';
+import { vagasEmailWorker } from './automacao/vagasEmailWorker.service.js';
+import { iniciarLinkedinCron, getEstadoPersistidoLinkedinCron } from './buscas/linkedinCron.service.js';
 
 const app = express();
 
 await initializeSmtpRuntimeConfig();
 
-// Scraper scheduler desativado: usuário controla envios e análises via Dashboard.
+// Scraper scheduler (fontes internacionais) permanece desativado por padrão: usuário
+// controla envios e análises via Dashboard. A automação de envio (vagasEmailWorker) e o
+// cron de scraping do LinkedIn, porém, retomam automaticamente no boot SOMENTE se o
+// usuário já os tinha ligado antes (estado persistido em curriculo_automacao_config) —
+// caso contrário eles ficam parados por redeploy, exigindo um toggle manual toda vez.
+try {
+  const automacaoDeveEstarAtiva = await vagasEmailWorker.isAtivoPersistido();
+  if (automacaoDeveEstarAtiva) {
+    logInfo('[Boot] Retomando automação de envios (estado persistido = ativo)...');
+    await vagasEmailWorker.iniciar();
+  }
+} catch (err) {
+  logError('[Boot] Falha ao retomar automação de envios automaticamente:', err);
+}
+
+try {
+  const { ativo, cronExpr } = await getEstadoPersistidoLinkedinCron();
+  if (ativo) {
+    logInfo(`[Boot] Retomando cron de scraping do LinkedIn (estado persistido = ativo, cron=${cronExpr})...`);
+    iniciarLinkedinCron({ cron: cronExpr });
+  }
+} catch (err) {
+  logError('[Boot] Falha ao retomar cron do LinkedIn automaticamente:', err);
+}
 
 // O nginx injeta X-Forwarded-For/Proto. Sem `trust proxy` aqui o
 // express-rate-limit deste app lança ERR_ERL_UNEXPECTED_X_FORWARDED_FOR

@@ -102,6 +102,8 @@ export interface AutomacaoStatus {
   mensagem: string;
   pauseReason?: string | null;
   backoffAttempt?: number;
+  totalNoFeed: number | null;
+  ultimaAtualizacaoFeed: string | null;
 }
 
 export interface AutomacaoLog {

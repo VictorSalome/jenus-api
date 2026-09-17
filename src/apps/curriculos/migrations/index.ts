@@ -298,5 +298,13 @@ export const curriculoMigrations: Migration[] = [
       WHERE id = 1;
     `,
   },
+  {
+    id: "curriculo_017_automacao_persist_running_state",
+    up: `
+      ALTER TABLE curriculo_automacao_config ADD COLUMN ativo INTEGER DEFAULT 0;
+      ALTER TABLE curriculo_automacao_config ADD COLUMN linkedin_cron_ativo INTEGER DEFAULT 0;
+      ALTER TABLE curriculo_automacao_config ADD COLUMN linkedin_cron_expr TEXT DEFAULT '15 */2 * * *';
+    `,
+  },
 ];
 

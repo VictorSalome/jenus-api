@@ -1,11 +1,36 @@
 import { Router } from "express";
 import { buscarVagasBrasil, buscarVagasPorTecnologia, buscarVagasRemotas } from "../buscas/scraperBR.service.js";
 import { calcularCompatibilidade } from "../buscas/match.service.js";
+import { executarScraperVagas } from "./scraper.service.js";
 import { logInfo, logError } from "../shared/utils/logger.js";
 import { apiKeyAuth, optionalApiKeyAuth } from "../shared/middleware/apiKeyAuth.js";
 import { asyncHandler } from "../../../shared/http/index.js";
 
 const router = Router();
+
+/**
+ * POST /scraper/linkedin/run
+ * Executa o scraper de vagas do LinkedIn (Playwright) e atualiza data/vagas-email.json,
+ * o feed consumido pela automação de envios (vagasEmailWorker).
+ * Autenticação: Obrigatória (dispara automação de scraping real, não é leitura).
+ */
+router.post("/linkedin/run", apiKeyAuth, asyncHandler(async (req: any, res: any) => {
+  const startTime = Date.now();
+  try {
+    const relatorio = await executarScraperVagas(req.body || {});
+    logInfo(
+      `Scraper LinkedIn executado via API: ${relatorio.vagasFinais} vaga(s) finais, ${relatorio.erros.length} erro(s)`,
+    );
+    res.json({
+      success: true,
+      tempo: Date.now() - startTime,
+      ...relatorio,
+    });
+  } catch (err: any) {
+    logError("Erro ao executar scraper LinkedIn via API", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+}));
 
 /**
  * GET /scraper/vagas

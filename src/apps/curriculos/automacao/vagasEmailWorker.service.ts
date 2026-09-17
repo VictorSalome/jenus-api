@@ -11,6 +11,7 @@ import {
 } from "../analisar/curriculoPersonalizador.service.js";
 import { gerarPdfCurriculo } from "../shared/pdf/pdfGenerator.service.js";
 import { enviarCurriculoComRegistro } from "../shared/email/email.service.js";
+import { executarScraperVagas } from "../scraper/scraper.service.js";
 import type {
   VagaEmailRaw,
   VagaNormalizada,
@@ -27,6 +28,34 @@ import type {
  * Erros 4xx, quota exceeded, busy, rate limit, etc. são transitórios e aceitam backoff.
  * Erros 5xx definitivos (550, 535, etc.) não devem entrar em backoff infinito.
  */
+export function isNetworkError(err: any): boolean {
+  if (!err) return false;
+  const code = err.responseCode || err.code;
+  const codeStr = String(code || "").toUpperCase();
+
+  if (
+    codeStr === "ETIMEDOUT" ||
+    codeStr === "ECONNRESET" ||
+    codeStr === "ECONNREFUSED" ||
+    codeStr === "ESOCKET" ||
+    codeStr === "EHOSTUNREACH" ||
+    codeStr === "ENOTFOUND" ||
+    codeStr === "EPIPE"
+  ) {
+    return true;
+  }
+
+  const msg = String(err.message || err.response || err.toString() || "").toLowerCase();
+  return (
+    msg.includes("etimedout") ||
+    msg.includes("econnreset") ||
+    msg.includes("econnrefused") ||
+    msg.includes("esocket") ||
+    msg.includes("network error") ||
+    msg.includes("timeout")
+  );
+}
+
 export function isGmailRateLimitOuErroTemporario(err: any): boolean {
   if (!err) return false;
   const code = err.responseCode || err.code;
@@ -37,13 +66,6 @@ export function isGmailRateLimitOuErroTemporario(err: any): boolean {
 
   const codeStr = String(code || "").toUpperCase();
   if (
-    codeStr === "ETIMEDOUT" ||
-    codeStr === "ECONNRESET" ||
-    codeStr === "ECONNREFUSED" ||
-    codeStr === "ESOCKET" ||
-    codeStr === "EHOSTUNREACH" ||
-    codeStr === "ENOTFOUND" ||
-    codeStr === "EPIPE" ||
     codeStr === "421" ||
     codeStr === "450" ||
     codeStr === "451" ||
@@ -54,7 +76,6 @@ export function isGmailRateLimitOuErroTemporario(err: any): boolean {
 
   const msg = String(err.message || err.response || err.toString() || "").toLowerCase();
 
-  // Erros permanentes típicos do SMTP (550, 551, 552, 553, 554, 535) só devem ser tratados como transitórios se o texto indicar cota/rate limit
   if (numCode === 550 || numCode === 551 || numCode === 552 || numCode === 553 || numCode === 554 || numCode === 535) {
     return (
       msg.includes("rate limit") ||
@@ -78,10 +99,6 @@ export function isGmailRateLimitOuErroTemporario(err: any): boolean {
     msg.includes("busy") ||
     msg.includes("speed limit") ||
     msg.includes("user-rate limit") ||
-    msg.includes("etimedout") ||
-    msg.includes("econnreset") ||
-    msg.includes("econnrefused") ||
-    msg.includes("esocket") ||
     msg.includes("421") ||
     msg.includes("450") ||
     msg.includes("451") ||
@@ -201,6 +218,35 @@ class VagasEmailWorkerService {
     return this.config;
   }
 
+  /**
+   * Lê do banco se a automação deveria estar rodando (persistido pela última chamada
+   * de start/stop), para permitir auto-resume no boot do servidor após um redeploy.
+   */
+  public async isAtivoPersistido(): Promise<boolean> {
+    try {
+      const db = await getDb();
+      const row = await db.get<{ ativo: number }>(
+        "SELECT ativo FROM curriculo_automacao_config WHERE id = 1",
+      );
+      return Boolean(row?.ativo);
+    } catch (err) {
+      logError("Erro ao ler estado ativo persistido da automação:", err);
+      return false;
+    }
+  }
+
+  private async persistirAtivo(ativo: boolean): Promise<void> {
+    try {
+      const db = await getDb();
+      await db.run(
+        "UPDATE curriculo_automacao_config SET ativo = ? WHERE id = 1",
+        ativo ? 1 : 0,
+      );
+    } catch (err) {
+      logError("Erro ao persistir estado ativo da automação:", err);
+    }
+  }
+
   // ── Logs e Histórico ───────────────────────────────────────────────────────
 
   private async registrarLog(
@@ -277,6 +323,51 @@ class VagasEmailWorkerService {
     return segundosAteProximaJanela;
   }
 
+  /**
+   * Inspeciona (best-effort, síncrono) o feed local de vagas configurado para expor
+   * na tela de automação quantas vagas há e há quanto tempo foi atualizado — sem isso,
+   * um feed vazio/parado é indistinguível de uma automação "travada" para o usuário.
+   */
+  private obterInfoFeedSync(): {
+    totalNoFeed: number | null;
+    ultimaAtualizacaoFeed: string | null;
+  } {
+    try {
+      const feedUrl = (this.config.feedUrl || "./data/vagas-email.json").trim();
+      const isHttp = feedUrl.startsWith("http://") || feedUrl.startsWith("https://");
+      if (isHttp) {
+        return { totalNoFeed: null, ultimaAtualizacaoFeed: null };
+      }
+
+      let caminhoLimpo = feedUrl.startsWith("file://")
+        ? feedUrl.replace(/^file:\/\//, "")
+        : feedUrl;
+      let caminhoFinal = path.isAbsolute(caminhoLimpo)
+        ? caminhoLimpo
+        : path.resolve(process.cwd(), caminhoLimpo);
+
+      if (!fs.existsSync(caminhoFinal)) {
+        const caminhoAlternativo = path.resolve(process.cwd(), "jenus-api", caminhoLimpo);
+        if (fs.existsSync(caminhoAlternativo)) {
+          caminhoFinal = caminhoAlternativo;
+        } else {
+          return { totalNoFeed: 0, ultimaAtualizacaoFeed: null };
+        }
+      }
+
+      const stat = fs.statSync(caminhoFinal);
+      const conteudo = fs.readFileSync(caminhoFinal, "utf-8").trim();
+      const dados = conteudo ? JSON.parse(conteudo) : [];
+
+      return {
+        totalNoFeed: Array.isArray(dados) ? dados.length : null,
+        ultimaAtualizacaoFeed: stat.mtime.toISOString(),
+      };
+    } catch {
+      return { totalNoFeed: null, ultimaAtualizacaoFeed: null };
+    }
+  }
+
   public getStatus(): AutomacaoStatus {
     let proximoEnvioEmSegundos: number | null = null;
     if (this.proximoEnvioTimestamp && (this.state === "RUNNING" || this.proximaJanelaTimestamp)) {
@@ -310,6 +401,7 @@ class VagasEmailWorkerService {
       mensagem: this.mensagem,
       pauseReason: this.pauseReason,
       backoffAttempt: this.backoffAttempt > 0 ? this.backoffAttempt : undefined,
+      ...this.obterInfoFeedSync(),
     };
   }
 
@@ -892,6 +984,18 @@ class VagasEmailWorkerService {
         await this.carregarConfiguracaoSalva();
       }
 
+      // Atualiza o feed local via scraper antes do ciclo. Se o scraper falhar (ex: sessão
+      // do LinkedIn expirada, rede indisponível), não interrompe a automação — segue com
+      // o que já houver em disco, apenas registra o erro.
+      try {
+        logInfo("[Worker] Atualizando feed de vagas via scraper antes de iniciar o ciclo...");
+        await executarScraperVagas();
+      } catch (err: any) {
+        logWarn(
+          `[Worker] Scraper falhou ao atualizar o feed, prosseguindo com os dados já existentes em disco: ${err?.message || err}`,
+        );
+      }
+
       // Proteção atômica do limite diário de segurança (se configurado) antes de iniciar
       if (this.config.dailyLimit && this.config.dailyLimit > 0) {
         const enviosUltimas24h = await this.contarEnviosUltimas24h();
@@ -949,6 +1053,8 @@ class VagasEmailWorkerService {
           stack: err?.stack,
         });
       });
+
+      await this.persistirAtivo(true);
 
       return this.getStatus();
     } catch (err) {
@@ -1023,6 +1129,7 @@ class VagasEmailWorkerService {
       this.delayAtualSegundos = null;
       await this.finalizarRun("STOPPED", motivo);
       await this.registrarLog("warn", `Automação parada: ${motivo}`);
+      await this.persistirAtivo(false);
     }
     return this.getStatus();
   }
@@ -1406,6 +1513,8 @@ class VagasEmailWorkerService {
 
         const errMsg = err?.message || String(err);
         const ehRateLimit = isGmailRateLimitOuErroTemporario(err);
+        const ehNetwork = isNetworkError(err);
+        const ehTemporario = ehRateLimit || ehNetwork;
 
         // Atualizar imediatamente para FAILED para liberar o status de PROCESSING.
         // Isso garante que a retentativa ou a reconciliação não se confundam.
@@ -1419,17 +1528,18 @@ class VagasEmailWorkerService {
           vaga.jobId,
         );
 
-        if (ehRateLimit) {
+        if (ehTemporario) {
           this.backoffAttempt++;
-          const maxAttempts = this.config.maxBackoffAttempts || 3;
+          const maxAttempts = ehNetwork ? 5 : (this.config.maxBackoffAttempts || 3);
 
           if (this.backoffAttempt > maxAttempts) {
-            // Excedeu as tentativas de backoff: pausar o worker com RATE_LIMIT
-            this.pausar("RATE_LIMIT");
-            this.mensagem = `Worker pausado automaticamente: limite de backoff (${maxAttempts} tentativas) excedido por rate limit do Gmail.`;
+            // Excedeu as tentativas de backoff: pausar o worker
+            const pauseReason = ehNetwork ? "NETWORK_ERROR" : "RATE_LIMIT";
+            this.pausar(pauseReason);
+            this.mensagem = `Worker pausado automaticamente: limite de backoff (${maxAttempts} tentativas) excedido por ${ehNetwork ? "falha de rede" : "rate limit do Gmail"}.`;
             await this.registrarLog(
               "error",
-              `Limite máximo de backoff (${maxAttempts} tentativas) excedido no envio para ${vaga.contactEmail}. Worker pausado automaticamente com pauseReason='RATE_LIMIT'.`,
+              `Limite máximo de backoff (${maxAttempts} tentativas) excedido no envio para ${vaga.contactEmail}. Worker pausado automaticamente com pauseReason='${pauseReason}'.`,
               vaga.jobId,
               { erro: errMsg, backoffAttempt: this.backoffAttempt },
             );
@@ -1437,14 +1547,24 @@ class VagasEmailWorkerService {
             continue;
           }
 
-          // Backoff progressivo: 1ª tentativa: 600s (10min), 2ª: 1200s (20min), 3ª: 2400s (40min)
-          const backoffDelays = [600, 1200, 2400];
-          const delaySegundos = backoffDelays[this.backoffAttempt - 1] || (600 * Math.pow(2, this.backoffAttempt - 1));
+          // Estratégia inspirada no BullMQ: Backoff Exponencial + Jitter
+          let delaySegundos: number;
+          if (ehNetwork) {
+            // Rede: recupera rápido. Base: 5s, 10s, 20s, 40s...
+            const baseDelay = 5 * Math.pow(2, this.backoffAttempt - 1);
+            const jitter = Math.random() * 2; // até 2s extra
+            delaySegundos = Math.round(baseDelay + jitter);
+          } else {
+            // Rate Limit: recupera devagar. Base: 10m, 20m, 40m...
+            const baseDelay = 600 * Math.pow(2, this.backoffAttempt - 1);
+            const jitter = Math.random() * 30; // até 30s extra
+            delaySegundos = Math.round(baseDelay + jitter);
+          }
 
-          this.mensagem = `Rate limit do Gmail detectado. Aplicando backoff de ${delaySegundos}s (${Math.round(delaySegundos / 60)}min) - tentativa ${this.backoffAttempt}/${maxAttempts}...`;
+          this.mensagem = `${ehNetwork ? "Oscilação de rede" : "Rate limit do Gmail"} detectado. Aplicando backoff de ${delaySegundos}s - tentativa ${this.backoffAttempt}/${maxAttempts}...`;
           await this.registrarLog(
             "warn",
-            `[Gmail Rate Limit] Erro temporário no envio para ${vaga.contactEmail} (${errMsg}). Aplicando backoff de ${delaySegundos}s (${Math.round(delaySegundos / 60)}min) - tentativa ${this.backoffAttempt}/${maxAttempts}.`,
+            `[${ehNetwork ? "Falha de Rede" : "Gmail Rate Limit"}] Erro temporário no envio para ${vaga.contactEmail} (${errMsg}). Aplicando backoff de ${delaySegundos}s - tentativa ${this.backoffAttempt}/${maxAttempts}.`,
             vaga.jobId,
             { erro: errMsg, backoffAttempt: this.backoffAttempt, delaySegundos },
           );
