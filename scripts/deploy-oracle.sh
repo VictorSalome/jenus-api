@@ -79,10 +79,10 @@ ssh -4 -i "$SSH_KEY" \
 
 # 2. Copiar o dist/ compilado localmente para o VM.
 # Segurança: não apagar o dist/ atual antes de garantir que o novo chegou.
-# Se o scp falhar (rede/VM) ou o mv quebrar no meio, o dist/ antigo continua
+# Se o stream falhar (rede/VM) ou o mv quebrar no meio, o dist/ antigo continua
 # no lugar e o PM2 não fica apontando para um arquivo inexistente.
-echo '📦 Copiando dist/ local para o VM...'
-if ! scp -4 -i "$SSH_KEY" -o StrictHostKeyChecking=no -r dist "$ORACLE_USER@$ORACLE_HOST:$REMOTE_DIR/dist_new"; then
+echo '📦 Copiando dist/ local para o VM (stream comprimido)...'
+if ! tar --no-xattrs -czf - -C dist . | ssh -4 -i "$SSH_KEY" -o StrictHostKeyChecking=no "$ORACLE_USER@$ORACLE_HOST" "mkdir -p '$REMOTE_DIR/dist_new' && tar -xzf - -C '$REMOTE_DIR/dist_new'"; then
   echo '❌ Falha ao copiar dist/ — deploy abortado (dist/ antigo preservado).'
   exit 1
 fi
