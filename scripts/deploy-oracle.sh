@@ -74,6 +74,7 @@ ssh -4 -i "$SSH_KEY" \
     npm install
     echo '🔄 Sincronizando dados do perfil no banco SQLite...'
     node scripts/sync-profile.js
+    rm -rf dist_new
   "
 
 # 2. Copiar o dist/ compilado localmente para o VM.
