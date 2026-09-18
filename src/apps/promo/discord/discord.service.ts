@@ -1,4 +1,3 @@
-import fetch from "node-fetch";
 import { promoConfig } from "../config.js";
 import * as logger from "../../../core/logger.js";
 import * as discordWebhookConfigRepo from "../discord-webhook-config/discord-webhook-config.repository.js";

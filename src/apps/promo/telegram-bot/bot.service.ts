@@ -1,4 +1,3 @@
-import fetch from "node-fetch";
 import { promoConfig } from "../config.js";
 import * as logger from "../../../core/logger.js";
 import * as botConfigRepo from "../telegram-bot-config/telegram-bot-config.repository.js";

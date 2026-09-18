@@ -26,17 +26,7 @@
     "financas:test:security": "tsx src/apps/financas/tests/security-adversarial.test.ts",
     "financas:test:experience": "tsx src/apps/financas/tests/household-experience.test.ts",
     "curriculo:automacao": "tsx scripts/executar-automacao.ts",
-    "test:automacao": "tsx scripts/test-automacao.ts",
-    "test:concorrencia": "tsx scripts/test-concorrencia-e-locks.ts",
-    "test:scraper-parser": "tsx src/apps/curriculos/scraper/linkedin/linkedin-job.parser.test.ts",
-    "test:scraper-session": "tsx src/apps/curriculos/scraper/linkedin/linkedin-session.service.test.ts",
-    "test:scraper-query-builder": "tsx src/apps/curriculos/scraper/linkedin/query-builder.service.test.ts",
-    "test:scraper-pipeline": "tsx src/apps/curriculos/scraper/scraper.service.test.ts",
-    "linkedin:login": "tsx scripts/login-linkedin.ts",
-    "linkedin:scrape": "tsx scripts/executar-scraper-linkedin.ts",
-    "pipeline:curriculo": "tsx scripts/pipeline-curriculo.ts",
-    "test:pipeline": "tsx scripts/test-pipeline-curriculo.ts",
-    "test:suite-completa": "tsx scripts/test-suite-completa.ts"
+    "test:automacao": "tsx scripts/test-automacao.ts"
   },
   "dependencies": {
     "axios": "^1.19.0",
@@ -53,7 +43,6 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "node-cron": "^4.6.0",
-    "node-fetch": "^3.3.2",
     "nodemailer": "^10.0.0",
     "pdfkit": "^0.14.0",
     "playwright": "^1.60.0",

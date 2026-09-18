@@ -2,6 +2,13 @@ import { Router } from "express";
 import { getDb } from "../../../core/database.js";
 import { asyncHandler, ValidationError } from "../shared/middleware/errorHandler.js";
 import { logInfo, logError } from "../shared/utils/logger.js";
+import { reavaliarVagasHistoricoSalvo } from "../automacao/vagasEmailWorker.service.js";
+
+function dispararReavaliacaoBackground() {
+  reavaliarVagasHistoricoSalvo({ motivo: "mudança de perfil (hook)" })
+    .catch(err => logError("Erro no hook reavaliarVagasHistoricoSalvo", err));
+}
+
 
 const router = Router();
 
@@ -122,6 +129,7 @@ router.patch(
 
     const updated = await db.get("SELECT id, name, email, phone, has_whatsapp, linkedin, github, portfolio, location, title, summary, salary_pretension, test_email, updated_at FROM curriculo_profile_personal WHERE id = 1");
     logInfo("Dados pessoais atualizados");
+    dispararReavaliacaoBackground();
     res.json({
       success: true,
       personalInfo: {
@@ -206,6 +214,7 @@ for (const [section, config] of Object.entries(SECTIONS)) {
   router.get(`/profile/${section}`, asyncHandler(async (_req, res) => {
     const db = await getDb();
     const rows = await db.all(`SELECT ${config.selectListFields.join(", ")} FROM ${config.table} ORDER BY sort_order`);
+    dispararReavaliacaoBackground();
     res.json({ success: true, [section]: rows.map((row) => {
       return {
         ...config.mapRow(row),
@@ -232,6 +241,7 @@ for (const [section, config] of Object.entries(SECTIONS)) {
 
     logInfo(`Item adicionado em ${section}`, { id: insertedId });
     const rows = await db.all(`SELECT ${config.selectListFields.join(", ")} FROM ${config.table} ORDER BY sort_order`);
+    dispararReavaliacaoBackground();
     res.json({ success: true, [section]: rows.map((row) => {
       return {
         ...config.mapRow(row),
@@ -253,6 +263,7 @@ for (const [section, config] of Object.entries(SECTIONS)) {
 
     logInfo(`Item atualizado em ${section}`, { id: req.params.id });
     const rows = await db.all(`SELECT ${config.selectListFields.join(", ")} FROM ${config.table} ORDER BY sort_order`);
+    dispararReavaliacaoBackground();
     res.json({ success: true, [section]: rows.map((row) => {
       return {
         ...config.mapRow(row),
@@ -267,6 +278,7 @@ for (const [section, config] of Object.entries(SECTIONS)) {
     await db.run(`DELETE FROM ${config.table} WHERE id = ?`, req.params.id);
     logInfo(`Item removido de ${section}`, { id: req.params.id });
     const rows = await db.all(`SELECT ${config.selectListFields.join(", ")} FROM ${config.table} ORDER BY sort_order`);
+    dispararReavaliacaoBackground();
     res.json({ success: true, [section]: rows.map((row) => {
       return {
         ...config.mapRow(row),
@@ -302,6 +314,7 @@ router.patch(
     }
 
     logInfo("Perfil atualizado via PATCH /profile");
+    dispararReavaliacaoBackground();
     res.json({ success: true, message: "Perfil atualizado com sucesso" });
   })
 );
@@ -346,6 +359,7 @@ router.patch(
 
     const updatedSkills = await db.all("SELECT category, tech FROM curriculo_profile_skills ORDER BY category, tech");
     logInfo("Skills atualizadas", { count: updatedSkills.length });
+    dispararReavaliacaoBackground();
     res.json({ success: true, message: "Skills atualizadas", skills: updatedSkills });
   })
 );
@@ -484,7 +498,8 @@ router.post(
       await db.exec("COMMIT");
 
       logInfo("Perfil recarregado do candidate-profile.json", { expCount, eduCount, certCount, langCount, specCount, skillCount });
-      res.json({
+      dispararReavaliacaoBackground();
+    res.json({
         success: true,
         message: "Perfil recarregado com sucesso",
         counts: { experiences: expCount, education: eduCount, certifications: certCount, languages: langCount, specializations: specCount, skills: skillCount },

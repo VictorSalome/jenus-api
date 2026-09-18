@@ -18,7 +18,7 @@ export const defaultLimiter = rateLimit({
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60_000,
-  max: 10,
+  max: config.NODE_ENV === 'development' ? 1000 : 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: "Muitas tentativas. Tente novamente em alguns minutos." },

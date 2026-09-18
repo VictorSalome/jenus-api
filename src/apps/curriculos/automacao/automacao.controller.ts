@@ -30,11 +30,16 @@ export const obterPreviewController = async (
     const hourlyLimit = req.query.hourlyLimit
       ? Number(req.query.hourlyLimit)
       : undefined;
+    const modoAmplo =
+      req.query.modoAmplo !== undefined
+        ? req.query.modoAmplo === "true" || req.query.modoAmplo === "1"
+        : undefined;
 
     const preview = await vagasEmailWorker.gerarPreview({
       ...(minScore !== undefined ? { minScore } : {}),
       ...(hourlyLimit !== undefined ? { hourlyLimit } : {}),
       ...(dailyLimit !== undefined ? { dailyLimit } : {}),
+      ...(modoAmplo !== undefined ? { modoAmplo } : {}),
     });
 
     res.json({
@@ -90,6 +95,9 @@ export const iniciarAutomacaoController = async (
       windowHours,
       feedUrl,
       overrideEmail,
+      modoAmplo,
+      semIa,
+      habilitarFraseEquivalencia,
     } = req.body || {};
 
     const status = await vagasEmailWorker.iniciar({
@@ -105,6 +113,9 @@ export const iniciarAutomacaoController = async (
       ...(windowHours !== undefined ? { windowHours: Number(windowHours) } : {}),
       ...(feedUrl ? { feedUrl: String(feedUrl) } : {}),
       ...(overrideEmail !== undefined ? { overrideEmail: overrideEmail ? String(overrideEmail) : null } : {}),
+      ...(modoAmplo !== undefined ? { modoAmplo: Boolean(modoAmplo) } : {}),
+      ...(semIa !== undefined ? { semIa: Boolean(semIa) } : {}),
+      ...(habilitarFraseEquivalencia !== undefined ? { habilitarFraseEquivalencia: Boolean(habilitarFraseEquivalencia) } : {}),
     });
     
     logInfo("=> Worker iniciado com sucesso. Status: " + JSON.stringify(status));

@@ -8,6 +8,7 @@ import {
   carregarPerfilCandidato,
   personalizarCurriculo,
   calcularPontuacaoRelevancia,
+  identificarMatchesPorCategoria,
 } from "../analisar/curriculoPersonalizador.service.js";
 import { gerarPdfCurriculo } from "../shared/pdf/pdfGenerator.service.js";
 import { enviarCurriculoComRegistro } from "../shared/email/email.service.js";
@@ -21,6 +22,7 @@ import type {
   CandidaturaAutomacaoRow,
   SkipReason,
 } from "./types.js";
+import { gerarFingerprintVaga } from "./vagaFingerprint.js";
 
 /**
  * Identifica se um erro retornado pelo envio SMTP (ex: Gmail) é temporário / rate limit.
@@ -68,7 +70,10 @@ export function isGmailRateLimitOuErroTemporario(err: any): boolean {
     codeStr === "421" ||
     codeStr === "450" ||
     codeStr === "451" ||
-    codeStr === "452"
+    codeStr === "452" ||
+    codeStr === "ETIMEDOUT" ||
+    codeStr === "ECONNRESET" ||
+    codeStr === "ECONNREFUSED"
   ) {
     return true;
   }
@@ -105,17 +110,59 @@ export function isGmailRateLimitOuErroTemporario(err: any): boolean {
   );
 }
 
+/**
+ * SHADOW MODE (Missão 6): calcula o score com equivalência de categoria e os
+ * matches correspondentes, apenas para observação/auditoria. NÃO influencia a
+ * decisão de envio/elegibilidade em nenhum ponto do worker — o `score`
+ * original (sem equivalência) continua sendo o único usado para isso.
+ *
+ * Extraída como função de módulo (em vez de lógica inline em `gerarPreview`)
+ * para ser testável isoladamente: os testes injetam `deps.calcularScore` /
+ * `deps.identificarMatches` para simular sucesso e falha sem precisar mockar
+ * o módulo inteiro.
+ */
+export const calcularShadowScore = (
+  perfil: any,
+  dadosVaga: Record<string, any>,
+  jobId: string,
+  deps: {
+    calcularScore?: typeof calcularPontuacaoRelevancia;
+    identificarMatches?: typeof identificarMatchesPorCategoria;
+  } = {},
+): {
+  scoreComEquivalencia: VagaNormalizada["scoreComEquivalencia"];
+  matchesCategoria: VagaNormalizada["matchesCategoria"];
+} => {
+  const calcularScore = deps.calcularScore ?? calcularPontuacaoRelevancia;
+  const identificarMatches = deps.identificarMatches ?? identificarMatchesPorCategoria;
+
+  try {
+    const scoreComEquivalencia = calcularScore(perfil, dadosVaga, true);
+    const matchesCategoria = identificarMatches(perfil, dadosVaga);
+    return { scoreComEquivalencia, matchesCategoria };
+  } catch (shadowErr) {
+    logWarn(
+      `[shadow-mode] Falha ao calcular score/matches por categoria para vaga ${jobId}: ${
+        shadowErr instanceof Error ? shadowErr.message : String(shadowErr)
+      }`,
+    );
+    return { scoreComEquivalencia: null, matchesCategoria: null };
+  }
+};
+
 class VagasEmailWorkerService {
   private state: AutomacaoState = "IDLE";
   private config: AutomacaoConfig = {
     minScore: 70,
-    hourlyLimit: 30,
-    dailyLimit: 150,
-    minDelaySeconds: 90,
-    maxDelaySeconds: 150,
+    hourlyLimit: 100,
+    dailyLimit: 250,
+    minDelaySeconds: 25,
+    maxDelaySeconds: 40,
     windowHours: 72,
     feedUrl: "./data/vagas-email.json",
     semIa: false,
+    habilitarFraseEquivalencia: false,
+    modoAmplo: true,
     maxBackoffAttempts: 3,
   };
 
@@ -166,20 +213,22 @@ class VagasEmailWorkerService {
     try {
       const db = await getDb();
       const row = await db.get<any>(
-        "SELECT min_score, daily_limit, min_delay_seconds, max_delay_seconds, window_hours, feed_url FROM curriculo_automacao_config WHERE id = 1",
+        "SELECT * FROM curriculo_automacao_config WHERE id = 1",
       );
       if (row) {
         const feedUrlFinal = row.feed_url || "./data/vagas-email.json";
 
         this.config = {
           minScore: Number(row.min_score) || 70,
-          hourlyLimit: Number(row.hourly_limit) || 30,
-          dailyLimit: Number(row.daily_limit) || 150,
-          minDelaySeconds: Number(row.min_delay_seconds) || 90,
-          maxDelaySeconds: Number(row.max_delay_seconds) || 150,
+          hourlyLimit: Number(row.hourly_limit) || 100,
+          dailyLimit: Number(row.daily_limit) || 250,
+          minDelaySeconds: Number(row.min_delay_seconds) || 25,
+          maxDelaySeconds: Number(row.max_delay_seconds) || 40,
           windowHours: Number(row.window_hours) || 72,
           feedUrl: feedUrlFinal,
           semIa: Boolean(row.sem_ia),
+          habilitarFraseEquivalencia: Boolean(row.habilitar_frase_equivalencia),
+          modoAmplo: row.modo_amplo === undefined || row.modo_amplo === null ? true : Boolean(row.modo_amplo),
           maxBackoffAttempts: 3,
         };
       }
@@ -197,7 +246,7 @@ class VagasEmailWorkerService {
       const db = await getDb();
       await db.run(
         `UPDATE curriculo_automacao_config
-         SET min_score = ?, hourly_limit = ?, daily_limit = ?, min_delay_seconds = ?, max_delay_seconds = ?, window_hours = ?, feed_url = ?, updated_at = CURRENT_TIMESTAMP
+         SET min_score = ?, hourly_limit = ?, daily_limit = ?, min_delay_seconds = ?, max_delay_seconds = ?, window_hours = ?, feed_url = ?, sem_ia = ?, habilitar_frase_equivalencia = ?, modo_amplo = ?, updated_at = CURRENT_TIMESTAMP
          WHERE id = 1`,
         this.config.minScore,
         this.config.hourlyLimit,
@@ -206,6 +255,9 @@ class VagasEmailWorkerService {
         this.config.maxDelaySeconds,
         this.config.windowHours,
         this.config.feedUrl,
+        this.config.semIa ? 1 : 0,
+        this.config.habilitarFraseEquivalencia ? 1 : 0,
+        this.config.modoAmplo !== false ? 1 : 0,
       );
     } catch (err) {
       logError("Erro ao persistir curriculo_automacao_config:", err);
@@ -285,14 +337,14 @@ class VagasEmailWorkerService {
     const db = await getDb();
     if (status && status !== "ALL") {
       return db.all<CandidaturaAutomacaoRow[]>(
-        "SELECT id, job_id, contact_email, company, vaga_title, vaga_url, location, salary, score, dados_vaga_json, status, skip_reason, error_message, delay_applied_seconds, envio_id, sent_at, created_at, updated_at FROM curriculo_automacao_candidaturas WHERE status = ? ORDER BY id DESC LIMIT ? OFFSET ?",
+        "SELECT id, job_id, contact_email, company, vaga_title, vaga_url, location, salary, score, score_categoria_aplicado, matches_categoria_json, dados_vaga_json, status, skip_reason, error_message, delay_applied_seconds, envio_id, sent_at, created_at, updated_at FROM curriculo_automacao_candidaturas WHERE status = ? ORDER BY id DESC LIMIT ? OFFSET ?",
         status,
         limit,
         offset,
       );
     }
     return db.all<CandidaturaAutomacaoRow[]>(
-      "SELECT id, job_id, contact_email, company, vaga_title, vaga_url, location, salary, score, dados_vaga_json, status, skip_reason, error_message, delay_applied_seconds, envio_id, sent_at, created_at, updated_at FROM curriculo_automacao_candidaturas ORDER BY id DESC LIMIT ? OFFSET ?",
+      "SELECT id, job_id, contact_email, company, vaga_title, vaga_url, location, salary, score, score_categoria_aplicado, matches_categoria_json, dados_vaga_json, status, skip_reason, error_message, delay_applied_seconds, envio_id, sent_at, created_at, updated_at FROM curriculo_automacao_candidaturas ORDER BY id DESC LIMIT ? OFFSET ?",
       limit,
       offset,
     );
@@ -529,6 +581,46 @@ class VagasEmailWorkerService {
     };
   }
 
+  /**
+   * Missão 7: reconstrói um `VagaEmailRaw` (o mesmo shape retornado por
+   * `buscarVagasDoFeed`) a partir do snapshot salvo em `dados_vaga_json` de
+   * uma candidatura. É o inverso exato de `normalizarDadosVaga` — cada campo
+   * de `dadosVagaFormatados` tem um campo de origem 1:1 em `VagaEmailRaw` —
+   * então o objeto reconstruído entra no mesmo pipeline (`normalizarDadosVaga`
+   * -> score -> elegibilidade -> dedup -> reserva atômica) usado por qualquer
+   * vaga vinda do feed vivo, sem exigir nenhuma mudança no resto do fluxo.
+   */
+  private reconstruirVagaRawDoSnapshot(jobId: string, dadosVagaJson: string): VagaEmailRaw | null {
+    try {
+      const snapshot = JSON.parse(dadosVagaJson);
+      return {
+        id: jobId,
+        title: snapshot.titulo || "Vaga sem título",
+        company: snapshot.empresa || "Confidencial",
+        location: snapshot.localizacao || "",
+        sourceUrl: snapshot.sourceUrl || "",
+        description: snapshot.descricao || "",
+        requirements: Array.isArray(snapshot.requisitosObrigatorios)
+          ? snapshot.requisitosObrigatorios
+          : [],
+        benefits: Array.isArray(snapshot.diferenciaisDesejaveis)
+          ? snapshot.diferenciaisDesejaveis
+          : [],
+        salary: snapshot.salario || "",
+        postedAt: "",
+        skills: Array.isArray(snapshot.stackTecnologica) ? snapshot.stackTecnologica : [],
+        contactEmail: snapshot.emailContato || "",
+      };
+    } catch (err) {
+      logWarn(
+        `[Worker] Falha ao reconstruir vaga promovida do histórico (job_id=${jobId}) a partir de dados_vaga_json: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      return null;
+    }
+  }
+
   // ── Contagem e Reserva Atômica de Envios ───────────────────────────────────
 
   private async contarEnviosUltimas24h(): Promise<number> {
@@ -590,40 +682,69 @@ class VagasEmailWorkerService {
           }
         }
 
-        // 3. Validação do e-mail de contato para impedir disparo duplicado no período de tolerância
-        const windowHours = this.config.windowHours || 72;
-        const emailConflito = await db.get<{ total: number }>(
+        // 3. Validação do Fingerprint Canônico (impede envio duplicado da mesma vaga mesmo se o feed trocou de job_id)
+        const fingerprint =
+          vaga.fingerprint ||
+          gerarFingerprintVaga(vaga.contactEmail, vaga.company, vaga.title, vaga.sourceUrl);
+
+        const fingerprintConflito = await db.get<{ total: number }>(
           `SELECT (
             (SELECT count(*) FROM curriculo_automacao_candidaturas
-             WHERE lower(trim(contact_email)) = lower(trim(?))
-               AND (
-                 (status = 'SENT' AND sent_at >= datetime('now', ?))
-                 OR (status = 'PROCESSING' AND job_id != ? AND updated_at >= datetime('now', '-10 minutes'))
-               )
-            ) +
+             WHERE (vaga_fingerprint = ? OR (lower(trim(contact_email)) = lower(trim(?)) AND lower(trim(vaga_title)) = lower(trim(?))))
+               AND status = 'SENT') +
             (SELECT count(*) FROM curriculo_envios
-             WHERE lower(trim(email_destino)) = lower(trim(?))
-               AND status = 'SENT'
-               AND created_at >= datetime('now', ?)
-            )
+             WHERE (vaga_fingerprint = ? OR (lower(trim(email_destino)) = lower(trim(?)) AND lower(trim(vaga_titulo)) = lower(trim(?))))
+               AND status = 'SENT')
           ) as total`,
+          fingerprint,
           vaga.contactEmail,
-          `-${windowHours} hours`,
-          vaga.jobId,
+          vaga.title,
+          fingerprint,
           vaga.contactEmail,
-          `-${windowHours} hours`,
+          vaga.title,
         );
 
-        if ((emailConflito?.total ?? 0) > 0) {
+        if ((fingerprintConflito?.total ?? 0) > 0) {
           return { reservado: false, motivo: "CONCURRENCY_CONFLICT" as const };
         }
 
-        // 4. Transiciona a vaga para PROCESSING reservando o slot atomicamente sob transação.
+        // 4. Validação do e-mail de contato para impedir disparo duplicado no período de tolerância
+        const windowHours = this.config.windowHours !== undefined ? this.config.windowHours : 72;
+        if (windowHours > 0) {
+          const emailConflito = await db.get<{ total: number }>(
+            `SELECT (
+              (SELECT count(*) FROM curriculo_automacao_candidaturas
+               WHERE lower(trim(contact_email)) = lower(trim(?))
+                 AND (
+                   (status = 'SENT' AND sent_at >= datetime('now', ?))
+                   OR (status = 'PROCESSING' AND job_id != ? AND updated_at >= datetime('now', '-10 minutes'))
+                 )
+              ) +
+              (SELECT count(*) FROM curriculo_envios
+               WHERE lower(trim(email_destino)) = lower(trim(?))
+                 AND status = 'SENT'
+                 AND created_at >= datetime('now', ?)
+              )
+            ) as total`,
+            vaga.contactEmail,
+            `-${windowHours} hours`,
+            vaga.jobId,
+            vaga.contactEmail,
+            `-${windowHours} hours`,
+          );
+
+          if ((emailConflito?.total ?? 0) > 0) {
+            return { reservado: false, motivo: "CONCURRENCY_CONFLICT" as const };
+          }
+        }
+
+        // 5. Transiciona a vaga para PROCESSING reservando o slot atomicamente sob transação.
         const res = await db.run(
           `INSERT INTO curriculo_automacao_candidaturas
-           (job_id, contact_email, company, vaga_title, vaga_url, location, salary, score, dados_vaga_json, status, run_id, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROCESSING', ?, CURRENT_TIMESTAMP)
+           (job_id, contact_email, company, vaga_title, vaga_url, location, salary, score, dados_vaga_json, vaga_fingerprint, status, run_id, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PROCESSING', ?, CURRENT_TIMESTAMP)
            ON CONFLICT(job_id) DO UPDATE SET
+             vaga_fingerprint = excluded.vaga_fingerprint,
              status = 'PROCESSING',
              run_id = excluded.run_id,
              envio_id = NULL,
@@ -649,6 +770,7 @@ class VagasEmailWorkerService {
           vaga.salary,
           vaga.score,
           JSON.stringify(vaga.dadosVagaFormatados),
+          fingerprint,
           runId,
         );
 
@@ -721,43 +843,95 @@ class VagasEmailWorkerService {
     config: AutomacaoConfig;
   }> {
     const cfg: AutomacaoConfig = { ...this.config, ...configOverride };
+    const usarModoAmplo = cfg.modoAmplo !== undefined ? Boolean(cfg.modoAmplo) : true;
     const vagasRaw = await this.buscarVagasDoFeed(cfg.feedUrl);
     const perfil = await carregarPerfilCandidato();
     const db = await getDb();
 
     const enviosUltimas24h = await this.contarEnviosUltimas24h();
     const enviosHoraAtual = await this.contarEnviosHoraAtual();
-    const limiteHorarioRestante = Math.max(0, (cfg.hourlyLimit || 30) - enviosHoraAtual);
-    const limiteDiarioRestante = Math.max(0, cfg.dailyLimit - enviosUltimas24h);
+    const limiteHorarioRestante = (cfg.hourlyLimit !== undefined && cfg.hourlyLimit === 0)
+      ? 999999
+      : Math.max(0, (cfg.hourlyLimit || 100) - enviosHoraAtual);
+    const limiteDiarioRestante = (cfg.dailyLimit !== undefined && cfg.dailyLimit === 0)
+      ? 999999
+      : Math.max(0, (cfg.dailyLimit || 250) - enviosUltimas24h);
 
     // Reconciliação defensiva de status 'PROCESSING' órfãos (crash recovery)
     await this.reconciliarProcessosOrfaos();
 
-    // 1. Carregar histórico existente de job_ids e emails
+    // Missão 7: mescla o feed vivo do dia com o "banco de oportunidades" —
+    // candidaturas marcadas como PENDING por `reavaliarVagasHistoricoSalvo`
+    // (vagas que já saíram do feed, mas foram promovidas por um novo score
+    // com o perfil atual). Sem isso, a promoção era decorativa: o restante
+    // do pipeline (score/elegibilidade/dedup/reserva atômica) só enxergava o
+    // que vinha de `buscarVagasDoFeed`. Em caso de conflito de job_id, o feed
+    // vivo tem prioridade (dado mais recente).
+    const jobIdsNoFeedVivo = new Set(vagasRaw.map((v) => v.id));
+    let vagasPromovidasHistorico: VagaEmailRaw[] = [];
+    try {
+      const pendentes = await db.all<Array<{ job_id: string; dados_vaga_json: string }>>(
+        `SELECT job_id, dados_vaga_json
+         FROM curriculo_automacao_candidaturas
+         WHERE status = 'PENDING' AND dados_vaga_json IS NOT NULL`,
+      );
+      vagasPromovidasHistorico = pendentes
+        .filter((p) => !jobIdsNoFeedVivo.has(p.job_id))
+        .map((p) => this.reconstruirVagaRawDoSnapshot(p.job_id, p.dados_vaga_json))
+        .filter((v): v is VagaEmailRaw => v !== null);
+
+      if (vagasPromovidasHistorico.length > 0) {
+        logInfo(
+          `[Worker] ${vagasPromovidasHistorico.length} vaga(s) promovida(s) do banco de oportunidades (histórico reavaliado) mesclada(s) ao feed vivo deste ciclo.`,
+          { jobIds: vagasPromovidasHistorico.map((v) => v.id) },
+        );
+      }
+    } catch (err) {
+      logWarn(
+        `[Worker] Falha ao carregar candidaturas PENDING do banco de oportunidades: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
+    const vagasCombinadas: VagaEmailRaw[] = [...vagasRaw, ...vagasPromovidasHistorico];
+
+    // 1. Carregar histórico existente de job_ids, fingerprints e emails
     const candidaturasSalvas = await db.all<
       Array<{
         job_id: string;
         contact_email: string;
+        company: string;
+        vaga_title: string;
+        vaga_fingerprint?: string | null;
         status: string;
         sent_at: string | null;
         updated_at: string | null;
       }>
-    >("SELECT job_id, contact_email, status, sent_at, updated_at FROM curriculo_automacao_candidaturas");
+    >("SELECT job_id, contact_email, company, vaga_title, vaga_fingerprint, status, sent_at, updated_at FROM curriculo_automacao_candidaturas");
 
     const jobIdsSent = new Set<string>();
+    const fingerprintsSent = new Set<string>();
     const jobIdsActiveProcessing = new Set<string>();
     const jobIdsHistory = new Map<string, string>();
     const emailsRecentementeEnviados = new Set<string>();
 
     const agora = Date.now();
-    const windowMs = cfg.windowHours * 60 * 60 * 1000;
+    const windowMs = (cfg.windowHours !== undefined ? cfg.windowHours : 72) * 60 * 60 * 1000;
     const dezMinMs = 10 * 60 * 1000;
 
     for (const c of candidaturasSalvas) {
       jobIdsHistory.set(c.job_id, c.status);
       if (c.status === "SENT") {
         jobIdsSent.add(c.job_id);
-        if (c.sent_at) {
+        const fp =
+          c.vaga_fingerprint ||
+          gerarFingerprintVaga(c.contact_email, c.company, c.vaga_title);
+        if (fp) {
+          fingerprintsSent.add(fp);
+        }
+
+        if (windowMs > 0 && c.sent_at) {
           const rawDate = c.sent_at.includes("T") ? c.sent_at : c.sent_at.replace(" ", "T") + "Z";
           const sentTime = new Date(rawDate).getTime();
           if (agora - sentTime < windowMs) {
@@ -775,12 +949,20 @@ class VagasEmailWorkerService {
 
     // Também verificar envios gerais da tabela curriculo_envios
     const enviosGerais = await db.all<
-      Array<{ email_destino: string; created_at: string }>
+      Array<{ email_destino: string; empresa?: string; vaga_titulo?: string; vaga_fingerprint?: string; created_at: string }>
     >(
-      "SELECT email_destino, created_at FROM curriculo_envios WHERE status = 'SENT'",
+      "SELECT email_destino, vaga_titulo, vaga_fingerprint, created_at FROM curriculo_envios WHERE status = 'SENT'",
     );
     for (const eg of enviosGerais) {
-      if (eg.email_destino && eg.created_at) {
+      if (eg.vaga_fingerprint) {
+        fingerprintsSent.add(eg.vaga_fingerprint);
+      } else if (eg.email_destino && eg.vaga_titulo) {
+        fingerprintsSent.add(
+          gerarFingerprintVaga(eg.email_destino, eg.empresa || "", eg.vaga_titulo),
+        );
+      }
+
+      if (windowMs > 0 && eg.email_destino && eg.created_at) {
         const rawDate = eg.created_at.includes("T") ? eg.created_at : eg.created_at.replace(" ", "T") + "Z";
         const sentTime = new Date(rawDate).getTime();
         if (agora - sentTime < windowMs) {
@@ -792,13 +974,30 @@ class VagasEmailWorkerService {
     // 2. Normalizar e calcular score inicial de cada vaga
     const todasNormalizadas: VagaNormalizada[] = [];
 
-    for (const vaga of vagasRaw) {
+    for (const vaga of vagasCombinadas) {
       const contactEmail = (vaga.contactEmail || "").trim().toLowerCase();
       const dadosVagaFormatados = this.normalizarDadosVaga(vaga);
-      const score = calcularPontuacaoRelevancia(perfil, dadosVagaFormatados);
+      dadosVagaFormatados.modoAmplo = usarModoAmplo;
+      const score = calcularPontuacaoRelevancia(perfil, dadosVagaFormatados, usarModoAmplo);
+
+      // SHADOW MODE (Missão 6): ver `calcularShadowScore` — não influencia a
+      // decisão de envio/elegibilidade quando em modo estrito, mas mantém observabilidade.
+      const { scoreComEquivalencia, matchesCategoria } = calcularShadowScore(
+        perfil,
+        dadosVagaFormatados,
+        vaga.id,
+      );
+
+      const fingerprint = gerarFingerprintVaga(
+        contactEmail,
+        vaga.company || "",
+        vaga.title || "",
+        vaga.sourceUrl,
+      );
 
       const vagaNorm: VagaNormalizada = {
         jobId: vaga.id,
+        fingerprint,
         title: vaga.title || "Vaga sem título",
         company: vaga.company || "Confidencial",
         contactEmail,
@@ -815,6 +1014,8 @@ class VagasEmailWorkerService {
         eligible: false,
         status: "PENDING",
         dadosVagaFormatados,
+        scoreComEquivalencia,
+        matchesCategoria,
       };
 
       // Validação básica de dados
@@ -833,6 +1034,14 @@ class VagasEmailWorkerService {
         continue;
       }
 
+      // Já enviada anteriormente com mesmo Fingerprint Canônico (mesmo se o feed mudou ID ou título cosmético)
+      if (fingerprintsSent.has(fingerprint)) {
+        vagaNorm.status = "SKIPPED";
+        vagaNorm.skipReason = "ALREADY_SENT_CANONICAL";
+        todasNormalizadas.push(vagaNorm);
+        continue;
+      }
+
       // Em processamento ativo por outra instância/worker concorrente
       if (jobIdsActiveProcessing.has(vaga.id)) {
         vagaNorm.status = "SKIPPED";
@@ -841,7 +1050,7 @@ class VagasEmailWorkerService {
         continue;
       }
 
-      // Já recebeu email nas últimas 72h
+      // Já recebeu email nas últimas 72h (se janela configurada)
       if (emailsRecentementeEnviados.has(contactEmail)) {
         vagaNorm.status = "SKIPPED";
         vagaNorm.skipReason = "DUPLICATE_COMPANY_EMAIL_72H";
@@ -862,7 +1071,26 @@ class VagasEmailWorkerService {
       todasNormalizadas.push(vagaNorm);
     }
 
-    // 3. Agrupar por contact_email para selecionar APENAS A MELHOR OPORTUNIDADE por empresa
+    // 3. Deduplicação por Fingerprint Canônico no lote atual (se o feed repetiu o mesmo anúncio com IDs distintos)
+    const vagasPorFingerprint = new Map<string, VagaNormalizada[]>();
+    for (const v of todasNormalizadas) {
+      if (v.status === "PENDING" && v.fingerprint) {
+        const lista = vagasPorFingerprint.get(v.fingerprint) || [];
+        lista.push(v);
+        vagasPorFingerprint.set(v.fingerprint, lista);
+      }
+    }
+    for (const [_fp, grupo] of vagasPorFingerprint.entries()) {
+      if (grupo.length > 1) {
+        grupo.sort((a, b) => b.score - a.score);
+        for (let i = 1; i < grupo.length; i++) {
+          grupo[i].status = "SKIPPED";
+          grupo[i].skipReason = "DUPLICATE_CANONICAL_VAGA";
+        }
+      }
+    }
+
+    // 4. Agrupar por contact_email para selecionar APENAS A MELHOR OPORTUNIDADE por empresa no lote
     const vagasPorEmail = new Map<string, VagaNormalizada[]>();
     for (const v of todasNormalizadas) {
       if (v.status === "PENDING") {
@@ -897,7 +1125,7 @@ class VagasEmailWorkerService {
     const puladas = todasNormalizadas.filter((v) => v.status === "SKIPPED");
 
     return {
-      totalNoFeed: vagasRaw.length,
+      totalNoFeed: vagasCombinadas.length,
       elegiveis,
       puladas,
       enviosUltimas24h,
@@ -916,6 +1144,7 @@ class VagasEmailWorkerService {
     if (!vaga) throw new Error("Vaga não encontrada no feed");
 
     const dadosVagaFormatados = this.normalizarDadosVaga(vaga);
+    dadosVagaFormatados.modoAmplo = this.config.modoAmplo !== false;
     const curriculo = await personalizarCurriculo(dadosVagaFormatados);
 
     // Persiste o snapshot no banco para garantir que o preview é exatamente o que será enviado
@@ -1165,6 +1394,21 @@ class VagasEmailWorkerService {
 
   private async executarCiclo(): Promise<void> {
     const db = await getDb();
+
+    // Missão 7: antes de processar o feed vivo do dia, reavalia o "banco de
+    // oportunidades" (candidaturas SKIPPED/LOW_SCORE salvas nos últimos 45
+    // dias) com o perfil e o motor de score atuais. Best-effort: nunca deve
+    // impedir o ciclo normal de rodar mesmo se falhar.
+    try {
+      await reavaliarVagasHistoricoSalvo({ motivo: "início de ciclo automático" });
+    } catch (err) {
+      logWarn(
+        `[Worker] Falha ao reavaliar histórico de oportunidades no início do ciclo: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+
     const preview = await this.gerarPreview();
 
     this.totalVagas = preview.elegiveis.length + preview.puladas.length;
@@ -1176,11 +1420,14 @@ class VagasEmailWorkerService {
       try {
         await db.run(
           `INSERT INTO curriculo_automacao_candidaturas
-           (job_id, contact_email, company, vaga_title, vaga_url, location, salary, score, dados_vaga_json, status, skip_reason)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'SKIPPED', ?)
+           (job_id, contact_email, company, vaga_title, vaga_url, location, salary, score, dados_vaga_json, vaga_fingerprint, status, skip_reason, score_categoria_aplicado, matches_categoria_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SKIPPED', ?, ?, ?)
            ON CONFLICT(job_id) DO UPDATE SET
              score = excluded.score,
              skip_reason = excluded.skip_reason,
+             vaga_fingerprint = COALESCE(excluded.vaga_fingerprint, curriculo_automacao_candidaturas.vaga_fingerprint),
+             score_categoria_aplicado = excluded.score_categoria_aplicado,
+             matches_categoria_json = excluded.matches_categoria_json,
              updated_at = CURRENT_TIMESTAMP
            WHERE curriculo_automacao_candidaturas.status NOT IN ('SENT', 'PROCESSING')`,
           p.jobId,
@@ -1192,7 +1439,10 @@ class VagasEmailWorkerService {
           p.salary,
           p.score,
           JSON.stringify(p.dadosVagaFormatados),
+          p.fingerprint || null,
           p.skipReason || "SKIPPED",
+          p.scoreComEquivalencia ?? null,
+          p.matchesCategoria ? JSON.stringify(p.matchesCategoria) : null,
         );
       } catch (err) {
         // Ignora erro de inserção de puladas
@@ -1600,3 +1850,196 @@ class VagasEmailWorkerService {
 }
 
 export const vagasEmailWorker = new VagasEmailWorkerService();
+
+// ── Missão 7: Banco de oportunidades / reavaliação do histórico ──────────────
+
+/** Janela de retenção: só reavalia candidaturas SKIPPED/LOW_SCORE criadas há até 45 dias. */
+export const REAVALIACAO_HISTORICO_JANELA_DIAS = 45;
+
+/**
+ * Proteção contra reprocessamento infinito (idempotência).
+ *
+ * Decisão de design: hoje não existe nenhum jeito confiável de saber "quando o
+ * perfil do candidato mudou pela última vez" — nem `curriculo_profile_personal`
+ * nem `curriculo_profile_skills`/`curriculo_profile_experiences` têm uma coluna
+ * `updated_at` populada em cada edição (isso é escopo da Missão 8, que vai
+ * expor um hook de PATCH de perfil). Sem esse sinal, a alternativa mais simples
+ * e segura é uma janela de tempo fixa: só reavaliar uma candidatura cuja
+ * `ultima_reavaliacao_em` seja NULL ou tenha mais de `protecaoHoras` (default
+ * 24h). Isso evita reprocessar a mesma vaga a cada execução do ciclo (que pode
+ * rodar de hora em hora), mas ainda garante reavaliação periódica caso o
+ * candidato tenha atualizado currículo/skills nesse meio tempo. Quando a
+ * Missão 8 existir, o critério pode evoluir para comparar
+ * `ultima_reavaliacao_em` contra o `updated_at` real do perfil.
+ */
+export const REAVALIACAO_HISTORICO_PROTECAO_HORAS = 24;
+
+export interface ReavaliacaoHistoricoResultado {
+  avaliadas: number;
+  promovidas: number;
+  mantidas: number;
+  erros: number;
+}
+
+/**
+ * Reavalia candidaturas antigas marcadas como SKIPPED/LOW_SCORE usando o perfil
+ * ATUAL do candidato e o motor de score COM equivalência de categoria
+ * (`calcularPontuacaoRelevancia(..., true)`), que é a fonte de verdade para
+ * promoção nesta missão.
+ *
+ * Importante: os dados da vaga original já são reconstruídos a partir de
+ * `dados_vaga_json` — essa coluna já guarda o snapshot completo de
+ * `dadosVagaFormatados` usado no cálculo de score original (ver `gerarPreview`
+ * e `reservarSlotEnvioAtomico`), então NÃO foi necessário criar uma coluna
+ * nova de snapshot para esta missão.
+ *
+ * Esta função NUNCA dispara envio de e-mail. Quando uma vaga cruza o
+ * `minScore` atual ela é promovida trocando `status` para `PENDING` e
+ * limpando `skip_reason` (ambos já fazem parte do enum existente da coluna
+ * `status`, então não foi necessário alterar o CHECK constraint da tabela) —
+ * essa é a opção "mais simples" citada na missão, evitando duplicar a lógica
+ * de envio/dedup/slot atômico que já existe em `reservarSlotEnvioAtomico`.
+ *
+ * ATENÇÃO (gap conhecido, documentado para a próxima missão): o loop de
+ * processamento em `executarCiclo` monta `preview.elegiveis` exclusivamente a
+ * partir do feed VIVO do dia (`gerarPreview` -> `buscarVagasDoFeed`), e não
+ * relê candidaturas já persistidas com `status = 'PENDING'`. Ou seja, marcar
+ * uma vaga como `PENDING` aqui a torna elegível para o "próximo ciclo
+ * natural" SOMENTE se essa vaga também reaparecer no feed vivo (ex.: feed
+ * reaberto/reprocessado). Se a vaga já saiu definitivamente do feed, o envio
+ * de fato só vai acontecer quando outra missão ensinar `executarCiclo` (ou
+ * `gerarPreview`) a também considerar candidaturas `PENDING` reconstruídas via
+ * `dados_vaga_json` como uma fonte adicional de vagas elegíveis. Até lá, esta
+ * função cumpre o papel de "banco de oportunidades": mantém o histórico
+ * corretamente pontuado e pronto para ser aproveitado assim que esse fio for
+ * amarrado, sem arriscar duplicar/disparar envios por conta própria.
+ */
+export async function reavaliarVagasHistoricoSalvo(
+  opcoes: {
+    motivo?: string;
+    minScore?: number;
+    janelaDias?: number;
+    protecaoHoras?: number;
+    deps?: {
+      getDb?: typeof getDb;
+      carregarPerfil?: typeof carregarPerfilCandidato;
+      calcularScore?: typeof calcularPontuacaoRelevancia;
+      identificarMatches?: typeof identificarMatchesPorCategoria;
+    };
+  } = {},
+): Promise<ReavaliacaoHistoricoResultado> {
+  const resultado: ReavaliacaoHistoricoResultado = {
+    avaliadas: 0,
+    promovidas: 0,
+    mantidas: 0,
+    erros: 0,
+  };
+
+  const deps = opcoes.deps ?? {};
+  const obterDb = deps.getDb ?? getDb;
+  const carregarPerfil = deps.carregarPerfil ?? carregarPerfilCandidato;
+  const calcularScore = deps.calcularScore ?? calcularPontuacaoRelevancia;
+  const identificarMatches = deps.identificarMatches ?? identificarMatchesPorCategoria;
+
+  const janelaDias = opcoes.janelaDias ?? REAVALIACAO_HISTORICO_JANELA_DIAS;
+  const protecaoHoras = opcoes.protecaoHoras ?? REAVALIACAO_HISTORICO_PROTECAO_HORAS;
+  const minScore = opcoes.minScore ?? vagasEmailWorker.getStatus().config.minScore;
+
+  let db;
+  try {
+    db = await obterDb();
+  } catch (err) {
+    logError("[reavaliacao-historico] Falha ao obter conexão com o banco:", err);
+    return resultado;
+  }
+
+  let candidatas: Array<{ id: number; job_id: string; dados_vaga_json: string }> = [];
+  try {
+    candidatas = await db.all(
+      `SELECT id, job_id, dados_vaga_json
+       FROM curriculo_automacao_candidaturas
+       WHERE status = 'SKIPPED'
+         AND skip_reason = 'LOW_SCORE'
+         AND created_at > datetime('now', ?)
+         AND (ultima_reavaliacao_em IS NULL OR ultima_reavaliacao_em < datetime('now', ?))`,
+      `-${janelaDias} days`,
+      `-${protecaoHoras} hours`,
+    );
+  } catch (err) {
+    logError("[reavaliacao-historico] Falha ao buscar candidaturas SKIPPED/LOW_SCORE:", err);
+    return resultado;
+  }
+
+  if (candidatas.length === 0) {
+    return resultado;
+  }
+
+  let perfil: any;
+  try {
+    perfil = await carregarPerfil();
+  } catch (err) {
+    logError("[reavaliacao-historico] Falha ao carregar perfil atual do candidato:", err);
+    resultado.erros = candidatas.length;
+    return resultado;
+  }
+
+  for (const candidatura of candidatas) {
+    resultado.avaliadas++;
+    try {
+      const dadosVaga = JSON.parse(candidatura.dados_vaga_json);
+      const novoScore = calcularScore(perfil, dadosVaga, true);
+      const matches = identificarMatches(perfil, dadosVaga);
+      const matchesJson = JSON.stringify(matches ?? []);
+
+      if (novoScore >= minScore) {
+        await db.run(
+          `UPDATE curriculo_automacao_candidaturas
+           SET status = 'PENDING',
+               skip_reason = NULL,
+               score = ?,
+               score_categoria_aplicado = ?,
+               matches_categoria_json = ?,
+               ultima_reavaliacao_em = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ? AND status = 'SKIPPED'`,
+          novoScore,
+          novoScore,
+          matchesJson,
+          candidatura.id,
+        );
+        resultado.promovidas++;
+        logInfo(
+          `[reavaliacao-historico] Vaga ${candidatura.job_id} promovida do histórico: novo score ${novoScore}% >= minScore ${minScore}%.`,
+        );
+      } else {
+        await db.run(
+          `UPDATE curriculo_automacao_candidaturas
+           SET score_categoria_aplicado = ?,
+               matches_categoria_json = ?,
+               ultima_reavaliacao_em = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ? AND status = 'SKIPPED'`,
+          novoScore,
+          matchesJson,
+          candidatura.id,
+        );
+        resultado.mantidas++;
+      }
+    } catch (err) {
+      resultado.erros++;
+      logWarn(
+        `[reavaliacao-historico] Falha ao reavaliar candidatura ${candidatura.job_id}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
+  if (resultado.avaliadas > 0) {
+    logInfo(
+      `[reavaliacao-historico] Reavaliação concluída (motivo: ${opcoes.motivo || "não informado"}): ${resultado.avaliadas} avaliadas, ${resultado.promovidas} promovidas, ${resultado.mantidas} mantidas, ${resultado.erros} com erro.`,
+    );
+  }
+
+  return resultado;
+}

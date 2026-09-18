@@ -15,10 +15,6 @@ import { loggerMiddleware, logInfo, logError } from './shared/utils/logger.js';
 import analisarRoutes, { pdfPreviewRouter } from './analisar/analisar.routes.js';
 import testeRoutes from './teste/teste.routes.js';
 import smtpRoutes from './shared/smtp/smtp.routes.js';
-import buscasRoutes from './buscas/buscas.routes.js';
-import pendingRoutes from './buscas/pending.routes.js';
-import sourcesRoutes from './buscas/sources.routes.js';
-import scraperRoutes from './scraper/scraper.routes.js';
 import monitorRoutes from './monitor/monitor.routes.js';
 import exportRoutes from './export/export.routes.js';
 import perfilRoutes from './perfil/perfil.routes.js';
@@ -27,17 +23,19 @@ import emailTestRoutes from './shared/email/emailTest.routes.js';
 import analyticsRoutes from './analytics/analytics.routes.js';
 import automacaoRoutes from './automacao/automacao.routes.js';
 import { vagasEmailWorker } from './automacao/vagasEmailWorker.service.js';
-import { iniciarLinkedinCron, getEstadoPersistidoLinkedinCron } from './buscas/linkedinCron.service.js';
+
+import { startOportunidadesDiariasCron } from './automacao/notificacaoOportunidades.cron.js';
 
 const app = express();
 
 await initializeSmtpRuntimeConfig();
+startOportunidadesDiariasCron();
 
 // Scraper scheduler (fontes internacionais) permanece desativado por padrão: usuário
-// controla envios e análises via Dashboard. A automação de envio (vagasEmailWorker) e o
-// cron de scraping do LinkedIn, porém, retomam automaticamente no boot SOMENTE se o
-// usuário já os tinha ligado antes (estado persistido em curriculo_automacao_config) —
-// caso contrário eles ficam parados por redeploy, exigindo um toggle manual toda vez.
+// controla envios e análises via Dashboard. A automação de envio (vagasEmailWorker),
+// porém, retoma automaticamente no boot SOMENTE se o usuário já a tinha ligado antes
+// (estado persistido em curriculo_automacao_config) — caso contrário fica parada por
+// redeploy, exigindo um toggle manual toda vez.
 try {
   const automacaoDeveEstarAtiva = await vagasEmailWorker.isAtivoPersistido();
   if (automacaoDeveEstarAtiva) {
@@ -46,16 +44,6 @@ try {
   }
 } catch (err) {
   logError('[Boot] Falha ao retomar automação de envios automaticamente:', err);
-}
-
-try {
-  const { ativo, cronExpr } = await getEstadoPersistidoLinkedinCron();
-  if (ativo) {
-    logInfo(`[Boot] Retomando cron de scraping do LinkedIn (estado persistido = ativo, cron=${cronExpr})...`);
-    iniciarLinkedinCron({ cron: cronExpr });
-  }
-} catch (err) {
-  logError('[Boot] Falha ao retomar cron do LinkedIn automaticamente:', err);
 }
 
 // O nginx injeta X-Forwarded-For/Proto. Sem `trust proxy` aqui o
@@ -119,14 +107,6 @@ if (config.dev.logRequests) {
 
 app.use('/', analisarRoutes);
 app.use('/', perfilRoutes);
-app.use('/', buscasRoutes);
-app.use('/', pendingRoutes);
-app.use('/', sourcesRoutes);
-// Prefixo próprio: as rotas de scraper.routes.ts (busca "crua" por
-// tecnologia/remoto, sem persistir) usam /vagas, o que colidia com
-// compatibilidade.routes.ts (listagem das vagas cadastradas com
-// compatibilidade calculada, é o que o app realmente consome).
-app.use('/scraper', scraperRoutes);
 app.use('/', monitorRoutes);
 app.use('/', compatibilidadeRoutes);
 app.use('/', emailTestRoutes);

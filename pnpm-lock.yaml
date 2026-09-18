@@ -50,9 +50,6 @@ importers:
       node-cron:
         specifier: ^4.6.0
         version: 4.6.0
-      node-fetch:
-        specifier: ^3.3.2
-        version: 3.3.2
       nodemailer:
         specifier: ^10.0.0
         version: 10.0.0

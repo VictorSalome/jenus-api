@@ -262,6 +262,10 @@ const startServer = async (): Promise<void> => {
     const { startDebtsScheduler } = await import("./apps/financas/services/debts-scheduler.service.js");
     startDebtsScheduler();
 
+    // Scheduler de notificação diária de oportunidades de currículo
+    const { startOportunidadesDiariasCron } = await import("./apps/curriculos/automacao/notificacaoOportunidades.cron.js");
+    startOportunidadesDiariasCron();
+
     const server = app.listen(config.PORT, () => {
       logger.info(`🚀 Jenus API rodando na porta ${config.PORT}`, "Server");
       logger.info(`📑 Swagger UI: http://192.168.1.16:${config.PORT}/api/docs`, "Server");

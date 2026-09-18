@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import fetch from "node-fetch";
 import * as repo from "./discord-webhook-config.repository.js";
 
 const WEBHOOK_URL_RE = /^https:\/\/discord\.com\/api\/webhooks\/\d+\/[\w-]+$/;

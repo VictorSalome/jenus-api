@@ -39,6 +39,8 @@ export type SkipReason =
   | 'DAILY_LIMIT_REACHED'
   | 'INVALID_DATA'
   | 'ALREADY_SENT'
+  | 'ALREADY_SENT_CANONICAL'
+  | 'DUPLICATE_CANONICAL_VAGA'
   | 'ALREADY_PROCESSING';
 
 export interface AutomacaoConfig {
@@ -51,11 +53,14 @@ export interface AutomacaoConfig {
   feedUrl: string;
   overrideEmail?: string | null;
   semIa?: boolean;
+  habilitarFraseEquivalencia?: boolean;
+  modoAmplo?: boolean;
   maxBackoffAttempts?: number;
 }
 
 export interface VagaNormalizada {
   jobId: string;
+  fingerprint?: string;
   title: string;
   company: string;
   contactEmail: string;
@@ -74,6 +79,20 @@ export interface VagaNormalizada {
   skipReason?: SkipReason;
   dadosVagaFormatados: Record<string, any>;
   resumoGerado?: string;
+  /**
+   * SHADOW MODE (não influencia envio/elegibilidade): score recalculado usando
+   * o motor de equivalência tecnológica por categoria. Apenas observação.
+   */
+  scoreComEquivalencia?: number | null;
+  /**
+   * SHADOW MODE: matches identificados pelo motor de equivalência por categoria.
+   */
+  matchesCategoria?: Array<{
+    skillCandidato: string;
+    tecnologiaVaga: string;
+    categoria: string;
+    peso: number;
+  }> | null;
 }
 
 export interface AutomacaoStatus {
@@ -131,7 +150,9 @@ export interface CandidaturaAutomacaoRow {
   error_message: string | null;
   delay_applied_seconds: number | null;
   envio_id: number | null;
+  vaga_fingerprint?: string | null;
   sent_at: string | null;
   created_at: string;
   updated_at: string;
+  ultima_reavaliacao_em?: string | null;
 }

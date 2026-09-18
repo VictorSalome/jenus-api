@@ -131,6 +131,9 @@ export const AutomacaoConfigSchema = z.object({
   windowHours: z.coerce.number().optional(),
   feedUrl: z.string().url().optional(),
   overrideEmail: z.string().email().optional().nullable(),
+  modoAmplo: z.boolean().or(z.coerce.number().transform((v) => Boolean(v))).optional(),
+  semIa: z.boolean().or(z.coerce.number().transform((v) => Boolean(v))).optional(),
+  habilitarFraseEquivalencia: z.boolean().or(z.coerce.number().transform((v) => Boolean(v))).optional(),
 });
 
 export const EmptyBodySchema = z.object({}).strict().optional().or(z.object({}));

@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import { logInfo, logError } from "../shared/utils/logger.js";
 import { calculateSimilarity } from "../shared/utils/textUtils.js";
+import { calcularAnosExperiencia } from "../shared/utils/experiencia.util.js";
 import { gerarResumo } from "./resumoProfissional.service.js";
 import { getDb } from "../../../core/database.js";
 
@@ -22,6 +23,10 @@ const SKILL_ALIASES: Record<string, string[]> = {
     "isr",
     "server components",
   ],
+  Vue: ["vue", "vue.js", "vuejs", "vue3", "vue 3"],
+  Nuxt: ["nuxt", "nuxt.js", "nuxtjs", "nuxt 3"],
+  Angular: ["angular", "angularjs", "angular 2+"],
+  Svelte: ["svelte", "sveltekit"],
   "Node.js": [
     "node.js",
     "nodejs",
@@ -38,7 +43,40 @@ const SKILL_ALIASES: Record<string, string[]> = {
     "solid",
     "separacao de camadas",
   ],
+  Express: ["express", "express.js", "expressjs"],
   TypeScript: ["typescript", "tipagem", "tipado"],
+  Python: ["python", "flask"],
+  Django: ["django", "django rest framework", "drf"],
+  FastAPI: ["fastapi", "fast api"],
+  Java: ["java", "spring", "spring boot"],
+  "Spring Boot": ["spring boot", "springboot", "spring-boot", "spring"],
+  "C#": ["c#", "csharp", "c sharp"],
+  ".NET": [".net", "dotnet", "asp.net", "aspnet", ".net core", "dotnet core"],
+  Go: ["go", "golang"],
+  "React Native": ["react native", "react-native", "mobile", "expo", "ios", "android"],
+  Expo: ["expo", "expo go"],
+  Flutter: ["flutter", "dart"],
+  "iOS Nativo": ["ios nativo", "ios", "swift", "swiftui", "objective-c"],
+  "Android Nativo": ["android nativo", "android", "kotlin", "java android"],
+  PostgreSQL: ["postgresql", "postgres"],
+  MySQL: ["mysql"],
+  "SQL Server": ["sql server", "sqlserver", "mssql", "t-sql"],
+  Oracle: ["oracle", "pl/sql", "plsql"],
+  SQLite: ["sqlite", "sqlite3"],
+  SQL: ["sql", "relacional", "queries", "banco de dados"],
+  MongoDB: ["mongodb", "mongo"],
+  Redis: ["redis", "cache"],
+  Elasticsearch: [
+    "elasticsearch",
+    "busca",
+    "search engine",
+    "aplicacoes orientadas a busca",
+  ],
+  DynamoDB: ["dynamodb", "dynamo"],
+  Docker: ["docker", "containerizacao", "container"],
+  "Docker Compose": ["docker compose", "docker-compose"],
+  Kubernetes: ["kubernetes", "k8s", "orquestracao"],
+  K8s: ["k8s", "kubernetes"],
   Jest: [
     "jest",
     "testes",
@@ -54,37 +92,154 @@ const SKILL_ALIASES: Record<string, string[]> = {
     "testes de interface",
   ],
   "Testing Library": ["testing library", "rtl", "testes de interface"],
-  "Tailwind CSS": ["tailwind", "tailwind css"],
-  GraphQL: ["graphql", "graph ql"],
-  "REST API": ["api rest", "rest api", "restful", "apis robustas"],
-  Docker: ["docker", "containerizacao", "container"],
-  "CI/CD": ["ci/cd", "cicd", "integracao continua", "deploy automatizado", "github actions"],
+  Supertest: ["supertest"],
+  Mocha: ["mocha", "chai"],
+  Cypress: ["cypress", "e2e"],
+  Playwright: ["playwright", "e2e"],
+  JUnit: ["junit", "junit5"],
   AWS: ["aws", "cloud"],
   EC2: ["ec2"],
   S3: ["s3"],
   Lambda: ["lambda"],
   SQS: ["sqs"],
-  PostgreSQL: ["postgresql", "postgres"],
-  MongoDB: ["mongodb", "mongo"],
-  Elasticsearch: [
-    "elasticsearch",
-    "busca",
-    "search engine",
-    "aplicacoes orientadas a busca",
-  ],
+  GCP: ["gcp", "google cloud", "google cloud platform"],
+  Azure: ["azure", "microsoft azure"],
+  "Tailwind CSS": ["tailwind", "tailwind css"],
+  GraphQL: ["graphql", "graph ql"],
+  "REST API": ["api rest", "rest api", "restful", "apis robustas"],
+  "CI/CD": ["ci/cd", "cicd", "integracao continua", "deploy automatizado", "github actions"],
   SonarQube: ["sonarqube", "qualidade de codigo", "quality gate"],
   "Clean Code": ["clean code", "codigo limpo", "refatoracao"],
   "Code Review": ["code review", "revisao de codigo"],
-  "React Native": ["react native", "mobile", "expo", "ios", "android"],
-  Python: ["python", "fastapi", "django", "flask"],
-  Java: ["java", "spring", "spring boot"],
-  Kubernetes: ["kubernetes", "k8s", "orquestracao"],
   Microservices: ["microservicos", "microservices", "arquitetura distribuida"],
-  Redis: ["redis", "cache"],
   Scrum: ["scrum", "agile", "agilidade", "kanban", "sprints"],
   Git: ["git", "github", "gitlab", "versionamento", "github actions"],
-  SQL: ["sql", "relacional", "queries", "banco de dados"],
 };
+
+/**
+ * Modelo de match com três estados explícitos.
+ *
+ * IMPORTANTE — leia antes de mexer aqui:
+ * "EXACT" e "ALIAS" representam a MESMA tecnologia (grafias/sinônimos diferentes
+ * da mesma coisa), por isso sempre têm peso 1.0.
+ *
+ * "CATEGORY_EQUIVALENCE" é conceitualmente DIFERENTE: indica que duas
+ * tecnologias distintas pertencem à mesma categoria funcional e representam
+ * experiência CONCEITUAL parcialmente equivalente — nunca que uma tecnologia
+ * substitui a outra. "Node.js ~ Java" quer dizer "o candidato tem vivência
+ * em backend/APIs que é parcialmente transferível para Java", e NÃO
+ * "Node.js + Express é a mesma coisa que Spring Boot". Por isso o peso de
+ * CATEGORY_EQUIVALENCE nunca é 1.0 (fica entre 0.4 e 0.6) e este tipo nunca
+ * deve ser somado, comparado ou tratado no código como se fosse EXACT/ALIAS.
+ */
+type TipoMatch = "EXACT" | "ALIAS" | "CATEGORY_EQUIVALENCE";
+
+interface ResultadoMatch {
+  tipo: TipoMatch;
+  peso: number; // 1.0 para EXACT/ALIAS, 0.4-0.6 para CATEGORY_EQUIVALENCE
+  categoria?: string; // só quando tipo === "CATEGORY_EQUIVALENCE"
+}
+
+interface EquivalenciaCategoria {
+  categoria: string;
+  membros: string[]; // nomes de skill que já existem como chaves de SKILL_ALIASES
+  peso: number;
+}
+
+// Cada categoria abaixo agrupa tecnologias que resolvem o MESMO TIPO DE
+// PROBLEMA de formas diferentes (ex: "framework-backend-web"), não
+// tecnologias intercambiáveis. Usado exclusivamente para reconhecer
+// experiência conceitual adjacente, nunca para afirmar equivalência técnica.
+const CATEGORIAS_TECNOLOGICAS_EQUIVALENTES: EquivalenciaCategoria[] = [
+  {
+    categoria: "framework-backend-web",
+    peso: 0.55,
+    membros: [
+      "NestJS",
+      "Node.js",
+      "Express",
+      "Java",
+      "Spring Boot",
+      "Python",
+      "Django",
+      "FastAPI",
+      "C#",
+      ".NET",
+      "Go",
+    ],
+  },
+  {
+    categoria: "linguagem-tipada-backend",
+    peso: 0.40,
+    membros: ["TypeScript", "Java", "C#", "Go"],
+  },
+  {
+    categoria: "framework-frontend-web",
+    peso: 0.55,
+    membros: [
+      "React",
+      "Next.js",
+      "Vue",
+      "Nuxt",
+      "Angular",
+      "Svelte",
+      "TypeScript",
+      "Tailwind CSS",
+    ],
+  },
+  {
+    categoria: "mobile-cross-platform",
+    peso: 0.50,
+    membros: [
+      "React Native",
+      "Expo",
+      "Flutter",
+      "iOS Nativo",
+      "Android Nativo",
+    ],
+  },
+  {
+    categoria: "banco-relacional",
+    peso: 0.60,
+    membros: [
+      "PostgreSQL",
+      "MySQL",
+      "SQL Server",
+      "Oracle",
+      "SQLite",
+      "SQL",
+    ],
+  },
+  {
+    categoria: "banco-nosql",
+    peso: 0.50,
+    membros: ["MongoDB", "Redis", "Elasticsearch", "DynamoDB"],
+  },
+  {
+    categoria: "containerizacao-orquestracao",
+    peso: 0.60,
+    membros: ["Docker", "Docker Compose", "Kubernetes", "K8s"],
+  },
+  {
+    categoria: "testes-automatizados",
+    peso: 0.50,
+    membros: [
+      "Jest",
+      "React Testing Library",
+      "Testing Library",
+      "Supertest",
+      "Mocha",
+      "Cypress",
+      "Playwright",
+      "JUnit",
+    ],
+  },
+  {
+    categoria: "cloud-integracao",
+    peso: 0.50,
+    membros: ["AWS", "EC2", "S3", "Lambda", "SQS", "GCP", "Azure"],
+  },
+];
 
 interface ContextRule {
   name: string;
@@ -241,6 +396,85 @@ const isSkillSemanticallyRelevant = (skill: string, text: string): boolean => {
   return aliases.some((alias) => text.includes(normalizeText(alias)));
 };
 
+/**
+ * Classifica a relação entre uma habilidade do candidato e um requisito da
+ * vaga em um dos três estados explícitos de ResultadoMatch (ver comentário
+ * acima de TipoMatch). Retorna `null` quando não há relação alguma.
+ *
+ * Ordem de verificação (do mais forte para o mais fraco):
+ * 1. EXACT — substring mútua entre os textos normalizados.
+ * 2. ALIAS — mesma tecnologia via SKILL_ALIASES (sinônimo/grafia).
+ * 3. CATEGORY_EQUIVALENCE — tecnologias diferentes, mesma categoria
+ *    funcional (ver CATEGORIAS_TECNOLOGICAS_EQUIVALENTES). NUNCA é
+ *    confundido com EXACT/ALIAS: é experiência conceitual adjacente, não a
+ *    mesma tecnologia.
+ */
+const classificarMatch = (habilidade: string, requisito: string): ResultadoMatch | null => {
+  const skillNorm = normalizeText(habilidade);
+  const reqNorm = normalizeText(requisito);
+
+  if (reqNorm.includes(skillNorm) || skillNorm.includes(reqNorm)) {
+    return { tipo: "EXACT", peso: 1 };
+  }
+
+  if (isSkillSemanticallyRelevant(habilidade, reqNorm)) {
+    return { tipo: "ALIAS", peso: 1 };
+  }
+
+  for (const equivalencia of CATEGORIAS_TECNOLOGICAS_EQUIVALENTES) {
+    if (!equivalencia.membros.includes(habilidade)) {
+      continue;
+    }
+
+    const outroMembroRelevante = equivalencia.membros.some(
+      (membro) =>
+        membro !== habilidade && isSkillSemanticallyRelevant(membro, reqNorm),
+    );
+
+    if (outroMembroRelevante) {
+      return {
+        tipo: "CATEGORY_EQUIVALENCE",
+        peso: equivalencia.peso,
+        categoria: equivalencia.categoria,
+      };
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Wrapper de `classificarMatch` que restringe a ORIGEM de um match
+ * CATEGORY_EQUIVALENCE a skills REAIS do candidato (`skillsReais`, vindas
+ * de `perfil.skills`).
+ *
+ * Por quê: `habilidadesCorrespondentes` (calculada em
+ * `identificarHabilidadesCorrespondentes`) mistura skills reais do
+ * candidato com skills "fantasma" inferidas por afinidade contextual da
+ * vaga (ex: `areaAtuacao: "Backend"` injeta Node.js/NestJS/Docker mesmo que
+ * o candidato nunca tenha declarado essas skills). Deixar
+ * CATEGORY_EQUIVALENCE rodar sobre essas skills fantasma quebraria o
+ * princípio documentado em CATEGORIAS_TECNOLOGICAS_EQUIVALENTES: o
+ * candidato receberia crédito de equivalência conceitual por uma
+ * tecnologia que ele nunca teve, real ou adjacente.
+ *
+ * EXACT/ALIAS não passam por essa restrição — isso é comportamento
+ * pré-existente e fora do escopo desta correção.
+ */
+const classificarMatchComOrigemReal = (
+  skill: string,
+  alvo: string,
+  skillsReais: string[],
+): ResultadoMatch | null => {
+  const resultado = classificarMatch(skill, alvo);
+
+  if (resultado?.tipo === "CATEGORY_EQUIVALENCE" && !skillsReais.includes(skill)) {
+    return null;
+  }
+
+  return resultado;
+};
+
 const clamp = (value: number, min = 0, max = 1): number => Math.min(max, Math.max(min, value));
 
 const inferirSenioridade = (dadosVaga: Record<string, any> = {}): string => {
@@ -273,42 +507,6 @@ const inferirSenioridade = (dadosVaga: Record<string, any> = {}): string => {
   return "pleno";
 };
 
-const calcularAnosExperiencia = (experiencias: any[] = []): number => {
-  if (!Array.isArray(experiencias) || experiencias.length === 0) return 0;
-
-  const agora = new Date();
-  let minInicio: Date | null = null;
-  let maxFim: Date | null = null;
-
-  experiencias.forEach((exp) => {
-    const inicio = new Date(`${exp.startDate || ""}-01`);
-    const fim =
-      exp.endDate === "present" || !exp.endDate ? agora : new Date(`${exp.endDate || ""}-01`);
-
-    if (
-      Number.isNaN(inicio.getTime()) ||
-      Number.isNaN(fim.getTime()) ||
-      fim <= inicio
-    ) {
-      return;
-    }
-
-    if (!minInicio || inicio < minInicio) {
-      minInicio = inicio;
-    }
-    if (!maxFim || fim > maxFim) {
-      maxFim = fim;
-    }
-  });
-
-  if (!minInicio || !maxFim) return 0;
-
-  const diffAnos =
-    (maxFim.getTime() - minInicio.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
-
-  return Number(diffAnos.toFixed(1));
-};
-
 const calcularAderenciaSenioridade = (senioridade: string, anosExperiencia: number): number => {
   switch (senioridade) {
     case "senior":
@@ -334,6 +532,24 @@ const calcularCoberturaLista = (itens: any[] = [], matchPredicate: (item: any) =
   return clamp(matched / total);
 };
 
+/**
+ * Igual a calcularCoberturaLista, mas soma o `peso` de cada match (em vez de
+ * contar binariamente 0/1). Usado para cobertura que precisa reconhecer
+ * matches parciais (ex: CATEGORY_EQUIVALENCE).
+ */
+const calcularCoberturaListaPonderada = (
+  itens: any[] = [],
+  matchFn: (item: any) => ResultadoMatch | null,
+): number => {
+  if (!Array.isArray(itens) || itens.length === 0) return 1;
+  const total = itens.length;
+  const pesoSomado = itens.reduce((soma, item) => {
+    const resultado = matchFn(item);
+    return soma + (resultado ? resultado.peso : 0);
+  }, 0);
+  return clamp(pesoSomado / total);
+};
+
 const habilidadeCombinaComRequisito = (habilidade: string, requisito: string): boolean => {
   const skillNorm = normalizeText(habilidade);
   const reqNorm = normalizeText(requisito);
@@ -343,6 +559,136 @@ const habilidadeCombinaComRequisito = (habilidade: string, requisito: string): b
     skillNorm.includes(reqNorm) ||
     isSkillSemanticallyRelevant(habilidade, reqNorm)
   );
+};
+
+/**
+ * Varre as skills do candidato contra os requisitos/stack da vaga e retorna
+ * apenas os pares que deram match por CATEGORY_EQUIVALENCE (equivalência
+ * tecnológica, não a mesma tecnologia). Não é consumida ainda nesta missão —
+ * fica pronta para a frase de equivalência e para a auditoria do histórico
+ * (outras missões).
+ */
+const identificarMatchesPorCategoria = (
+  perfil: any,
+  dadosVaga: Record<string, any>,
+): { skillCandidato: string; tecnologiaVaga: string; categoria: string; peso: number }[] => {
+  const skillsDoCandidato: string[] = Object.values(perfil?.skills || {})
+    .filter((categoria) => Array.isArray(categoria))
+    .flat()
+    .filter((skill): skill is string => typeof skill === "string" && skill.trim().length > 0);
+
+  const tecnologiasDaVaga: string[] = [
+    ...(dadosVaga.stackTecnologica || []),
+    ...(dadosVaga.requisitosObrigatorios || []),
+    ...(dadosVaga.diferenciaisDesejaveis || []),
+  ];
+
+  const matches: { skillCandidato: string; tecnologiaVaga: string; categoria: string; peso: number }[] = [];
+
+  skillsDoCandidato.forEach((skillCandidato) => {
+    tecnologiasDaVaga.forEach((tecnologiaVaga) => {
+      const resultado = classificarMatch(skillCandidato, tecnologiaVaga);
+      if (resultado?.tipo === "CATEGORY_EQUIVALENCE") {
+        matches.push({
+          skillCandidato,
+          tecnologiaVaga,
+          categoria: resultado.categoria as string,
+          peso: resultado.peso,
+        });
+      }
+    });
+  });
+
+  return matches;
+};
+
+/**
+ * Gera um texto profissional e contextual de "Ponte de Competências"
+ * conectando as tecnologias dominadas pelo candidato às equivalentes solicitadas pela vaga.
+ */
+const gerarPonteCompetencias = (
+  categoryMatches: Array<{
+    skillCandidato: string;
+    tecnologiaVaga: string;
+    categoria: string;
+    peso: number;
+  }>,
+  _perfilCandidato?: any,
+  _dadosVaga?: any,
+): string => {
+  if (!categoryMatches || categoryMatches.length === 0) return "";
+
+  const categoriasMap = new Map<string, { skillsCandidato: Set<string>; techsVaga: Set<string> }>();
+
+  for (const match of categoryMatches) {
+    if (!categoriasMap.has(match.categoria)) {
+      categoriasMap.set(match.categoria, {
+        skillsCandidato: new Set(),
+        techsVaga: new Set(),
+      });
+    }
+    const entry = categoriasMap.get(match.categoria)!;
+    entry.skillsCandidato.add(match.skillCandidato);
+    entry.techsVaga.add(match.tecnologiaVaga);
+  }
+
+  const frases: string[] = [];
+
+  for (const [categoria, dados] of categoriasMap.entries()) {
+    const skillsCand = Array.from(dados.skillsCandidato).join(", ");
+    const techsVaga = Array.from(dados.techsVaga).join(", ");
+
+    switch (categoria) {
+      case "framework-backend-web":
+      case "linguagem-tipada-backend":
+        frases.push(
+          `Experiência consistente em arquitetura de backend, APIs RESTful, microsserviços e padrões SOLID construída com ${skillsCand}, proporcionando sólida fundamentação técnica e rápida absorção de ecossistemas corporativos equivalentes como ${techsVaga}.`
+        );
+        break;
+      case "framework-frontend-web":
+        frases.push(
+          `Domínio na construção de interfaces modernas, responsivas e orientadas a componentes com ${skillsCand}, aplicando conceitos de reatividade, gerenciamento de estado e arquitetura SPA diretamente alinhados aos requisitos de ${techsVaga}.`
+        );
+        break;
+      case "mobile-cross-platform":
+        frases.push(
+          `Vivência no ciclo completo de desenvolvimento e publicação mobile utilizando ${skillsCand}, com competências em gerenciamento de estado, consumo de APIs e UX mobile plenamente aplicáveis a ${techsVaga}.`
+        );
+        break;
+      case "banco-relacional":
+        frases.push(
+          `Sólida vivência em modelagem relacional, indexação, otimização de consultas e integridade transacional com ${skillsCand}, diretamente transferível para ${techsVaga}.`
+        );
+        break;
+      case "banco-nosql":
+        frases.push(
+          `Prática com armazenamento não-relacional, cache e estruturas de dados de alta performance utilizando ${skillsCand}, transferível para operações com ${techsVaga}.`
+        );
+        break;
+      case "containerizacao-orquestracao":
+        frases.push(
+          `Vivência em ambientes conteinerizados, isolamento de serviços e automação de deploy com ${skillsCand}, alinhada aos requisitos de ${techsVaga}.`
+        );
+        break;
+      case "testes-automatizados":
+        frases.push(
+          `Cultura de qualidade com desenvolvimento orientado a testes (TDD/testes unitários e de integração) em ${skillsCand}, adaptável ao framework ${techsVaga}.`
+        );
+        break;
+      case "cloud-integracao":
+        frases.push(
+          `Experiência em arquitetura cloud e integração de serviços distribuídos com ${skillsCand}, assegurando rápida familiaridade com a infraestrutura ${techsVaga}.`
+        );
+        break;
+      default:
+        frases.push(
+          `Vivência prática consolidada em ${skillsCand}, fornecendo fundamentação arquitetural e técnica diretamente transferível para ${techsVaga}.`
+        );
+        break;
+    }
+  }
+
+  return `*Ponte de Competências:* ${frases.join(" ")}`;
 };
 
 /**
@@ -383,6 +729,27 @@ export const personalizarCurriculo = async (dadosVaga: Record<string, any>): Pro
       summaryFinal = dadosVaga.customSummary ? dadosVaga.customSummary : resumoDinamico.resumo;
     } else if (dadosVaga.customSummary) {
       summaryFinal = dadosVaga.customSummary;
+    }
+
+    try {
+      const db = await getDb();
+      const configRow = await db.get(
+        "SELECT habilitar_frase_equivalencia, modo_amplo FROM curriculo_automacao_config WHERE id = 1",
+      );
+      const isModoAmplo = dadosVaga.modoAmplo !== undefined ? Boolean(dadosVaga.modoAmplo) : (configRow?.modo_amplo ?? 1) === 1;
+      const habilitarFrase = Boolean(configRow?.habilitar_frase_equivalencia);
+
+      if (isModoAmplo || habilitarFrase) {
+        const categoryMatches = identificarMatchesPorCategoria(perfilCandidato, dadosVaga);
+        if (categoryMatches.length > 0) {
+          const ponte = gerarPonteCompetencias(categoryMatches, perfilCandidato, dadosVaga);
+          if (ponte && !summaryFinal.includes(ponte.trim())) {
+            summaryFinal = summaryFinal ? `${summaryFinal}\n\n${ponte}` : ponte;
+          }
+        }
+      }
+    } catch (err) {
+      logError("Erro ao processar frase de equivalência / ponte de competências", err);
     }
 
     // areasAtuacao e specializations sempre foram o mesmo dado — calculamos
@@ -959,7 +1326,11 @@ const inferirHabilidadesPorAfinidade = (textoVaga: string): string[] => {
 /**
  * Calcula pontuação geral de relevância do candidato para a vaga
  */
-const calcularPontuacaoRelevancia = (perfil: any, dadosVaga: Record<string, any>): number => {
+const calcularPontuacaoRelevancia = (
+  perfil: any,
+  dadosVaga: Record<string, any>,
+  usarEquivalenciaCategoria: boolean = false,
+): number => {
   const habilidadesCorrespondentes = identificarHabilidadesCorrespondentes(
     perfil.skills,
     dadosVaga,
@@ -986,16 +1357,36 @@ const calcularPontuacaoRelevancia = (perfil: any, dadosVaga: Record<string, any>
     .flat()
     .filter((skill) => typeof skill === "string" && skill.trim().length > 0);
 
-  const mustHaveCoverage = calcularCoberturaLista(
-    requisitosObrigatorios,
-    (requisito: string) =>
-      skillsDoCandidato.some((skill: string) =>
-        habilidadeCombinaComRequisito(skill, requisito),
-      ) ||
-      habilidadesCorrespondentes.some((skill: string) =>
-        habilidadeCombinaComRequisito(skill, requisito),
-      ),
-  );
+  // Só populado quando usarEquivalenciaCategoria === true, para observabilidade
+  // (ver logInfo "Matches por tipo (modo equivalência)" no final da função).
+  const matchesEncontrados: ResultadoMatch[] = [];
+
+  const mustHaveCoverage = usarEquivalenciaCategoria
+    ? calcularCoberturaListaPonderada(requisitosObrigatorios, (requisito: string) => {
+        const candidatas = [...skillsDoCandidato, ...habilidadesCorrespondentes];
+        let melhorMatch: ResultadoMatch | null = null;
+        candidatas.forEach((skill: string) => {
+          // CATEGORY_EQUIVALENCE só conta se `skill` for uma skill REAL do
+          // candidato — nunca uma skill "fantasma" inferida por afinidade
+          // contextual da vaga (ver classificarMatchComOrigemReal).
+          const resultado = classificarMatchComOrigemReal(skill, requisito, skillsDoCandidato);
+          if (resultado && (!melhorMatch || resultado.peso > melhorMatch.peso)) {
+            melhorMatch = resultado;
+          }
+        });
+        if (melhorMatch) matchesEncontrados.push(melhorMatch);
+        return melhorMatch;
+      })
+    : calcularCoberturaLista(
+        requisitosObrigatorios,
+        (requisito: string) =>
+          skillsDoCandidato.some((skill: string) =>
+            habilidadeCombinaComRequisito(skill, requisito),
+          ) ||
+          habilidadesCorrespondentes.some((skill: string) =>
+            habilidadeCombinaComRequisito(skill, requisito),
+          ),
+      );
 
   const niceToHaveCoverage = calcularCoberturaLista(
     diferenciaisDesejaveis,
@@ -1008,14 +1399,28 @@ const calcularPontuacaoRelevancia = (perfil: any, dadosVaga: Record<string, any>
       ),
   );
 
-  const stackCoverage = calcularCoberturaLista(stackTecnologica, (tech: string) =>
-    habilidadesCorrespondentes.some(
-      (skill: string) =>
-        normalizeText(skill).includes(normalizeText(tech)) ||
-        normalizeText(tech).includes(normalizeText(skill)) ||
-        isSkillSemanticallyRelevant(skill, normalizeText(tech)),
-    ),
-  );
+  const stackCoverage = usarEquivalenciaCategoria
+    ? calcularCoberturaListaPonderada(stackTecnologica, (tech: string) => {
+        let melhorMatch: ResultadoMatch | null = null;
+        habilidadesCorrespondentes.forEach((skill: string) => {
+          // Mesma restrição de origem aplicada em mustHaveCoverage: só skill
+          // real do candidato pode disparar CATEGORY_EQUIVALENCE.
+          const resultado = classificarMatchComOrigemReal(skill, tech, skillsDoCandidato);
+          if (resultado && (!melhorMatch || resultado.peso > melhorMatch.peso)) {
+            melhorMatch = resultado;
+          }
+        });
+        if (melhorMatch) matchesEncontrados.push(melhorMatch);
+        return melhorMatch;
+      })
+    : calcularCoberturaLista(stackTecnologica, (tech: string) =>
+        habilidadesCorrespondentes.some(
+          (skill: string) =>
+            normalizeText(skill).includes(normalizeText(tech)) ||
+            normalizeText(tech).includes(normalizeText(skill)) ||
+            isSkillSemanticallyRelevant(skill, normalizeText(tech)),
+        ),
+      );
 
   const contextoCoverage = calcularCoberturaLista(
     contextMatches.skills,
@@ -1043,6 +1448,25 @@ const calcularPontuacaoRelevancia = (perfil: any, dadosVaga: Record<string, any>
     densidadeCertificacoes * 0.01;
 
   const pontuacaoFinal = Math.round(clamp(scoreNormalizado) * 100);
+
+  if (usarEquivalenciaCategoria) {
+    const categoriasUsadas = [
+      ...new Set(
+        matchesEncontrados
+          .filter((match) => match.tipo === "CATEGORY_EQUIVALENCE")
+          .map((match) => match.categoria as string),
+      ),
+    ];
+
+    logInfo("Matches por tipo (modo equivalência)", {
+      exact: matchesEncontrados.filter((match) => match.tipo === "EXACT").length,
+      alias: matchesEncontrados.filter((match) => match.tipo === "ALIAS").length,
+      categoryEquivalence: matchesEncontrados.filter(
+        (match) => match.tipo === "CATEGORY_EQUIVALENCE",
+      ).length,
+      categorias: categoriasUsadas,
+    });
+  }
 
   logInfo("Pontuação de relevância calculada", {
     senioridadeDesejada,
@@ -1080,4 +1504,13 @@ const extrairCompetenciasChave = (responsabilidades: string[], skills: Record<st
   return [...new Set(competencias)];
 };
 
-export { carregarPerfilCandidato, calcularPontuacaoRelevancia };
+export {
+  carregarPerfilCandidato,
+  calcularPontuacaoRelevancia,
+  classificarMatch,
+  calcularCoberturaListaPonderada,
+  identificarMatchesPorCategoria,
+  gerarPonteCompetencias,
+  CATEGORIAS_TECNOLOGICAS_EQUIVALENTES,
+};
+export type { TipoMatch, ResultadoMatch, EquivalenciaCategoria };

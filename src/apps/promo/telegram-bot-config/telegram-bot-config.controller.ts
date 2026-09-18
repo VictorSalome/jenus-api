@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import fetch from "node-fetch";
 import * as repo from "./telegram-bot-config.repository.js";
 
 const maskToken = (token: string): string => {

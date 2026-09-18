@@ -1,6 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { logInfo, logError } from "../utils/logger.js";
+import { calcularAnosExperiencia } from "../utils/experiencia.util.js";
+import { gerarFingerprintVaga } from "../../automacao/vagaFingerprint.js";
 import { getDb } from "../../../../core/database.js";
 import {
   getSmtpRuntimeConfig,
@@ -188,6 +190,84 @@ const CORES = {
 };
 
 /**
+ * Variações fixas da frase de abertura do e-mail de candidatura. A escolha
+ * entre elas é determinística (mesma vaga sempre gera o mesmo texto), só
+ * pra evitar que todo e-mail saia com a frase idêntica — não é geração
+ * dinâmica de texto novo, é seleção de template.
+ * Placeholders {vaga}/{empresa} são substituídos depois de já ter passado
+ * por escapeHtml, então ${nomeVaga} e ${empresa} aqui já vêm sanitizados.
+ */
+const FRASES_ABERTURA = [
+  (nomeVaga: string, empresa: string) =>
+    `Tenho interesse em contribuir com a equipe de ${empresa} na posição de <strong>${nomeVaga}</strong> e, com base nos requisitos descritos, destaco a seguir os pontos do meu perfil mais relevantes para a vaga:`,
+  (nomeVaga: string, empresa: string) =>
+    `Escrevo para me candidatar à posição de <strong>${nomeVaga}</strong> em ${empresa}. Ao longo da minha trajetória, desenvolvi experiências que considero diretamente aplicáveis ao que a vaga exige:`,
+];
+
+/**
+ * Variações fixas da frase de fechamento (antes da assinatura).
+ */
+const FRASES_FECHAMENTO_EMAIL = [
+  "Ficarei feliz em conversar com mais detalhes sobre como posso contribuir com o time. Agradeço a atenção e fico no aguardo de um retorno.",
+  "Coloco-me à disposição para uma conversa e para esclarecer qualquer ponto do meu currículo. Agradeço desde já pela oportunidade de participar do processo.",
+];
+
+/**
+ * Hash simples (soma de charCodes) do título + empresa da vaga, usado só
+ * pra escolher determinísticamente entre as variações de texto acima.
+ * Não usamos pontos.length pra isso: na prática esse array quase sempre
+ * fica entre 3 e 5 itens (regras de negócio fixas + fallback genérico),
+ * o que daria pouca variação real entre vagas diferentes. Um hash do
+ * nome da vaga/empresa varia bem mais de candidatura pra candidatura e
+ * continua 100% determinístico pra mesma vaga.
+ */
+export const hashSimples = (texto: string): number => {
+  let soma = 0;
+  for (let i = 0; i < texto.length; i++) {
+    soma += texto.charCodeAt(i);
+  }
+  return soma;
+};
+
+/**
+ * Escolhe determinísticamente (por vaga) qual variação de abertura e qual
+ * variação de fechamento usar no corpo do e-mail — ver comentário de
+ * `hashSimples` para o porquê do critério. Usa dois seeds diferentes (com
+ * sufixos distintos) pra abertura e fechamento não variarem sempre juntas.
+ *
+ * Exportada (junto com `hashSimples`) principalmente para permitir teste
+ * automatizado do determinismo/variação sem precisar montar um objeto
+ * `candidato` completo — ver `email.service.test.ts`.
+ *
+ * @param dadosVaga - Dados da vaga (usa apenas `titulo`/`empresa`)
+ * @param nomeVagaEscapado - `dadosVaga.titulo` já sanitizado com escapeHtml
+ * @param empresaEscapada - `dadosVaga.empresa` já sanitizada com escapeHtml
+ */
+export const escolherVariacoesEmail = (
+  dadosVaga: { titulo?: string; empresa?: string },
+  nomeVagaEscapado: string,
+  empresaEscapada: string,
+): { fraseAbertura: string; fraseFechamento: string } => {
+  const seedVaga = `${dadosVaga.titulo || ""}|${dadosVaga.empresa || ""}`;
+  const indiceAbertura = hashSimples(`${seedVaga}|abertura`) % FRASES_ABERTURA.length;
+  const indiceFechamento = hashSimples(`${seedVaga}|fechamento`) % FRASES_FECHAMENTO_EMAIL.length;
+
+  // Log só dos índices/identificador da vaga (não do texto inteiro) — o
+  // suficiente pra depurar em produção "por que este e-mail saiu com este
+  // texto" sem poluir o log com o corpo completo do e-mail.
+  logInfo("Variação de texto do corpo do e-mail de candidatura selecionada", {
+    nomeVaga: dadosVaga.titulo || null,
+    indiceAbertura,
+    indiceFechamento,
+  });
+
+  return {
+    fraseAbertura: FRASES_ABERTURA[indiceAbertura](nomeVagaEscapado, empresaEscapada),
+    fraseFechamento: FRASES_FECHAMENTO_EMAIL[indiceFechamento],
+  };
+};
+
+/**
  * Gera corpo do e-mail em HTML. CSS inline em cada elemento (não em
  * <style>) e layout em <table> — necessário pra renderizar de forma
  * consistente em clientes de e-mail restritivos como Gmail (que ignora
@@ -197,7 +277,7 @@ const CORES = {
  * @param {Object} candidato - Dados do candidato
  * @returns {string} Corpo do e-mail em HTML
  */
-const gerarCorpoEmail = (dadosVaga, candidato, pretensaoSalarial = null, pretensaoNegociavel = false) => {
+export const gerarCorpoEmail = (dadosVaga, candidato, pretensaoSalarial = null, pretensaoNegociavel = false) => {
   const nomeVaga = escapeHtml(dadosVaga.titulo || "a vaga anunciada");
   const nomeCandidato = escapeHtml(candidato.name || "Candidato");
   const cargoCandidato = escapeHtml(candidato.title || "");
@@ -243,7 +323,13 @@ const gerarCorpoEmail = (dadosVaga, candidato, pretensaoSalarial = null, pretens
     .join("\n");
 
   const pontosHtml = gerarPontosRelevantes(dadosVaga, candidato);
-  
+
+  const { fraseAbertura, fraseFechamento } = escolherVariacoesEmail(
+    dadosVaga,
+    nomeVaga,
+    empresa,
+  );
+
   // Regra de Negócio: Salário pretendido somente deve ser incluído quando detectado/mencionado na vaga.
   const vagaMencionaSalario = Boolean(dadosVaga.salario || dadosVaga.salary);
   const activePretensao = vagaMencionaSalario ? (pretensaoSalarial !== null ? pretensaoSalarial : (candidato.salaryPretension || candidato.salary_pretension || "")) : "";
@@ -282,7 +368,7 @@ const gerarCorpoEmail = (dadosVaga, candidato, pretensaoSalarial = null, pretens
             <td style="padding:32px;">
               <p style="margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:${CORES.texto};">Prezados(as),</p>
               <p style="margin:0 0 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:${CORES.texto};">
-                Venho apresentar minha candidatura para a posição de <strong>${nomeVaga}</strong> em ${empresa}. Após analisar os requisitos da vaga, acredito que meu perfil está alinhado com o que buscam:
+                ${fraseAbertura}
               </p>
               ${pretensaoSalarialHtml}
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">
@@ -292,7 +378,7 @@ const gerarCorpoEmail = (dadosVaga, candidato, pretensaoSalarial = null, pretens
                 Em anexo, segue meu currículo com as experiências e competências mais relevantes para esta oportunidade.
               </p>
               <p style="margin:0 0 24px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:${CORES.texto};">
-                Fico à disposição para uma conversa e agradeço desde já pela atenção.
+                ${fraseFechamento}
               </p>
               <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:${CORES.texto};">Atenciosamente,</p>
               <p style="margin:2px 0 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:${CORES.texto};">${nomeCandidato}</p>
@@ -374,30 +460,6 @@ const gerarPontosRelevantes = (dadosVaga, candidato) => {
                 </tr>`,
     )
     .join("\n");
-};
-
-/**
- * Calcula anos de experiência com base nas experiências profissionais
- * @param {Array} experiences - Array de experiências
- * @returns {number} Anos de experiência
- */
-const calcularAnosExperiencia = (experiences) => {
-  if (!experiences || experiences.length === 0) return 0;
-
-  let totalMeses = 0;
-
-  experiences.forEach((exp) => {
-    const inicio = new Date(exp.startDate);
-    const fim = exp.endDate === "present" ? new Date() : new Date(exp.endDate);
-
-    if (inicio && fim && fim > inicio) {
-      const diffTime = Math.abs(fim.getTime() - inicio.getTime());
-      const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30));
-      totalMeses += diffMonths;
-    }
-  });
-
-  return Math.floor(totalMeses / 12);
 };
 
 /**
@@ -517,11 +579,16 @@ export const enviarCurriculoComRegistro = async ({
   const db = await getDb();
   
   let envioId = null;
+  const vagaFingerprint = gerarFingerprintVaga(
+    emailDestino,
+    dadosVaga.empresa || "",
+    dadosVaga.titulo || "Vaga não identificada",
+  );
   try {
     envioId = await runTransaction(async (dbTx) => {
       const result = await dbTx.run(
-        `INSERT INTO curriculo_envios (vaga_id, filename, email_destino, vaga_titulo, status, salary_pretension, salary_pretension_negotiable, curriculo_snapshot, score)
-         VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?)`,
+        `INSERT INTO curriculo_envios (vaga_id, filename, email_destino, vaga_titulo, status, salary_pretension, salary_pretension_negotiable, curriculo_snapshot, score, vaga_fingerprint)
+         VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?)`,
         vagaId,
         path.basename(caminhoArquivoPdf),
         emailDestino,
@@ -530,13 +597,17 @@ export const enviarCurriculoComRegistro = async ({
         salaryPretensionNegotiable ? 1 : 0,
         curriculoSnapshot,
         score || 0,
+        vagaFingerprint,
       );
       const newEnvioId = result.lastID;
 
       if (automacaoJobId) {
         const claimCheck = await dbTx.run(
-          `UPDATE curriculo_automacao_candidaturas SET envio_id = ? WHERE job_id = ? AND status = 'PROCESSING' AND envio_id IS NULL`,
+          `UPDATE curriculo_automacao_candidaturas 
+           SET envio_id = ?, vaga_fingerprint = COALESCE(vaga_fingerprint, ?) 
+           WHERE job_id = ? AND status = 'PROCESSING' AND envio_id IS NULL`,
           newEnvioId,
+          vagaFingerprint,
           automacaoJobId
         );
         if (claimCheck.changes === 0) {

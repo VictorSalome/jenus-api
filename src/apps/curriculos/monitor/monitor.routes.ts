@@ -1,9 +1,6 @@
 import { Router } from "express";
-import { getStats, executarPipeline } from "../buscas/autoApply.service.js";
 import { registrarEnvio, registrarErro } from "../monitor/stats.service.js";
 import { getEnviosCount, getEnviosHistory } from "../shared/email/email.service.js";
-import { listarPendentes, aprovarEEnviar } from "../buscas/pendingApplications.service.js";
-import { requireAuth } from "../../../shared/auth/auth.middleware.js";
 import * as logger from "../../../core/logger.js";
 import config from "../config/index.js";
 import fs from "fs/promises";
@@ -19,9 +16,7 @@ const router = Router();
 router.get("/monitor", asyncHandler(async (req, res) => {
   const startTime = Date.now();
   try {
-    const stats = await getStats();
     const totalEnviados = await getEnviosCount();
-    const pendentesRevisao = await listarPendentes("pending");
 
     // Histórico do banco (fonte canônica), fallback para JSON legado
     let history: any[] = [];
@@ -91,17 +86,17 @@ router.get("/monitor", asyncHandler(async (req, res) => {
 
     res.json({
       success: true,
-      total: stats.totalVagas || 0,
-      enviados: stats.enviados || 0,
+      total: 0,
+      enviados: 0,
       totalEnviados,
-      pendentesRevisaoCount: pendentesRevisao.length,
-      erros: stats.erros || 0,
-      tempoMedio: stats.tempoMedio || "0ms",
-      ultimoEnvio: stats.ultimoEnvio || null,
+      pendentesRevisaoCount: 0,
+      erros: 0,
+      tempoMedio: "0ms",
+      ultimoEnvio: null,
       history,
       historyCount: history.length,
       successCount: totalEnviados,
-      errorCount: stats.erros || 0,
+      errorCount: 0,
       todayCount: history.filter((h: any) => {
         const hDate = new Date(h.timestamp);
         const today = new Date();
@@ -133,86 +128,5 @@ router.get("/monitor", asyncHandler(async (req, res) => {
     });
   }
 }));
-
-/**
- * POST /api/curriculo/auto-apply
- * Executa pipeline completo de candidatura automática
- */
-router.post("/auto-apply", asyncHandler(async (req, res) => {
-  try {
-    const { query = "", tags = [], minScore = 60, limit = 5 } = req.body;
-
-    const resultados = await executarPipeline({
-      query,
-      tags,
-      minScore,
-      limit,
-    });
-
-    // Registrar no histórico
-    const historyPath = path.join(config.paths.data, "send_history.json");
-    let history = [];
-    try {
-      const data = await fs.readFile(historyPath, "utf-8");
-      history = JSON.parse(data);
-    } catch (e) {}
-
-    // Adicionar novos envios ao histórico
-    resultados.applied.forEach(vaga => {
-      history.push({
-        timestamp: new Date().toISOString(),
-        title: vaga.title,
-        company: vaga.company,
-        email: vaga.email,
-        arquivo: vaga.arquivo,
-        status: vaga.status,
-        score: vaga.score,
-        query: query
-      });
-    });
-
-    await fs.writeFile(historyPath, JSON.stringify(history.slice(-100), null, 2));
-
-    res.json({
-      success: true,
-      resumo: resultados.resumo,
-      vagas: resultados.applied.slice(0, 10),
-      history: history.slice(-10),
-    });
-  } catch (err: any) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
-  }
-}));
-
-router.post("/approve-all-pending", requireAuth, async (req, res) => {
-  logger.info("Iniciando aprovação e envio de todos os pendentes", "Curriculo");
-
-  res.status(202).json({
-    success: true,
-    message: "Processando envios em segundo plano",
-  });
-
-  // Fire-and-forget isolado — não usar asyncHandler aqui pois a resposta já foi enviada.
-  // Qualquer rejeição é capturada internamente.
-  listarPendentes("pending")
-    .then(async (pendentes) => {
-      const resultados = await Promise.allSettled(
-        pendentes.map(async (p) => {
-          await aprovarEEnviar(p.id);
-          return { id: p.id, status: "sent" as const };
-        })
-      );
-
-      const sent = resultados.filter((r) => r.status === "fulfilled").length;
-      const errors = resultados.filter((r) => r.status === "rejected").length;
-      logger.info(`Aprovação concluída: ${sent} enviados, ${errors} erros`, "Curriculo");
-    })
-    .catch((err) => {
-      logger.error(`Erro ao aprovar e enviar todos: ${err.message}`, "Curriculo");
-    });
-});
 
 export default router;

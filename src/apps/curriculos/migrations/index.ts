@@ -306,5 +306,52 @@ export const curriculoMigrations: Migration[] = [
       ALTER TABLE curriculo_automacao_config ADD COLUMN linkedin_cron_expr TEXT DEFAULT '15 */2 * * *';
     `,
   },
+  {
+    id: "curriculo_018_automacao_categoria_e_notificacao",
+    up: `
+      ALTER TABLE curriculo_automacao_candidaturas ADD COLUMN notificado_em TEXT;
+      ALTER TABLE curriculo_automacao_candidaturas ADD COLUMN score_categoria_aplicado INTEGER;
+      ALTER TABLE curriculo_automacao_candidaturas ADD COLUMN matches_categoria_json TEXT;
+      ALTER TABLE curriculo_automacao_config ADD COLUMN habilitar_frase_equivalencia INTEGER DEFAULT 0;
+    `,
+  },
+  {
+    id: "curriculo_019_reavaliacao_historico_salvo",
+    up: `
+      ALTER TABLE curriculo_automacao_candidaturas ADD COLUMN ultima_reavaliacao_em TEXT;
+    `,
+  },
+  {
+    id: "curriculo_020_notificacao_diaria",
+    up: `
+      INSERT OR IGNORE INTO notification_types (id, module, name, description, title_template, body_template, default_priority, default_enabled, sound_type)
+      VALUES (
+        'curriculo.opportunities_daily',
+        'curriculo',
+        'Resumo Diário de Oportunidades',
+        'Notificação diária agrupando as vagas que cruzaram o limite de corte após equivalência tecnológica',
+        'Novas Oportunidades Encontradas',
+        'Seu perfil evoluiu! {{count}} vagas que haviam sido descartadas agora são compatíveis e foram promovidas para envio.',
+        'normal',
+        1,
+        'default'
+      );
+    `,
+  },
+  {
+    id: "curriculo_021_modo_amplo_estrategia",
+    up: `
+      ALTER TABLE curriculo_automacao_config ADD COLUMN modo_amplo INTEGER DEFAULT 1;
+    `,
+  },
+  {
+    id: "curriculo_022_vaga_fingerprint",
+    up: `
+      ALTER TABLE curriculo_automacao_candidaturas ADD COLUMN vaga_fingerprint TEXT;
+      CREATE INDEX IF NOT EXISTS idx_automacao_candidaturas_fingerprint ON curriculo_automacao_candidaturas(vaga_fingerprint);
+      ALTER TABLE curriculo_envios ADD COLUMN vaga_fingerprint TEXT;
+      CREATE INDEX IF NOT EXISTS idx_curriculo_envios_fingerprint ON curriculo_envios(vaga_fingerprint);
+    `,
+  },
 ];
 
